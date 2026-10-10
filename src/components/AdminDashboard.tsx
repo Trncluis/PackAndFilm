@@ -1,0 +1,1407 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  ShieldCheck,
+  Lock,
+  KeyRound,
+  RefreshCw,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  Calendar,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  FolderOpen,
+  ArrowLeft,
+  Camera,
+  CreditCard,
+  FileText,
+  Users,
+  X,
+  Check,
+  Maximize2,
+  UserCheck,
+  LogOut,
+  ShieldAlert,
+  Trash2,
+  AlertTriangle
+} from 'lucide-react';
+
+export interface AdminBookingItem {
+  bookingRef: string;
+  timestamp?: string;
+  customerName: string;
+  contactNumber: string;
+  socialMediaHandle: string;
+  cameraRented: string;
+  cameraId?: string;
+  startDate: string;
+  endDate: string;
+  rentalDays: number | string;
+  handoverMethod: string;
+  address: string;
+  shootType: string;
+  rentalTotal: number | string;
+  securityDeposit: number | string;
+  downpaymentPaid: number | string;
+  balanceDue: number | string;
+  gcashRefNumber: string;
+  status: string;
+  notes: string;
+  id1Url?: string;
+  id2Url?: string;
+  authSlipUrl?: string;
+  billingUrl?: string;
+  selfieVideoUrl?: string;
+  receiptUrl?: string;
+  guardianIdUrl?: string;
+  driveFolderUrl?: string;
+  id1File?: string | null;
+  id2File?: string | null;
+  authorizationSlipFile?: string | null;
+  deliveryReceiptsFile?: string | null;
+  selfieFile?: string | null;
+  receiptFile?: string | null;
+  contact1IdFile?: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// GOOGLE DRIVE & DOCUMENT PREVIEW HELPERS
+// ─────────────────────────────────────────────────────────────
+export function getDriveFileId(url?: string | null): string | null {
+  if (!url) return null;
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+export function getDriveThumbnailUrl(url?: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('data:')) return url;
+  const fileId = getDriveFileId(url);
+  if (fileId) {
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w600`;
+  }
+  return url;
+}
+
+export function getDrivePreviewUrl(url?: string | null): string {
+  if (!url) return '';
+  const fileId = getDriveFileId(url);
+  if (fileId) {
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  }
+  return url;
+}
+
+interface KycArtifactCardProps {
+  title: string;
+  icon: React.ReactNode;
+  url?: string | null;
+  emptyLabel: string;
+  isVideo?: boolean;
+  onPreview: (title: string, url: string, isVideo?: boolean) => void;
+}
+
+const KycArtifactCard: React.FC<KycArtifactCardProps> = ({
+  title,
+  icon,
+  url,
+  emptyLabel,
+  isVideo = false,
+  onPreview
+}) => {
+  const [hasImgError, setHasImgError] = useState(false);
+  const fileId = getDriveFileId(url);
+  const isDriveLink = !!fileId;
+  const isVideoFile = isVideo || url?.endsWith('.mp4') || url?.endsWith('.mov') || url?.startsWith('data:video/');
+
+  if (!url) {
+    return (
+      <div className="p-3.5 rounded-2xl bg-white border-2 border-[#E8E4F0] space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-[11px] text-[#1A1A2E]">{title}</span>
+          <div className="opacity-40">{icon}</div>
+        </div>
+        <div className="h-28 rounded-xl bg-gray-50 border border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs font-semibold px-2 text-center">
+          {emptyLabel}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-3.5 rounded-2xl bg-white border-2 border-[#E8E4F0] hover:border-[#1A1A2E] transition-all space-y-2 shadow-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-[11px] text-[#1A1A2E]">{title}</span>
+        {icon}
+      </div>
+
+      <div
+        onClick={() => onPreview(title, url, isVideoFile)}
+        className="h-28 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex items-center justify-center overflow-hidden cursor-pointer group relative"
+      >
+        {isVideoFile ? (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#EDE8FC] to-[#FEF0E7] p-2 text-center">
+            <Camera className="w-6 h-6 text-[#6B46C1] mb-1" />
+            <span className="text-[10px] font-black text-[#1A1A2E]">Selfie Video Clip</span>
+            <span className="text-[9px] text-[#6B6B8A] font-bold mt-0.5">Click to Inspect in Viewer</span>
+          </div>
+        ) : !hasImgError ? (
+          <img
+            src={getDriveThumbnailUrl(url)}
+            alt={title}
+            onError={() => setHasImgError(true)}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-[#F7FAFC] border border-[#E2E8F0] p-2 text-center">
+            <FileText className="w-6 h-6 text-[#4A5568] mb-1" />
+            <span className="text-[10px] font-black text-[#2D3748]">Google Drive Document</span>
+            <span className="text-[9px] text-[#718096] font-semibold">Click to Inspect in Viewer</span>
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-bold transition-opacity gap-1.5">
+          <Maximize2 className="w-4 h-4" />
+          <span className="text-xs">Inspect</span>
+        </div>
+      </div>
+
+      {isDriveLink && (
+        <div className="pt-1 flex items-center justify-between text-[10px]">
+          <span className="text-[#38A169] font-bold flex items-center gap-1">
+            <Check className="w-3 h-3" /> Vaulted
+          </span>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-[#6B46C1] font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+          >
+            <span>Drive Link</span>
+            <ExternalLink className="w-2.5 h-2.5" />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface AdminDashboardProps {
+  appsScriptUrl: string;
+  onExit: () => void;
+  localBookings?: any[];
+  onBookingsUpdated?: (updated: any[]) => void;
+}
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  appsScriptUrl,
+  onExit,
+  localBookings = [],
+  onBookingsUpdated
+}) => {
+  // Session Authentication State (zero credentials stored in source code)
+  const [sessionToken, setSessionToken] = useState<string | null>(() => {
+    return sessionStorage.getItem('pnf_admin_token');
+  });
+  const [activeAdminName, setActiveAdminName] = useState<string>(() => {
+    return sessionStorage.getItem('pnf_admin_name') || '';
+  });
+  const [activeAdminUser, setActiveAdminUser] = useState<string>(() => {
+    return sessionStorage.getItem('pnf_admin_user') || '';
+  });
+
+  // Login Form State
+  const [selectedAccount, setSelectedAccount] = useState<'partner1' | 'partner2'>('partner1');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  // Bookings Data & Sync
+  const [bookings, setBookings] = useState<AdminBookingItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Filter & Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedBooking, setSelectedBooking] = useState<AdminBookingItem | null>(null);
+
+  // Status updating state
+  const [updatingRef, setUpdatingRef] = useState<string | null>(null);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+
+  // Clear All Bookings & Delete Action States
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
+  const [clearConfirmInput, setClearConfirmInput] = useState('');
+  const [isClearingBookings, setIsClearingBookings] = useState(false);
+  const [deleteTargetBooking, setDeleteTargetBooking] = useState<AdminBookingItem | null>(null);
+  const [isDeletingBooking, setIsDeletingBooking] = useState(false);
+
+  // Document Preview Modal
+  const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string; isVideo?: boolean } | null>(null);
+
+  const isAuthenticated = !!sessionToken;
+
+  // ─────────────────────────────────────────────────────────────
+  // BACKEND AUTHENTICATION (POST action: adminLogin)
+  // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // BACKEND AUTHENTICATION (POST action: adminLogin)
+  // ─────────────────────────────────────────────────────────────
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPass = passwordInput.trim();
+    if (!cleanPass) {
+      setLoginError('Please enter your secret admin passkey.');
+      return;
+    }
+
+    setIsAuthenticating(true);
+    setLoginError('');
+
+    try {
+      const response = await fetch(appsScriptUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'adminLogin',
+          username: selectedAccount,
+          password: cleanPass
+        })
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (data && data.status === 'success' && data.sessionToken) {
+        setSessionToken(data.sessionToken);
+        const adminName = data.adminName || (selectedAccount === 'partner1' ? 'Partner 1 (Lead Operations)' : 'Partner 2 (Equipment Manager)');
+        setActiveAdminName(adminName);
+        setActiveAdminUser(data.adminUser || selectedAccount);
+
+        sessionStorage.setItem('pnf_admin_token', data.sessionToken);
+        sessionStorage.setItem('pnf_admin_name', adminName);
+        sessionStorage.setItem('pnf_admin_user', data.adminUser || selectedAccount);
+
+        setPasswordInput('');
+        setLoginError('');
+      } else {
+        setLoginError(data?.message || 'Access denied: Invalid admin passkey.');
+      }
+    } catch (err: any) {
+      console.warn('Backend auth request error:', err);
+      setLoginError('Unable to connect to authentication server. Please check your network connection.');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // LOGOUT (POST action: adminLogout)
+  // ─────────────────────────────────────────────────────────────
+  const handleLogout = async () => {
+    if (sessionToken && appsScriptUrl && !sessionToken.startsWith('pnf-session-')) {
+      try {
+        await fetch(appsScriptUrl, {
+          method: 'POST',
+          redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'adminLogout', sessionToken })
+        });
+      } catch {
+        // Continue cleanup
+      }
+    }
+
+    setSessionToken(null);
+    setActiveAdminName('');
+    setActiveAdminUser('');
+    sessionStorage.removeItem('pnf_admin_token');
+    sessionStorage.removeItem('pnf_admin_name');
+    sessionStorage.removeItem('pnf_admin_user');
+    setBookings([]);
+    setPasswordInput('');
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // FETCH BOOKINGS (POST action: getAllBookings with Session Token)
+  // ─────────────────────────────────────────────────────────────
+  const fetchAllBookings = async () => {
+    if (!sessionToken) return;
+
+    setIsLoading(true);
+    setSyncError(null);
+
+    try {
+      const res = await fetch(appsScriptUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'getAllBookings',
+          sessionToken: sessionToken
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (data && data.status === 'success' && Array.isArray(data.bookings)) {
+        setBookings(data.bookings);
+        setLastSyncTime(new Date());
+      } else if (data && data.code === 'UNAUTHORIZED') {
+        handleLogout();
+        setLoginError('Your server session has expired. Please log in again.');
+      } else {
+        throw new Error(data?.message || 'Unable to retrieve reservations.');
+      }
+    } catch (err: any) {
+      console.warn('Error syncing bookings from backend:', err);
+      setSyncError('Could not sync with Google Sheets. Showing cached records.');
+      if (localBookings.length > 0 && bookings.length === 0) {
+        setBookings(localBookings);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchAllBookings();
+    }
+  }, [isAuthenticated]);
+
+  // ─────────────────────────────────────────────────────────────
+  // UPDATE BOOKING STATUS (POST action: updateStatus with Session Token)
+  // ─────────────────────────────────────────────────────────────
+  const handleUpdateStatus = async (bookingRef: string, newStatus: string) => {
+    if (!sessionToken) return;
+    setUpdatingRef(bookingRef);
+
+    // Optimistic UI update
+    setBookings(prev =>
+      prev.map(b => (b.bookingRef === bookingRef ? { ...b, status: newStatus } : b))
+    );
+    if (selectedBooking && selectedBooking.bookingRef === bookingRef) {
+      setSelectedBooking(prev => (prev ? { ...prev, status: newStatus } : null));
+    }
+
+    try {
+      const res = await fetch(appsScriptUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'updateStatus',
+          sessionToken: sessionToken,
+          bookingRef: bookingRef,
+          status: newStatus
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (data && data.status === 'success') {
+        setActionSuccessMsg(`Status for ${bookingRef} updated to "${newStatus}" (Audited by ${activeAdminName || 'Admin'})`);
+        setTimeout(() => setActionSuccessMsg(null), 4000);
+      } else if (data && data.code === 'UNAUTHORIZED') {
+        handleLogout();
+        setLoginError('Session expired. Please log in again.');
+      } else {
+        throw new Error(data?.message || 'Update failed');
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      setActionSuccessMsg(`Status updated locally. Note: Check backend connection.`);
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    } finally {
+      setUpdatingRef(null);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // DELETE SINGLE BOOKING (POST action: deleteBooking with Session Token)
+  // ─────────────────────────────────────────────────────────────
+  const handleDeleteBooking = async (bookingRef: string) => {
+    if (!sessionToken) return;
+    setIsDeletingBooking(true);
+
+    try {
+      const res = await fetch(appsScriptUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'deleteBooking',
+          sessionToken: sessionToken,
+          bookingRef: bookingRef
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (data && data.status === 'success') {
+        const updated = bookings.filter(b => b.bookingRef !== bookingRef);
+        setBookings(updated);
+        if (onBookingsUpdated) onBookingsUpdated(updated);
+        if (selectedBooking && selectedBooking.bookingRef === bookingRef) {
+          setSelectedBooking(null);
+        }
+        setDeleteTargetBooking(null);
+        setActionSuccessMsg(`Booking ${bookingRef} permanently removed.`);
+        setTimeout(() => setActionSuccessMsg(null), 4000);
+      } else if (data && data.code === 'UNAUTHORIZED') {
+        handleLogout();
+        setLoginError('Session expired. Please log in again.');
+      } else {
+        throw new Error(data?.message || 'Delete failed');
+      }
+    } catch (err: any) {
+      console.error('Error deleting booking:', err);
+      // Local fallback removal if backend request fails or offline
+      const updated = bookings.filter(b => b.bookingRef !== bookingRef);
+      setBookings(updated);
+      if (onBookingsUpdated) onBookingsUpdated(updated);
+      if (selectedBooking && selectedBooking.bookingRef === bookingRef) {
+        setSelectedBooking(null);
+      }
+      setDeleteTargetBooking(null);
+      setActionSuccessMsg(`Booking ${bookingRef} removed from view.`);
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    } finally {
+      setIsDeletingBooking(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // CLEAR ALL BOOKINGS (POST action: clearAllBookings with Session Token + Confirmation)
+  // ─────────────────────────────────────────────────────────────
+  const handleClearAllBookings = async () => {
+    if (!sessionToken || clearConfirmInput.trim() !== 'DELETE') return;
+    setIsClearingBookings(true);
+
+    try {
+      const res = await fetch(appsScriptUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'clearAllBookings',
+          sessionToken: sessionToken,
+          confirm: 'CONFIRM_DELETE_ALL'
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (data && data.status === 'success') {
+        setBookings([]);
+        if (onBookingsUpdated) onBookingsUpdated([]);
+        setSelectedBooking(null);
+        setShowClearAllModal(false);
+        setClearConfirmInput('');
+        setActionSuccessMsg('All bookings have been cleared from Google Sheets & memory.');
+        setTimeout(() => setActionSuccessMsg(null), 4000);
+      } else if (data && data.code === 'UNAUTHORIZED') {
+        handleLogout();
+        setLoginError('Session expired. Please log in again.');
+      } else {
+        throw new Error(data?.message || 'Clear all failed');
+      }
+    } catch (err: any) {
+      console.error('Error clearing all bookings:', err);
+      setBookings([]);
+      if (onBookingsUpdated) onBookingsUpdated([]);
+      setSelectedBooking(null);
+      setShowClearAllModal(false);
+      setClearConfirmInput('');
+      setActionSuccessMsg('Cleared local view. (Google Sheets update had a network warning)');
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    } finally {
+      setIsClearingBookings(false);
+    }
+  };
+
+  // KPI Calculations
+  const stats = useMemo(() => {
+    const total = bookings.length;
+    const pendingKyc = bookings.filter(b => 
+      !b.status || b.status.toLowerCase().includes('pending') || b.status.toLowerCase().includes('deposit')
+    ).length;
+    const confirmed = bookings.filter(b => 
+      b.status && (b.status.toLowerCase().includes('confirmed') || b.status.toLowerCase().includes('approved'))
+    ).length;
+    const activeRentals = bookings.filter(b => 
+      b.status && b.status.toLowerCase().includes('active')
+    ).length;
+
+    const totalRevenue = bookings.reduce((sum, b) => {
+      const down = Number(b.downpaymentPaid) || 0;
+      return sum + down;
+    }, 0);
+
+    return { total, pendingKyc, confirmed, activeRentals, totalRevenue };
+  }, [bookings]);
+
+  // Filter & Search
+  const filteredBookings = useMemo(() => {
+    return bookings.filter(b => {
+      const matchSearch =
+        !searchQuery.trim() ||
+        (b.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b.bookingRef || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b.contactNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b.cameraRented || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b.socialMediaHandle || '').toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'pending' && (!b.status || b.status.toLowerCase().includes('pending') || b.status.toLowerCase().includes('deposit'))) ||
+        (statusFilter === 'confirmed' && b.status && b.status.toLowerCase().includes('confirmed')) ||
+        (statusFilter === 'active' && b.status && b.status.toLowerCase().includes('active')) ||
+        (statusFilter === 'completed' && b.status && b.status.toLowerCase().includes('completed'));
+
+      return matchSearch && matchStatus;
+    });
+  }, [bookings, searchQuery, statusFilter]);
+
+  // ─────────────────────────────────────────────────────────────
+  // 1. SECURE LOGIN SCREEN (TWO DEDICATED PARTNER ACCOUNTS)
+  // ─────────────────────────────────────────────────────────────
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] p-8 space-y-6 animate-fadeIn">
+          <div className="text-center space-y-2">
+            <div className="w-20 h-20 rounded-3xl bg-[#EDE8FC] border-2 border-[#C9B8F0] flex items-center justify-center mx-auto shadow-sm p-1 overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="PackAndFilm"
+                className="w-full h-full object-contain scale-105"
+              />
+            </div>
+            <h1 className="text-2xl font-black text-[#1A1A2E] tracking-tight">
+              PackAndFilm Operations
+            </h1>
+            <p className="text-xs text-[#6B6B8A] font-medium">
+              Enterprise security: Authorized Partner Access Only
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            {/* Account Selector (Partner 1 vs Partner 2) */}
+            <div>
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#6B6B8A] mb-1.5">
+                Select Admin Account
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAccount('partner1')}
+                  className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                    selectedAccount === 'partner1'
+                      ? 'border-[#1A1A2E] bg-[#EDE8FC] shadow-[2px_2px_0px_#1A1A2E]'
+                      : 'border-[#E8E4F0] bg-[#FAFAF7] text-[#6B6B8A] hover:border-[#CBD5E0]'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-[#553C9A]" />
+                    <span className="font-extrabold text-xs text-[#1A1A2E]">Partner 1</span>
+                  </div>
+                  <span className="text-[10px] text-[#6B6B8A] block mt-0.5">Lead Operations</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedAccount('partner2')}
+                  className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                    selectedAccount === 'partner2'
+                      ? 'border-[#1A1A2E] bg-[#EDE8FC] shadow-[2px_2px_0px_#1A1A2E]'
+                      : 'border-[#E8E4F0] bg-[#FAFAF7] text-[#6B6B8A] hover:border-[#CBD5E0]'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-[#553C9A]" />
+                    <span className="font-extrabold text-xs text-[#1A1A2E]">Partner 2</span>
+                  </div>
+                  <span className="text-[10px] text-[#6B6B8A] block mt-0.5">Equipment Manager</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Secret Passkey Input */}
+            <div>
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-[#6B6B8A] mb-1.5">
+                Secret Passkey
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter secret admin passkey..."
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    setLoginError('');
+                  }}
+                  autoFocus
+                  className="w-full pl-4 pr-11 py-3 rounded-xl bg-[#FAFAF7] border-2 border-[#E8E4F0] focus:border-[#1A1A2E] text-sm font-semibold outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A1A2E] p-1 cursor-pointer transition-colors"
+                  title={showPassword ? 'Hide passkey' : 'Show passkey'}
+                  aria-label={showPassword ? 'Hide passkey' : 'Show passkey'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {loginError && (
+                <div className="mt-2 p-2.5 rounded-xl bg-[#FFF5F5] border border-[#FEB2B2] text-xs text-red-600 font-bold flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isAuthenticating}
+              className="w-full py-3.5 rounded-xl bg-[#1A1A2E] text-white font-extrabold text-sm hover:bg-[#6B46C1] transition-all shadow-[3px_3px_0px_#1A1A2E] active:translate-x-0.5 active:translate-y-0.5 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isAuthenticating ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  <span>Verifying Credentials on Server...</span>
+                </>
+              ) : (
+                <span>Verify & Unlock Operations Console</span>
+              )}
+            </button>
+          </form>
+
+          <div className="pt-4 border-t border-[#E8E4F0] text-center">
+            <button
+              type="button"
+              onClick={onExit}
+              className="text-xs font-bold text-[#6B6B8A] hover:text-[#1A1A2E] inline-flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Return to Customer Storefront</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 2. AUTHENTICATED ADMIN DASHBOARD
+  // ─────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-[#FAFAF7] text-[#1A1A2E] flex flex-col font-sans selection:bg-[#C9B8F0]">
+      {/* Toast Notification */}
+      {actionSuccessMsg && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#F0FFF4] border-2 border-[#38A169] text-[#22543D] px-4 py-2.5 rounded-2xl shadow-[4px_4px_0px_#1A1A2E] flex items-center gap-2 text-xs font-bold animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 text-[#38A169]" />
+          <span>{actionSuccessMsg}</span>
+        </div>
+      )}
+
+      {/* Header Bar */}
+      <header className="sticky top-0 z-30 bg-[#FAFAF7]/95 backdrop-blur-md border-b-2 border-[#1A1A2E] px-4 sm:px-8 py-3.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onExit}
+              className="p-2 rounded-xl bg-white border border-[#E8E4F0] hover:bg-[#EDE8FC] text-[#1A1A2E] transition-colors cursor-pointer"
+              title="Return to Customer Storefront"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="w-11 h-11 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] p-0.5 flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="PackAndFilm"
+                className="w-full h-full object-contain scale-105"
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-lg tracking-tight text-[#1A1A2E]">
+                  PackAndFilm Operations
+                </span>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#1A1A2E] text-white">
+                  ADMIN CONSOLE
+                </span>
+              </div>
+              <p className="text-[11px] text-[#6B6B8A]">
+                Authenticated as: <strong className="text-[#553C9A]">{activeAdminName}</strong> ({activeAdminUser})
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={fetchAllBookings}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] hover:bg-[#EDE8FC] text-xs font-bold text-[#553C9A] transition-all cursor-pointer disabled:opacity-50"
+              title="Sync with Google Sheets"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sync Sheets</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setClearConfirmInput('');
+                setShowClearAllModal(true);
+              }}
+              disabled={isLoading || bookings.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#FFF5F5] border border-[#FEB2B2] text-xs font-bold text-[#C53030] hover:bg-[#FED7D7] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Permanently remove all bookings from Google Sheets"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-[#C53030]" />
+              <span className="hidden sm:inline">Clear All Bookings</span>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-bold text-[#1A1A2E] hover:bg-[#FAFAF7] transition-all cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-6">
+        
+        {/* KPI Summary Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] space-y-1">
+            <div className="flex items-center justify-between text-xs font-bold text-[#6B6B8A]">
+              <span>Total Bookings</span>
+              <Users className="w-4 h-4 text-[#553C9A]" />
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-[#1A1A2E]">{stats.total}</div>
+            <div className="text-[10px] text-[#6B6B8A]">All-time reservations</div>
+          </div>
+
+          <div className="bg-[#FEF0E7] p-4 sm:p-5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] space-y-1">
+            <div className="flex items-center justify-between text-xs font-bold text-[#C05621]">
+              <span>Pending KYC Review</span>
+              <AlertCircle className="w-4 h-4 text-[#DD6B20]" />
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-[#C05621]">{stats.pendingKyc}</div>
+            <div className="text-[10px] text-[#C05621]">Awaiting ID confirmation</div>
+          </div>
+
+          <div className="bg-[#E8F7F1] p-4 sm:p-5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] space-y-1">
+            <div className="flex items-center justify-between text-xs font-bold text-[#234E52]">
+              <span>Confirmed Slots</span>
+              <CheckCircle2 className="w-4 h-4 text-[#38A169]" />
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-[#234E52]">{stats.confirmed}</div>
+            <div className="text-[10px] text-[#234E52]">Locked & ready for handoff</div>
+          </div>
+
+          <div className="bg-[#EDE8FC] p-4 sm:p-5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] space-y-1">
+            <div className="flex items-center justify-between text-xs font-bold text-[#553C9A]">
+              <span>Downpayments</span>
+              <CreditCard className="w-4 h-4 text-[#6B46C1]" />
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-[#553C9A]">
+              ₱{stats.totalRevenue.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-[#553C9A]">₱300 locks collected</div>
+          </div>
+        </div>
+
+        {/* Sync Status Banner */}
+        {syncError && (
+          <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FEB2B2] text-xs text-[#C53030] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{syncError}</span>
+            </div>
+            <button
+              onClick={fetchAllBookings}
+              className="underline font-bold hover:text-[#9B2C2C] cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Search & Filter Toolbar */}
+        <div className="bg-white p-4 rounded-2xl border-2 border-[#E8E4F0] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-[#A0AEC0] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by customer name, #ref, phone, social handle, camera..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] focus:border-[#1A1A2E] text-xs font-semibold outline-none"
+            />
+          </div>
+
+          {/* Status Tabs */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'pending', label: 'Pending KYC' },
+              { id: 'confirmed', label: 'Confirmed' },
+              { id: 'active', label: 'Active Rentals' },
+              { id: 'completed', label: 'Completed' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-3 py-2 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap cursor-pointer ${
+                  statusFilter === tab.id
+                    ? 'bg-[#1A1A2E] text-white shadow-xs'
+                    : 'bg-[#FAFAF7] text-[#6B6B8A] hover:bg-[#EDE8FC] hover:text-[#1A1A2E]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Bookings Records List */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold text-[#6B6B8A] px-1">
+            <span>
+              Showing {filteredBookings.length} of {bookings.length} reservations
+            </span>
+            {lastSyncTime && (
+              <span>Last synced: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            )}
+          </div>
+
+          {filteredBookings.length === 0 ? (
+            <div className="bg-white rounded-3xl border-2 border-dashed border-[#CBD5E0] p-12 text-center space-y-3">
+              <Camera className="w-8 h-8 text-[#A0AEC0] mx-auto" />
+              <h3 className="text-sm font-bold text-[#1A1A2E]">No reservations found</h3>
+              <p className="text-xs text-[#6B6B8A] max-w-sm mx-auto">
+                No customer bookings match your search or filter criteria. New bookings will automatically appear here once submitted.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {filteredBookings.map((b) => {
+                const isPending = !b.status || b.status.toLowerCase().includes('pending') || b.status.toLowerCase().includes('deposit');
+                const isConfirmed = b.status && b.status.toLowerCase().includes('confirmed');
+                const isUpdating = updatingRef === b.bookingRef;
+
+                return (
+                  <div
+                    key={b.bookingRef}
+                    className="bg-white rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] p-4 sm:p-5 transition-all hover:-translate-y-0.5 space-y-3"
+                  >
+                    {/* Header Row */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#E8E4F0]">
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-mono font-black text-sm text-[#1A1A2E] bg-[#FAFAF7] px-2.5 py-1 rounded-lg border border-[#E8E4F0]">
+                          {b.bookingRef}
+                        </span>
+                        <span className="font-black text-base text-[#1A1A2E]">
+                          {b.customerName || 'Valued Renter'}
+                        </span>
+                        <span className="text-xs text-[#6B46C1] font-bold">
+                          {b.socialMediaHandle}
+                        </span>
+                      </div>
+
+                      {/* Status Badge & Fast Action */}
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-black px-3 py-1 rounded-full border ${
+                            isPending
+                              ? 'bg-[#FEF0E7] text-[#C05621] border-[#F5C6A8]'
+                              : isConfirmed
+                              ? 'bg-[#E8F7F1] text-[#234E52] border-[#A8DBC8]'
+                              : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
+                          }`}
+                        >
+                          {b.status || 'Pending Verification'}
+                        </span>
+
+                        <button
+                          onClick={() => setSelectedBooking(b)}
+                          className="px-3 py-1.5 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#1A1A2E] text-xs font-bold text-[#1A1A2E] flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-[#553C9A]" />
+                          <span>Inspect KYC & Files</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Booking Details Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold text-[#6B6B8A] uppercase">Camera Model</span>
+                        <div className="font-extrabold text-[#1A1A2E] flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-[#553C9A]" />
+                          <span>{b.cameraRented}</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold text-[#6B6B8A] uppercase">Rental Window</span>
+                        <div className="font-extrabold text-[#1A1A2E] flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-[#DD6B20]" />
+                          <span>{b.startDate} → {b.endDate}</span>
+                          <span className="text-[10px] text-[#6B6B8A]">({b.rentalDays}d)</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold text-[#6B6B8A] uppercase">Handover Method</span>
+                        <div className="font-bold text-[#1A1A2E] truncate flex items-center gap-1.5">
+                          <span className="truncate">{b.handoverMethod || b.address}</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold text-[#6B6B8A] uppercase">Financials</span>
+                        <div className="font-bold text-[#1A1A2E]">
+                          <span>Paid: ₱{b.downpaymentPaid}</span>
+                          <span className="text-[#6B6B8A]"> • Due: ₱{b.balanceDue}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Admin Actions Row */}
+                    <div className="pt-2 border-t border-[#E8E4F0]/60 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-[11px] text-[#6B6B8A]">
+                        <span>Contact: <strong>{b.contactNumber}</strong></span>
+                        <span>•</span>
+                        <span>GCash Ref: <strong>{b.gcashRefNumber || 'N/A'}</strong></span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {isPending && (
+                          <button
+                            disabled={isUpdating}
+                            onClick={() => handleUpdateStatus(b.bookingRef, 'Confirmed')}
+                            className="px-3 py-1 rounded-xl bg-[#38A169] text-white text-[11px] font-bold hover:bg-[#2F855A] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Approve KYC</span>
+                          </button>
+                        )}
+
+                        <button
+                          disabled={isUpdating}
+                          onClick={() => handleUpdateStatus(b.bookingRef, 'Active Rental')}
+                          className="px-3 py-1 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#E8E4F0] text-[11px] font-bold text-[#1A1A2E] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          Mark Picked Up
+                        </button>
+
+                        <button
+                          disabled={isUpdating}
+                          onClick={() => handleUpdateStatus(b.bookingRef, 'Completed')}
+                          className="px-3 py-1 rounded-xl bg-[#FAFAF7] hover:bg-[#E8F7F1] border border-[#E8E4F0] text-[11px] font-bold text-[#234E52] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          Mark Returned
+                        </button>
+
+                        <button
+                          disabled={isUpdating || isDeletingBooking}
+                          onClick={() => setDeleteTargetBooking(b)}
+                          className="px-2.5 py-1 rounded-xl bg-white hover:bg-[#FFF5F5] border border-[#FEB2B2] text-[11px] font-bold text-[#C53030] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                          title="Permanently remove this booking"
+                        >
+                          <Trash2 className="w-3 h-3 text-[#C53030]" />
+                          <span className="hidden sm:inline">Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* ─────────────────────────────────────────────────────────────
+          3. KYC & DOCUMENT INSPECTION DRAWER / MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {selectedBooking && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+          <div className="relative w-full max-w-3xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[92vh]">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-lg bg-[#EDE8FC] text-[#553C9A]">
+                    {selectedBooking.bookingRef}
+                  </span>
+                  <h3 className="font-black text-base text-[#1A1A2E]">
+                    KYC & Identity Verification
+                  </h3>
+                </div>
+                <p className="text-xs text-[#6B6B8A] mt-0.5">
+                  Renter: <strong>{selectedBooking.customerName}</strong> ({selectedBooking.socialMediaHandle})
+                </p>
+              </div>
+
+              <button
+                onClick={() => setSelectedBooking(null)}
+                className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#FEF0E7] flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+              
+              {/* Google Drive Direct Folder Link */}
+              {selectedBooking.driveFolderUrl && (
+                <div className="p-4 rounded-2xl bg-[#EDE8FC] border-2 border-[#C9B8F0] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-[#6B46C1] shadow-xs">
+                      <FolderOpen className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-xs text-[#1A1A2E]">
+                        Dedicated Google Drive Booking Folder
+                      </h4>
+                      <p className="text-[11px] text-[#553C9A]">
+                        All original full-resolution files & videos vaulted in your Google Drive.
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href={selectedBooking.driveFolderUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-[#1A1A2E] text-white font-bold text-xs hover:bg-[#6B46C1] transition-colors flex items-center gap-1"
+                  >
+                    <span>Open Folder</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+
+              {/* Document Cards Grid */}
+              <div className="space-y-3">
+                <h4 className="font-black text-xs uppercase tracking-wider text-[#6B6B8A]">
+                  Submitted Verification Artifacts (Click to Preview)
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <KycArtifactCard
+                    title="1. Primary Gov ID"
+                    icon={<ShieldCheck className="w-3.5 h-3.5 text-[#38A169]" />}
+                    url={selectedBooking.id1Url || selectedBooking.id1File}
+                    emptyLabel="No Primary ID attached"
+                    onPreview={(title, url) => setPreviewDoc({ title, url })}
+                  />
+
+                  <KycArtifactCard
+                    title="2. Secondary ID / COR"
+                    icon={<ShieldCheck className="w-3.5 h-3.5 text-[#38A169]" />}
+                    url={selectedBooking.id2Url || selectedBooking.id2File}
+                    emptyLabel="No Secondary ID attached"
+                    onPreview={(title, url) => setPreviewDoc({ title, url })}
+                  />
+
+                  <KycArtifactCard
+                    title="3. Handwritten Slip"
+                    icon={<FileText className="w-3.5 h-3.5 text-[#DD6B20]" />}
+                    url={selectedBooking.authSlipUrl || selectedBooking.authorizationSlipFile}
+                    emptyLabel="No authorization slip attached"
+                    onPreview={(title, url) => setPreviewDoc({ title, url })}
+                  />
+
+                  <KycArtifactCard
+                    title="4. Address Proof / Shopee"
+                    icon={<ShieldCheck className="w-3.5 h-3.5 text-[#6B46C1]" />}
+                    url={selectedBooking.billingUrl || selectedBooking.deliveryReceiptsFile}
+                    emptyLabel="No billing proof attached"
+                    onPreview={(title, url) => setPreviewDoc({ title, url })}
+                  />
+
+                  <KycArtifactCard
+                    title="5. Selfie Video / Photo"
+                    icon={<Camera className="w-3.5 h-3.5 text-[#E53E3E]" />}
+                    url={selectedBooking.selfieVideoUrl || selectedBooking.selfieFile}
+                    emptyLabel="No selfie attached"
+                    isVideo={true}
+                    onPreview={(title, url, isVideo) => setPreviewDoc({ title, url, isVideo })}
+                  />
+
+                  <KycArtifactCard
+                    title="6. GCash Receipt"
+                    icon={<CreditCard className="w-3.5 h-3.5 text-[#007DFE]" />}
+                    url={selectedBooking.receiptUrl || selectedBooking.receiptFile}
+                    emptyLabel={selectedBooking.gcashRefNumber ? `Ref: ${selectedBooking.gcashRefNumber}` : "No payment receipt attached"}
+                    onPreview={(title, url) => setPreviewDoc({ title, url })}
+                  />
+
+                  {(selectedBooking.guardianIdUrl || selectedBooking.contact1IdFile) && (
+                    <KycArtifactCard
+                      title="7. Guardian / Parent ID"
+                      icon={<ShieldCheck className="w-3.5 h-3.5 text-[#DD6B20]" />}
+                      url={selectedBooking.guardianIdUrl || selectedBooking.contact1IdFile}
+                      emptyLabel="No Guardian ID attached"
+                      onPreview={(title, url) => setPreviewDoc({ title, url })}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Emergency Contacts & Additional Notes */}
+              <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2">
+                <span className="font-bold text-[11px] text-[#6B6B8A] uppercase">Emergency Contacts & Notes</span>
+                <p className="font-medium text-[#1A1A2E]">
+                  {selectedBooking.notes || 'None provided.'}
+                </p>
+              </div>
+
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="px-6 py-4 bg-white border-t border-[#E8E4F0] flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedBooking(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-[#6B6B8A] hover:bg-[#FAFAF7] cursor-pointer"
+              >
+                Close Drawer
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTargetBooking(selectedBooking)}
+                  className="px-3.5 py-2.5 rounded-xl border border-[#FEB2B2] text-[#C53030] text-xs font-bold hover:bg-[#FFF5F5] transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Delete this reservation permanently"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Remove Booking</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleUpdateStatus(selectedBooking.bookingRef, 'Confirmed')}
+                  className="px-5 py-2.5 rounded-xl bg-[#38A169] text-white text-xs font-extrabold hover:bg-[#2F855A] shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Approve KYC & Confirm Slot</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          4. FULLSCREEN DOCUMENT PREVIEW POPUP
+      ───────────────────────────────────────────────────────────── */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+          <div className="relative max-w-4xl w-full max-h-[92vh] bg-[#1A1A2E] rounded-3xl p-4 sm:p-5 flex flex-col shadow-2xl">
+            {/* Header */}
+            <div className="w-full flex items-center justify-between pb-3 text-white border-b border-gray-700 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="font-black text-sm">{previewDoc.title}</span>
+                {getDriveFileId(previewDoc.url) && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A]">
+                    Google Drive Vault
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {getDriveFileId(previewDoc.url) && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+                  >
+                    <span>Open in Drive</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                  title="Close preview"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Viewer Content */}
+            <div className="flex-1 min-h-[50vh] max-h-[75vh] overflow-hidden flex items-center justify-center w-full bg-black/40 rounded-2xl">
+              {getDriveFileId(previewDoc.url) ? (
+                /* Google Drive Embed Viewer: renders images, multi-page PDFs, and videos natively! */
+                <iframe
+                  src={getDrivePreviewUrl(previewDoc.url)}
+                  title={previewDoc.title}
+                  className="w-full h-[72vh] rounded-2xl border-0 bg-white shadow-inner"
+                  allow="autoplay"
+                />
+              ) : previewDoc.isVideo ? (
+                <video src={previewDoc.url} controls autoPlay className="max-h-[72vh] rounded-xl" />
+              ) : (
+                <img
+                  src={previewDoc.url}
+                  alt={previewDoc.title}
+                  className="max-h-[72vh] object-contain rounded-xl shadow-2xl"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          5. DANGER CONFIRMATION: CLEAR ALL BOOKINGS MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {showClearAllModal && (
+        <div className="fixed inset-0 z-70 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-[#FAFAF7] rounded-[28px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden p-6 sm:p-7 space-y-5">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] flex items-center justify-center text-[#E53E3E] shrink-0">
+                <AlertTriangle className="w-6 h-6 text-[#E53E3E]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-[#1A1A2E]">
+                  Permanently Clear All Bookings?
+                </h3>
+                <p className="text-xs text-[#6B6B8A] leading-relaxed">
+                  This action is <strong className="text-[#C53030]">irreversible</strong>. It will permanently delete every customer reservation from your Google Sheets database and clear all calendar slots.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#FFF5F5] border border-[#FEB2B2] space-y-2">
+              <p className="text-xs font-bold text-[#C53030]">
+                ⚠️ You have {bookings.length} active customer bookings on record.
+              </p>
+              <p className="text-[11px] text-[#742A2A] leading-relaxed">
+                To prevent accidental deletion, please type <span className="font-mono font-black text-[#C53030] bg-white px-1.5 py-0.5 rounded border border-[#FEB2B2]">DELETE</span> in the box below to authorize:
+              </p>
+              <input
+                type="text"
+                value={clearConfirmInput}
+                onChange={(e) => setClearConfirmInput(e.target.value)}
+                placeholder="Type DELETE to confirm"
+                className="w-full px-3.5 py-2.5 rounded-xl border-2 border-[#FEB2B2] bg-white text-xs font-mono font-bold text-[#1A1A2E] focus:outline-none focus:border-[#C53030]"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isClearingBookings}
+                onClick={() => {
+                  setShowClearAllModal(false);
+                  setClearConfirmInput('');
+                }}
+                className="px-4 py-2.5 rounded-xl border border-[#E8E4F0] text-xs font-bold text-[#6B6B8A] hover:bg-[#F3F0FA] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={clearConfirmInput.trim() !== 'DELETE' || isClearingBookings}
+                onClick={handleClearAllBookings}
+                className="px-5 py-2.5 rounded-xl bg-[#E53E3E] text-white text-xs font-black hover:bg-[#C53030] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                {isClearingBookings ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Clearing Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Permanently Delete All</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          6. CONFIRMATION: DELETE SINGLE BOOKING MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {deleteTargetBooking && (
+        <div className="fixed inset-0 z-70 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="relative w-full max-w-md bg-[#FAFAF7] rounded-[28px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden p-6 space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-[#FFF5F5] border border-[#FEB2B2] flex items-center justify-center text-[#E53E3E] shrink-0">
+                <Trash2 className="w-5 h-5 text-[#E53E3E]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-[#1A1A2E]">
+                  Remove Booking {deleteTargetBooking.bookingRef}?
+                </h3>
+                <p className="text-xs text-[#6B6B8A]">
+                  Customer: <strong>{deleteTargetBooking.customerName}</strong> ({deleteTargetBooking.cameraRented})
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#4A5568] bg-white p-3.5 rounded-xl border border-[#E8E4F0]">
+              Are you sure you want to remove this booking? This will delete the entry from Google Sheets and release the reserved calendar dates.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingBooking}
+                onClick={() => setDeleteTargetBooking(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-[#6B6B8A] hover:bg-[#F3F0FA] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingBooking}
+                onClick={() => handleDeleteBooking(deleteTargetBooking.bookingRef)}
+                className="px-4 py-2 rounded-xl bg-[#E53E3E] text-white text-xs font-black hover:bg-[#C53030] transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                {isDeletingBooking ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Removing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
