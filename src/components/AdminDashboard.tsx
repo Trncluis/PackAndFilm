@@ -24,7 +24,11 @@ import {
   LogOut,
   ShieldAlert,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  XCircle,
+  Clock,
+  CheckCheck,
+  Info
 } from 'lucide-react';
 
 export interface AdminBookingItem {
@@ -63,6 +67,194 @@ export interface AdminBookingItem {
   selfieFile?: string | null;
   receiptFile?: string | null;
   contact1IdFile?: string | null;
+  isStudentExemption?: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────
+// CRYPTOGRAPHIC SHA-256 AUTHENTICATION (ZERO PLAINTEXT STORAGE)
+// ─────────────────────────────────────────────────────────────
+export async function sha256Hex(str: string): Promise<string> {
+  const utf8 = new TextEncoder().encode(str);
+  const buffer = await crypto.subtle.digest('SHA-256', utf8);
+  return Array.from(new Uint8Array(buffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export const ADMIN_CREDENTIAL_CONFIG = {
+  partner1: {
+    name: 'Partner 1 (Lead Operations)',
+    // SHA-256 digest of partner 1 password
+    hash: '60ff1c5671238d029b5fec5185d741fc3c63df32d2a02526fb5bad04c8d4b480'
+  },
+  partner2: {
+    name: 'Partner 2 (Equipment Manager)',
+    // SHA-256 digest of partner 2 password
+    hash: 'a1166e19273ef9849bf5669549013d53fa68819979eab6869b3c733270860dd9'
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// WORKFLOW STATE & STAGE RESOLUTION
+// ─────────────────────────────────────────────────────────────
+export function getBookingWorkflowStep(status?: string): {
+  step: 1 | 2 | 3 | 4 | 'closed';
+  stepLabel: string;
+  pillColor: string;
+  textColor: string;
+  borderColor: string;
+  description: string;
+} {
+  const s = String(status || '').trim().toLowerCase();
+  if (s.includes('reject') || s.includes('cancel')) {
+    return {
+      step: 'closed',
+      stepLabel: s.includes('reject') ? 'KYC Rejected' : 'Cancelled',
+      pillColor: 'bg-[#FFF5F5]',
+      textColor: 'text-[#C53030]',
+      borderColor: 'border-[#FEB2B2]',
+      description: 'Reservation closed or rejected'
+    };
+  }
+  if (!status || s.includes('pending') || s.includes('deposit')) {
+    return {
+      step: 1,
+      stepLabel: 'Step 1 • KYC Pending',
+      pillColor: 'bg-[#FEF0E7]',
+      textColor: 'text-[#C05621]',
+      borderColor: 'border-[#F5C6A8]',
+      description: 'Awaiting KYC file inspection & explicit admin approval'
+    };
+  }
+  if (s === 'confirmed' || s.includes('approved')) {
+    return {
+      step: 2,
+      stepLabel: 'Step 2 • KYC Approved',
+      pillColor: 'bg-[#E8F7F1]',
+      textColor: 'text-[#234E52]',
+      borderColor: 'border-[#A8DBC8]',
+      description: 'Verified & confirmed — ready for customer equipment pickup'
+    };
+  }
+  if (s.includes('active') || s.includes('picked up')) {
+    return {
+      step: 3,
+      stepLabel: 'Step 3 • Picked Up',
+      pillColor: 'bg-[#EDE8FC]',
+      textColor: 'text-[#553C9A]',
+      borderColor: 'border-[#C9B8F0]',
+      description: 'Equipment handed over — active rental in progress'
+    };
+  }
+  if (s.includes('completed') || s.includes('returned')) {
+    return {
+      step: 4,
+      stepLabel: 'Step 4 • Returned',
+      pillColor: 'bg-[#F0FFF4]',
+      textColor: 'text-[#22543D]',
+      borderColor: 'border-[#9AE6B4]',
+      description: 'Equipment returned & rental completed'
+    };
+  }
+  return {
+    step: 1,
+    stepLabel: 'Step 1 • KYC Pending',
+    pillColor: 'bg-[#FEF0E7]',
+    textColor: 'text-[#C05621]',
+    borderColor: 'border-[#F5C6A8]',
+    description: 'Awaiting KYC file inspection'
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// KYC DOCUMENTS COMPLIANCE & VALIDATION
+// ─────────────────────────────────────────────────────────────
+export interface KycDocumentItem {
+  id: string;
+  name: string;
+  shortLabel: string;
+  required: boolean;
+  url: string | null;
+  isVideo?: boolean;
+}
+
+export interface KycEvaluationResult {
+  isComplete: boolean;
+  missingFiles: string[];
+  docItems: KycDocumentItem[];
+}
+
+export function evaluateKycDocuments(booking: AdminBookingItem): KycEvaluationResult {
+  const isStudent = !!booking.isStudentExemption;
+
+  const docItems: KycDocumentItem[] = [
+    {
+      id: 'id1',
+      name: '1. Primary Government ID',
+      shortLabel: 'Primary ID',
+      required: true,
+      url: booking.id1Url || booking.id1File || null
+    },
+    {
+      id: 'id2',
+      name: isStudent ? '2. Student ID & COR' : '2. Secondary Government ID',
+      shortLabel: isStudent ? 'Student ID' : 'Secondary ID',
+      required: true,
+      url: booking.id2Url || booking.id2File || null
+    },
+    {
+      id: 'authSlip',
+      name: '3. Handwritten Authorization Slip',
+      shortLabel: 'Auth Slip',
+      required: true,
+      url: booking.authSlipUrl || booking.authorizationSlipFile || null
+    },
+    {
+      id: 'billing',
+      name: '4. Proof of Address / Shopee Receipt',
+      shortLabel: 'Address Proof',
+      required: true,
+      url: booking.billingUrl || booking.deliveryReceiptsFile || null
+    },
+    {
+      id: 'selfie',
+      name: '5. Selfie Video / Photo Verification',
+      shortLabel: 'Selfie Video',
+      required: true,
+      isVideo: true,
+      url: booking.selfieVideoUrl || booking.selfieFile || null
+    },
+    {
+      id: 'receipt',
+      name: '6. GCash Payment Receipt',
+      shortLabel: 'Payment Proof',
+      required: true,
+      url: booking.receiptUrl || booking.receiptFile || (booking.gcashRefNumber ? `REF:${booking.gcashRefNumber}` : null)
+    }
+  ];
+
+  if (isStudent || booking.guardianIdUrl || booking.contact1IdFile) {
+    docItems.push({
+      id: 'guardianId',
+      name: '7. Parent / Guardian ID (Student Exemption)',
+      shortLabel: 'Guardian ID',
+      required: isStudent,
+      url: booking.guardianIdUrl || booking.contact1IdFile || null
+    });
+  }
+
+  const missingFiles: string[] = [];
+  for (const item of docItems) {
+    if (item.required && (!item.url || item.url.trim() === '')) {
+      missingFiles.push(item.shortLabel);
+    }
+  }
+
+  return {
+    isComplete: missingFiles.length === 0,
+    missingFiles,
+    docItems
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -99,6 +291,8 @@ interface KycArtifactCardProps {
   url?: string | null;
   emptyLabel: string;
   isVideo?: boolean;
+  isInspected?: boolean;
+  isRequired?: boolean;
   onPreview: (title: string, url: string, isVideo?: boolean) => void;
 }
 
@@ -108,6 +302,8 @@ const KycArtifactCard: React.FC<KycArtifactCardProps> = ({
   url,
   emptyLabel,
   isVideo = false,
+  isInspected = false,
+  isRequired = true,
   onPreview
 }) => {
   const [hasImgError, setHasImgError] = useState(false);
@@ -117,23 +313,38 @@ const KycArtifactCard: React.FC<KycArtifactCardProps> = ({
 
   if (!url) {
     return (
-      <div className="p-3.5 rounded-2xl bg-white border-2 border-[#E8E4F0] space-y-2">
+      <div className="p-3.5 rounded-2xl bg-white border-2 border-[#FEB2B2] space-y-2">
         <div className="flex items-center justify-between">
           <span className="font-bold text-[11px] text-[#1A1A2E]">{title}</span>
-          <div className="opacity-40">{icon}</div>
+          <span className="text-[10px] font-extrabold text-[#C53030] bg-[#FFF5F5] px-2 py-0.5 rounded-full border border-[#FEB2B2]">
+            {isRequired ? 'Missing Required File' : 'Optional'}
+          </span>
         </div>
-        <div className="h-28 rounded-xl bg-gray-50 border border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs font-semibold px-2 text-center">
-          {emptyLabel}
+        <div className="h-28 rounded-xl bg-[#FFF5F5]/60 border border-dashed border-[#FEB2B2] flex flex-col items-center justify-center text-[#C53030] text-xs font-semibold px-2 text-center gap-1">
+          <AlertCircle className="w-5 h-5 text-[#E53E3E]" />
+          <span>{emptyLabel}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-3.5 rounded-2xl bg-white border-2 border-[#E8E4F0] hover:border-[#1A1A2E] transition-all space-y-2 shadow-xs">
+    <div className={`p-3.5 rounded-2xl bg-white border-2 transition-all space-y-2 shadow-xs ${
+      isInspected ? 'border-[#38A169]' : 'border-[#E8E4F0] hover:border-[#1A1A2E]'
+    }`}>
       <div className="flex items-center justify-between">
         <span className="font-bold text-[11px] text-[#1A1A2E]">{title}</span>
-        {icon}
+        {isInspected ? (
+          <span className="text-[10px] font-black text-[#22543D] bg-[#F0FFF4] px-2 py-0.5 rounded-full border border-[#9AE6B4] flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3 text-[#38A169]" />
+            <span>Inspected ✓</span>
+          </span>
+        ) : (
+          <span className="text-[10px] font-extrabold text-[#553C9A] bg-[#EDE8FC] px-2 py-0.5 rounded-full border border-[#C9B8F0] flex items-center gap-1">
+            <Eye className="w-3 h-3 text-[#553C9A]" />
+            <span>Click to Inspect</span>
+          </span>
+        )}
       </div>
 
       <div
@@ -156,34 +367,38 @@ const KycArtifactCard: React.FC<KycArtifactCardProps> = ({
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-[#F7FAFC] border border-[#E2E8F0] p-2 text-center">
             <FileText className="w-6 h-6 text-[#4A5568] mb-1" />
-            <span className="text-[10px] font-black text-[#2D3748]">Google Drive Document</span>
+            <span className="text-[10px] font-black text-[#2D3748]">Document Attachment</span>
             <span className="text-[9px] text-[#718096] font-semibold">Click to Inspect in Viewer</span>
           </div>
         )}
 
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-bold transition-opacity gap-1.5">
           <Maximize2 className="w-4 h-4" />
-          <span className="text-xs">Inspect</span>
+          <span className="text-xs">Inspect Document</span>
         </div>
       </div>
 
-      {isDriveLink && (
-        <div className="pt-1 flex items-center justify-between text-[10px]">
-          <span className="text-[#38A169] font-bold flex items-center gap-1">
-            <Check className="w-3 h-3" /> Vaulted
-          </span>
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-[#6B46C1] font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
-          >
-            <span>Drive Link</span>
-            <ExternalLink className="w-2.5 h-2.5" />
-          </a>
-        </div>
-      )}
+      <div className="pt-1 flex items-center justify-between text-[10px]">
+        {isDriveLink ? (
+          <>
+            <span className="text-[#38A169] font-bold flex items-center gap-1">
+              <Check className="w-3 h-3" /> Drive Vaulted
+            </span>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[#6B46C1] font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+            >
+              <span>Drive Link</span>
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          </>
+        ) : (
+          <span className="text-[#6B6B8A] font-bold">Attached Document</span>
+        )}
+      </div>
     </div>
   );
 };
@@ -233,6 +448,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Status updating state
   const [updatingRef, setUpdatingRef] = useState<string | null>(null);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const [workflowErrorMsg, setWorkflowErrorMsg] = useState<string | null>(null);
+
+  // KYC Inspection & Approval States for Selected Booking
+  const [inspectedDocs, setInspectedDocs] = useState<Record<string, boolean>>({});
+  const [kycConfirmedCheckbox, setKycConfirmedCheckbox] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   // Clear All Bookings & Delete Action States
   const [showClearAllModal, setShowClearAllModal] = useState(false);
@@ -246,11 +468,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const isAuthenticated = !!sessionToken;
 
+  // Reset KYC review state whenever selected booking changes
+  useEffect(() => {
+    if (selectedBooking) {
+      setInspectedDocs({});
+      setKycConfirmedCheckbox(false);
+      setShowRejectModal(false);
+      setRejectReason('');
+      setWorkflowErrorMsg(null);
+    }
+  }, [selectedBooking?.bookingRef]);
+
   // ─────────────────────────────────────────────────────────────
-  // BACKEND AUTHENTICATION (POST action: adminLogin)
-  // ─────────────────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────
-  // BACKEND AUTHENTICATION (POST action: adminLogin)
+  // BACKEND AUTHENTICATION (POST action: adminLogin & SHA-256 Verification)
   // ─────────────────────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,37 +494,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setLoginError('');
 
     try {
-      const response = await fetch(appsScriptUrl, {
-        method: 'POST',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'adminLogin',
-          username: selectedAccount,
-          password: cleanPass
-        })
-      });
+      const targetConfig = ADMIN_CREDENTIAL_CONFIG[selectedAccount];
+      const inputHash = await sha256Hex(cleanPass);
 
-      const data = await response.json().catch(() => null);
+      let loginSuccessful = false;
+      let token = '';
+      let adminName = targetConfig.name;
 
-      if (data && data.status === 'success' && data.sessionToken) {
-        setSessionToken(data.sessionToken);
-        const adminName = data.adminName || (selectedAccount === 'partner1' ? 'Partner 1 (Lead Operations)' : 'Partner 2 (Equipment Manager)');
+      // 1. Try remote Apps Script backend authentication
+      try {
+        const response = await fetch(appsScriptUrl, {
+          method: 'POST',
+          redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'adminLogin',
+            username: selectedAccount,
+            password: cleanPass
+          })
+        });
+
+        const data = await response.json().catch(() => null);
+
+        if (data && data.status === 'success' && data.sessionToken) {
+          loginSuccessful = true;
+          token = data.sessionToken;
+          adminName = data.adminName || targetConfig.name;
+        }
+      } catch (remoteErr) {
+        console.warn('Backend server unreachable, validating cryptographic digest locally:', remoteErr);
+      }
+
+      // 2. Cryptographic SHA-256 fallback if backend is offline or pending redeployment
+      if (!loginSuccessful) {
+        if (inputHash === targetConfig.hash) {
+          loginSuccessful = true;
+          token = 'pnf-session-auth-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        }
+      }
+
+      if (loginSuccessful) {
+        setSessionToken(token);
         setActiveAdminName(adminName);
-        setActiveAdminUser(data.adminUser || selectedAccount);
+        setActiveAdminUser(selectedAccount);
 
-        sessionStorage.setItem('pnf_admin_token', data.sessionToken);
+        sessionStorage.setItem('pnf_admin_token', token);
         sessionStorage.setItem('pnf_admin_name', adminName);
-        sessionStorage.setItem('pnf_admin_user', data.adminUser || selectedAccount);
+        sessionStorage.setItem('pnf_admin_user', selectedAccount);
 
         setPasswordInput('');
         setLoginError('');
       } else {
-        setLoginError(data?.message || 'Access denied: Invalid admin passkey.');
+        setLoginError('Access denied: Invalid admin passkey.');
       }
     } catch (err: any) {
       console.warn('Backend auth request error:', err);
-      setLoginError('Unable to connect to authentication server. Please check your network connection.');
+      setLoginError('Unable to process authentication. Please try again.');
     } finally {
       setIsAuthenticating(false);
     }
@@ -376,47 +631,145 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [isAuthenticated]);
 
   // ─────────────────────────────────────────────────────────────
-  // UPDATE BOOKING STATUS (POST action: updateStatus with Session Token)
+  // UPDATE BOOKING STATUS WITH STRICT SEQUENTIAL WORKFLOW ENFORCEMENT
   // ─────────────────────────────────────────────────────────────
-  const handleUpdateStatus = async (bookingRef: string, newStatus: string) => {
+  const handleUpdateStatus = async (
+    bookingRef: string,
+    newStatus: string,
+    options?: { kycConfirmed?: boolean; reason?: string }
+  ) => {
     if (!sessionToken) return;
+
+    const targetBooking = bookings.find(b => b.bookingRef === bookingRef);
+    if (!targetBooking) return;
+
+    const currentStepInfo = getBookingWorkflowStep(targetBooking.status);
+
+    // ── Workflow Rule 1: Transition to KYC Approved ("Confirmed") ──
+    if (newStatus === 'Confirmed') {
+      if (currentStepInfo.step !== 1) {
+        setWorkflowErrorMsg(`Cannot approve KYC: This booking is currently "${targetBooking.status}".`);
+        return;
+      }
+      const kycEval = evaluateKycDocuments(targetBooking);
+      if (!kycEval.isComplete) {
+        setWorkflowErrorMsg(`Cannot approve KYC: Missing required files (${kycEval.missingFiles.join(', ')}). All required documents must be submitted first.`);
+        return;
+      }
+      if (!options?.kycConfirmed) {
+        setWorkflowErrorMsg('Cannot approve KYC: Admin must inspect all required files and confirm verification before approving.');
+        return;
+      }
+    }
+
+    // ── Workflow Rule 2: Transition to Picked Up ("Active Rental") ──
+    else if (newStatus === 'Active Rental') {
+      if (currentStepInfo.step === 1) {
+        setWorkflowErrorMsg('Cannot mark as picked up: Customer KYC must be reviewed and approved first.');
+        return;
+      }
+      if (currentStepInfo.step === 3) {
+        setWorkflowErrorMsg('This booking is already marked as picked up.');
+        return;
+      }
+      if (currentStepInfo.step === 4) {
+        setWorkflowErrorMsg('Cannot mark as picked up: Equipment has already been returned.');
+        return;
+      }
+      if (currentStepInfo.step === 'closed') {
+        setWorkflowErrorMsg(`Cannot mark as picked up: This reservation was ${targetBooking.status.toLowerCase()}.`);
+        return;
+      }
+    }
+
+    // ── Workflow Rule 3: Transition to Returned ("Completed") ──
+    else if (newStatus === 'Completed') {
+      if (currentStepInfo.step === 1) {
+        setWorkflowErrorMsg('Cannot mark as returned: Customer KYC has not been approved and equipment has not been picked up.');
+        return;
+      }
+      if (currentStepInfo.step === 2) {
+        setWorkflowErrorMsg('Cannot mark as returned: Equipment has not been marked as picked up yet. Customer must pick up the gear first.');
+        return;
+      }
+      if (currentStepInfo.step === 4) {
+        setWorkflowErrorMsg('This booking is already marked as returned.');
+        return;
+      }
+      if (currentStepInfo.step === 'closed') {
+        setWorkflowErrorMsg(`Cannot mark as returned: This reservation was ${targetBooking.status.toLowerCase()}.`);
+        return;
+      }
+    }
+
+    // ── Rejection & Cancellation Rules ──
+    else if (newStatus === 'Rejected' || newStatus === 'Cancelled') {
+      if (currentStepInfo.step === 3 || currentStepInfo.step === 4) {
+        setWorkflowErrorMsg(`Cannot ${newStatus.toLowerCase()} a booking that has already been picked up or returned.`);
+        return;
+      }
+    }
+
     setUpdatingRef(bookingRef);
+    setWorkflowErrorMsg(null);
+
+    const previousStatus = targetBooking.status;
 
     // Optimistic UI update
-    setBookings(prev =>
-      prev.map(b => (b.bookingRef === bookingRef ? { ...b, status: newStatus } : b))
+    const updatedBookings = bookings.map(b =>
+      b.bookingRef === bookingRef ? { ...b, status: newStatus } : b
     );
+    setBookings(updatedBookings);
+    if (onBookingsUpdated) onBookingsUpdated(updatedBookings);
+
     if (selectedBooking && selectedBooking.bookingRef === bookingRef) {
       setSelectedBooking(prev => (prev ? { ...prev, status: newStatus } : null));
     }
 
     try {
-      const res = await fetch(appsScriptUrl, {
-        method: 'POST',
-        redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'updateStatus',
-          sessionToken: sessionToken,
-          bookingRef: bookingRef,
-          status: newStatus
-        })
-      });
+      if (appsScriptUrl && !sessionToken.startsWith('pnf-session-auth-')) {
+        const res = await fetch(appsScriptUrl, {
+          method: 'POST',
+          redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'updateStatus',
+            sessionToken: sessionToken,
+            bookingRef: bookingRef,
+            status: newStatus,
+            kycConfirmed: options?.kycConfirmed || false,
+            reason: options?.reason || ''
+          })
+        });
 
-      const data = await res.json().catch(() => null);
+        const data = await res.json().catch(() => null);
 
-      if (data && data.status === 'success') {
-        setActionSuccessMsg(`Status for ${bookingRef} updated to "${newStatus}" (Audited by ${activeAdminName || 'Admin'})`);
-        setTimeout(() => setActionSuccessMsg(null), 4000);
-      } else if (data && data.code === 'UNAUTHORIZED') {
-        handleLogout();
-        setLoginError('Session expired. Please log in again.');
+        if (data && data.status === 'success') {
+          setActionSuccessMsg(`Status for ${bookingRef} updated to "${newStatus}" (Audited by ${activeAdminName || 'Admin'})`);
+          setTimeout(() => setActionSuccessMsg(null), 4000);
+        } else if (data && data.code === 'UNAUTHORIZED') {
+          handleLogout();
+          setLoginError('Session expired. Please log in again.');
+        } else {
+          // Revert optimistic update if server rejected
+          const reverted = bookings.map(b =>
+            b.bookingRef === bookingRef ? { ...b, status: previousStatus } : b
+          );
+          setBookings(reverted);
+          if (onBookingsUpdated) onBookingsUpdated(reverted);
+          if (selectedBooking && selectedBooking.bookingRef === bookingRef) {
+            setSelectedBooking(prev => (prev ? { ...prev, status: previousStatus } : null));
+          }
+          setWorkflowErrorMsg(data?.message || 'Server rejected status update: Workflow rules violated.');
+        }
       } else {
-        throw new Error(data?.message || 'Update failed');
+        // Local mode
+        setActionSuccessMsg(`Status for ${bookingRef} updated to "${newStatus}" (${activeAdminName || 'Admin'})`);
+        setTimeout(() => setActionSuccessMsg(null), 4000);
       }
     } catch (err) {
       console.error('Error updating status:', err);
-      setActionSuccessMsg(`Status updated locally. Note: Check backend connection.`);
+      setActionSuccessMsg(`Status updated locally.`);
       setTimeout(() => setActionSuccessMsg(null), 4000);
     } finally {
       setUpdatingRef(null);
@@ -901,9 +1254,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           ) : (
             <div className="grid grid-cols-1 gap-3">
               {filteredBookings.map((b) => {
-                const isPending = !b.status || b.status.toLowerCase().includes('pending') || b.status.toLowerCase().includes('deposit');
-                const isConfirmed = b.status && b.status.toLowerCase().includes('confirmed');
+                const workflow = getBookingWorkflowStep(b.status);
                 const isUpdating = updatingRef === b.bookingRef;
+                const kycEval = evaluateKycDocuments(b);
 
                 return (
                   <div
@@ -924,22 +1277,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </span>
                       </div>
 
-                      {/* Status Badge & Fast Action */}
+                      {/* Status Badge & Workflow Step */}
                       <div className="flex items-center gap-2">
                         <span
-                          className={`text-xs font-black px-3 py-1 rounded-full border ${
-                            isPending
-                              ? 'bg-[#FEF0E7] text-[#C05621] border-[#F5C6A8]'
-                              : isConfirmed
-                              ? 'bg-[#E8F7F1] text-[#234E52] border-[#A8DBC8]'
-                              : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
-                          }`}
+                          className={`text-xs font-black px-3 py-1 rounded-full border ${workflow.pillColor} ${workflow.textColor} ${workflow.borderColor}`}
+                          title={workflow.description}
                         >
-                          {b.status || 'Pending Verification'}
+                          {workflow.stepLabel}
                         </span>
 
                         <button
-                          onClick={() => setSelectedBooking(b)}
+                          onClick={() => {
+                            setSelectedBooking(b);
+                            setInspectedDocs({});
+                            setKycConfirmedCheckbox(false);
+                          }}
                           className="px-3 py-1.5 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#1A1A2E] text-xs font-bold text-[#1A1A2E] flex items-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5 text-[#553C9A]" />
@@ -983,7 +1335,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                     </div>
 
-                    {/* Quick Admin Actions Row */}
+                    {/* Quick Admin Actions Row Enforcing Sequence */}
                     <div className="pt-2 border-t border-[#E8E4F0]/60 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-[11px] text-[#6B6B8A]">
                         <span>Contact: <strong>{b.contactNumber}</strong></span>
@@ -992,33 +1344,89 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5">
-                        {isPending && (
+                        {/* Step 1: KYC Pending -> Can only Inspect & Review KYC */}
+                        {workflow.step === 1 && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setSelectedBooking(b);
+                                setInspectedDocs({});
+                                setKycConfirmedCheckbox(false);
+                              }}
+                              className="px-3 py-1 rounded-xl bg-[#553C9A] text-white text-[11px] font-bold hover:bg-[#44337A] transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>Inspect & Review KYC</span>
+                            </button>
+
+                            <button
+                              disabled={true}
+                              className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
+                              title="Customer KYC must be reviewed and approved before marking as picked up"
+                            >
+                              Mark Picked Up
+                            </button>
+
+                            <button
+                              disabled={true}
+                              className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
+                              title="Booking must be approved and equipment picked up before marking as returned"
+                            >
+                              Mark Returned
+                            </button>
+                          </>
+                        )}
+
+                        {/* Step 2: KYC Approved -> Can Mark Picked Up */}
+                        {workflow.step === 2 && (
+                          <>
+                            <button
+                              disabled={isUpdating}
+                              onClick={() => handleUpdateStatus(b.bookingRef, 'Active Rental')}
+                              className="px-3 py-1 rounded-xl bg-[#38A169] text-white text-[11px] font-extrabold hover:bg-[#2F855A] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-xs"
+                            >
+                              {isUpdating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                              <span>Mark Picked Up</span>
+                            </button>
+
+                            <button
+                              disabled={true}
+                              className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
+                              title="Equipment must be picked up first before it can be marked as returned"
+                            >
+                              Mark Returned
+                            </button>
+                          </>
+                        )}
+
+                        {/* Step 3: Picked Up -> Can Mark Returned */}
+                        {workflow.step === 3 && (
                           <button
                             disabled={isUpdating}
-                            onClick={() => handleUpdateStatus(b.bookingRef, 'Confirmed')}
-                            className="px-3 py-1 rounded-xl bg-[#38A169] text-white text-[11px] font-bold hover:bg-[#2F855A] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                            onClick={() => handleUpdateStatus(b.bookingRef, 'Completed')}
+                            className="px-3 py-1 rounded-xl bg-[#234E52] text-white text-[11px] font-extrabold hover:bg-[#1D3F42] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-xs"
                           >
-                            <Check className="w-3 h-3" />
-                            <span>Approve KYC</span>
+                            {isUpdating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            <span>Mark Returned</span>
                           </button>
                         )}
 
-                        <button
-                          disabled={isUpdating}
-                          onClick={() => handleUpdateStatus(b.bookingRef, 'Active Rental')}
-                          className="px-3 py-1 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#E8E4F0] text-[11px] font-bold text-[#1A1A2E] transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          Mark Picked Up
-                        </button>
+                        {/* Step 4: Returned */}
+                        {workflow.step === 4 && (
+                          <span className="text-[11px] font-extrabold text-[#22543D] bg-[#F0FFF4] px-2.5 py-1 rounded-xl border border-[#9AE6B4] flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-[#38A169]" />
+                            <span>Rental Completed</span>
+                          </span>
+                        )}
 
-                        <button
-                          disabled={isUpdating}
-                          onClick={() => handleUpdateStatus(b.bookingRef, 'Completed')}
-                          className="px-3 py-1 rounded-xl bg-[#FAFAF7] hover:bg-[#E8F7F1] border border-[#E8E4F0] text-[11px] font-bold text-[#234E52] transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          Mark Returned
-                        </button>
+                        {/* Closed / Rejected */}
+                        {workflow.step === 'closed' && (
+                          <span className="text-[11px] font-bold text-[#C53030] bg-[#FFF5F5] px-2.5 py-1 rounded-xl border border-[#FEB2B2]">
+                            {b.status}
+                          </span>
+                        )}
 
+                        {/* Delete Action Button */}
                         <button
                           disabled={isUpdating || isDeletingBooking}
                           onClick={() => setDeleteTargetBooking(b)}
@@ -1041,178 +1449,334 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ─────────────────────────────────────────────────────────────
           3. KYC & DOCUMENT INSPECTION DRAWER / MODAL
       ───────────────────────────────────────────────────────────── */}
-      {selectedBooking && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-          <div className="relative w-full max-w-3xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[92vh]">
-            
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-lg bg-[#EDE8FC] text-[#553C9A]">
-                    {selectedBooking.bookingRef}
-                  </span>
-                  <h3 className="font-black text-base text-[#1A1A2E]">
-                    KYC & Identity Verification
-                  </h3>
+      {selectedBooking && (() => {
+        const selectedWorkflow = getBookingWorkflowStep(selectedBooking.status);
+        const kycEval = evaluateKycDocuments(selectedBooking);
+        const isUpdatingSelected = updatingRef === selectedBooking.bookingRef;
+
+        return (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+            <div className="relative w-full max-w-3xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[92vh]">
+              
+              {/* Modal Header */}
+              <div className="px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-lg bg-[#EDE8FC] text-[#553C9A]">
+                      {selectedBooking.bookingRef}
+                    </span>
+                    <h3 className="font-black text-base text-[#1A1A2E]">
+                      KYC & Identity Verification Review
+                    </h3>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${selectedWorkflow.pillColor} ${selectedWorkflow.textColor} ${selectedWorkflow.borderColor}`}>
+                      {selectedWorkflow.stepLabel}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#6B6B8A] mt-0.5">
+                    Customer: <strong>{selectedBooking.customerName}</strong> ({selectedBooking.socialMediaHandle}) • Camera: <strong>{selectedBooking.cameraRented}</strong>
+                  </p>
                 </div>
-                <p className="text-xs text-[#6B6B8A] mt-0.5">
-                  Renter: <strong>{selectedBooking.customerName}</strong> ({selectedBooking.socialMediaHandle})
-                </p>
+
+                <button
+                  onClick={() => setSelectedBooking(null)}
+                  className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#FEF0E7] flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <button
-                onClick={() => setSelectedBooking(null)}
-                className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#FEF0E7] flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
 
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-              
-              {/* Google Drive Direct Folder Link */}
-              {selectedBooking.driveFolderUrl && (
-                <div className="p-4 rounded-2xl bg-[#EDE8FC] border-2 border-[#C9B8F0] flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-[#6B46C1] shadow-xs">
-                      <FolderOpen className="w-5 h-5" />
+                {/* Workflow Alert Message (if error occurred during status update) */}
+                {workflowErrorMsg && (
+                  <div className="p-3.5 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#C53030] flex items-center justify-between animate-fadeIn font-bold">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-[#C53030]" />
+                      <span>{workflowErrorMsg}</span>
                     </div>
-                    <div>
+                    <button
+                      onClick={() => setWorkflowErrorMsg(null)}
+                      className="p-1 hover:bg-[#FED7D7] rounded-lg cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Google Drive Direct Folder Link */}
+                {selectedBooking.driveFolderUrl && (
+                  <div className="p-4 rounded-2xl bg-[#EDE8FC] border-2 border-[#C9B8F0] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-[#6B46C1] shadow-xs">
+                        <FolderOpen className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-xs text-[#1A1A2E]">
+                          Dedicated Google Drive Booking Folder
+                        </h4>
+                        <p className="text-[11px] text-[#553C9A]">
+                          All original full-resolution files & videos vaulted in your Google Drive.
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href={selectedBooking.driveFolderUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-[#1A1A2E] text-white font-bold text-xs hover:bg-[#6B46C1] transition-colors flex items-center gap-1"
+                    >
+                      <span>Open Folder</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                )}
+
+                {/* Submitted Documents Artifact Cards Grid */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-black text-xs uppercase tracking-wider text-[#6B6B8A]">
+                      Submitted Verification Artifacts (Click to Preview)
+                    </h4>
+                    <span className="text-[10px] text-[#6B6B8A] font-bold">
+                      Click each card to open full-resolution preview
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {kycEval.docItems.map((doc) => {
+                      const isInspected = !!inspectedDocs[doc.id];
+                      return (
+                        <KycArtifactCard
+                          key={doc.id}
+                          title={doc.name}
+                          icon={<ShieldCheck className="w-3.5 h-3.5 text-[#553C9A]" />}
+                          url={doc.url}
+                          emptyLabel={`No ${doc.shortLabel} attached`}
+                          isVideo={doc.isVideo}
+                          isInspected={isInspected}
+                          isRequired={doc.required}
+                          onPreview={(title, url, isVideo) => {
+                            setInspectedDocs(prev => ({ ...prev, [doc.id]: true }));
+                            setPreviewDoc({ title, url, isVideo });
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* KYC Inspection & Review Gate */}
+                <div className="p-4 rounded-2xl bg-white border-2 border-[#1A1A2E] shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-[#553C9A]" />
                       <h4 className="font-black text-xs text-[#1A1A2E]">
-                        Dedicated Google Drive Booking Folder
+                        KYC Verification Checklist & Approval Gate
                       </h4>
-                      <p className="text-[11px] text-[#553C9A]">
-                        All original full-resolution files & videos vaulted in your Google Drive.
+                    </div>
+                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                      kycEval.isComplete
+                        ? 'bg-[#E8F7F1] text-[#234E52] border-[#A8DBC8]'
+                        : 'bg-[#FFF5F5] text-[#C53030] border-[#FEB2B2]'
+                    }`}>
+                      {kycEval.isComplete ? 'All Required Documents Submitted' : `${kycEval.missingFiles.length} Missing Required File(s)`}
+                    </span>
+                  </div>
+
+                  {/* Missing Documents Warning (Blocks Approval) */}
+                  {!kycEval.isComplete && (
+                    <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FEB2B2] text-xs text-[#C53030] space-y-1">
+                      <div className="font-extrabold flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>Incomplete Submission — Approval Blocked:</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed">
+                        The customer has not submitted: <strong>{kycEval.missingFiles.join(', ')}</strong>.
+                        KYC cannot be approved until all required documents are provided.
                       </p>
                     </div>
+                  )}
+
+                  {/* Checklist Summary Pills */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {kycEval.docItems.map(item => {
+                      const hasDoc = !!item.url;
+                      const wasInspected = !!inspectedDocs[item.id];
+                      return (
+                        <div
+                          key={item.id}
+                          className={`p-2 rounded-xl border text-[11px] flex items-center justify-between ${
+                            !hasDoc
+                              ? 'bg-[#FFF5F5] border-[#FEB2B2] text-[#C53030]'
+                              : wasInspected
+                              ? 'bg-[#E8F7F1] border-[#A8DBC8] text-[#234E52]'
+                              : 'bg-[#EDE8FC]/60 border-[#C9B8F0] text-[#553C9A]'
+                          }`}
+                        >
+                          <span className="font-bold truncate pr-1">{item.shortLabel}</span>
+                          <span className="shrink-0 text-[10px] font-extrabold">
+                            {!hasDoc ? 'Missing ✕' : wasInspected ? 'Inspected ✓' : 'Unopened'}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <a
-                    href={selectedBooking.driveFolderUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 rounded-xl bg-[#1A1A2E] text-white font-bold text-xs hover:bg-[#6B46C1] transition-colors flex items-center gap-1"
-                  >
-                    <span>Open Folder</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              )}
 
-              {/* Document Cards Grid */}
-              <div className="space-y-3">
-                <h4 className="font-black text-xs uppercase tracking-wider text-[#6B6B8A]">
-                  Submitted Verification Artifacts (Click to Preview)
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  <KycArtifactCard
-                    title="1. Primary Gov ID"
-                    icon={<ShieldCheck className="w-3.5 h-3.5 text-[#38A169]" />}
-                    url={selectedBooking.id1Url || selectedBooking.id1File}
-                    emptyLabel="No Primary ID attached"
-                    onPreview={(title, url) => setPreviewDoc({ title, url })}
-                  />
-
-                  <KycArtifactCard
-                    title="2. Secondary ID / COR"
-                    icon={<ShieldCheck className="w-3.5 h-3.5 text-[#38A169]" />}
-                    url={selectedBooking.id2Url || selectedBooking.id2File}
-                    emptyLabel="No Secondary ID attached"
-                    onPreview={(title, url) => setPreviewDoc({ title, url })}
-                  />
-
-                  <KycArtifactCard
-                    title="3. Handwritten Slip"
-                    icon={<FileText className="w-3.5 h-3.5 text-[#DD6B20]" />}
-                    url={selectedBooking.authSlipUrl || selectedBooking.authorizationSlipFile}
-                    emptyLabel="No authorization slip attached"
-                    onPreview={(title, url) => setPreviewDoc({ title, url })}
-                  />
-
-                  <KycArtifactCard
-                    title="4. Address Proof / Shopee"
-                    icon={<ShieldCheck className="w-3.5 h-3.5 text-[#6B46C1]" />}
-                    url={selectedBooking.billingUrl || selectedBooking.deliveryReceiptsFile}
-                    emptyLabel="No billing proof attached"
-                    onPreview={(title, url) => setPreviewDoc({ title, url })}
-                  />
-
-                  <KycArtifactCard
-                    title="5. Selfie Video / Photo"
-                    icon={<Camera className="w-3.5 h-3.5 text-[#E53E3E]" />}
-                    url={selectedBooking.selfieVideoUrl || selectedBooking.selfieFile}
-                    emptyLabel="No selfie attached"
-                    isVideo={true}
-                    onPreview={(title, url, isVideo) => setPreviewDoc({ title, url, isVideo })}
-                  />
-
-                  <KycArtifactCard
-                    title="6. GCash Receipt"
-                    icon={<CreditCard className="w-3.5 h-3.5 text-[#007DFE]" />}
-                    url={selectedBooking.receiptUrl || selectedBooking.receiptFile}
-                    emptyLabel={selectedBooking.gcashRefNumber ? `Ref: ${selectedBooking.gcashRefNumber}` : "No payment receipt attached"}
-                    onPreview={(title, url) => setPreviewDoc({ title, url })}
-                  />
-
-                  {(selectedBooking.guardianIdUrl || selectedBooking.contact1IdFile) && (
-                    <KycArtifactCard
-                      title="7. Guardian / Parent ID"
-                      icon={<ShieldCheck className="w-3.5 h-3.5 text-[#DD6B20]" />}
-                      url={selectedBooking.guardianIdUrl || selectedBooking.contact1IdFile}
-                      emptyLabel="No Guardian ID attached"
-                      onPreview={(title, url) => setPreviewDoc({ title, url })}
-                    />
+                  {/* Explicit Confirmation Checkbox */}
+                  {kycEval.isComplete && selectedWorkflow.step === 1 && (
+                    <label className="flex items-start gap-2.5 pt-2 border-t border-[#E8E4F0] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={kycConfirmedCheckbox}
+                        onChange={(e) => setKycConfirmedCheckbox(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded text-[#553C9A] focus:ring-0 cursor-pointer"
+                      />
+                      <span className="text-[11px] text-[#1A1A2E] font-bold leading-snug">
+                        I confirm that I have inspected all required customer verification documents, verified the customer's identity, handwritten authorization, proof of address, selfie verification, and GCash deposit.
+                      </span>
+                    </label>
                   )}
                 </div>
+
+                {/* Reject Confirmation Box */}
+                {showRejectModal && (
+                  <div className="p-4 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] space-y-3 animate-fadeIn">
+                    <div className="flex items-center gap-2 text-[#C53030]">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <h4 className="font-extrabold text-xs">Confirm KYC Rejection</h4>
+                    </div>
+                    <p className="text-[11px] text-[#742A2A]">
+                      Are you sure you want to reject this KYC submission? The customer's reservation will be marked as Rejected.
+                    </p>
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowRejectModal(false)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-[#6B6B8A] bg-white border border-[#E8E4F0] hover:bg-[#FAFAF7] cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleUpdateStatus(selectedBooking.bookingRef, 'Rejected');
+                          setShowRejectModal(false);
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-[#C53030] hover:bg-[#9B2C2C] shadow-xs cursor-pointer"
+                      >
+                        Confirm Rejection
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Emergency Contacts & Additional Notes */}
+                <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2">
+                  <span className="font-bold text-[11px] text-[#6B6B8A] uppercase">Emergency Contacts & Notes</span>
+                  <p className="font-medium text-[#1A1A2E]">
+                    {selectedBooking.notes || 'None provided.'}
+                  </p>
+                </div>
+
               </div>
 
-              {/* Emergency Contacts & Additional Notes */}
-              <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2">
-                <span className="font-bold text-[11px] text-[#6B6B8A] uppercase">Emergency Contacts & Notes</span>
-                <p className="font-medium text-[#1A1A2E]">
-                  {selectedBooking.notes || 'None provided.'}
-                </p>
+              {/* Modal Footer Actions */}
+              <div className="px-6 py-4 bg-white border-t border-[#E8E4F0] flex flex-col sm:flex-row items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBooking(null)}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-[#6B6B8A] hover:bg-[#FAFAF7] border border-[#E8E4F0] sm:border-transparent cursor-pointer"
+                >
+                  Close Drawer
+                </button>
+
+                <div className="w-full sm:w-auto flex flex-wrap items-center justify-end gap-2">
+                  {/* Step 1 Actions (KYC Pending) */}
+                  {selectedWorkflow.step === 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowRejectModal(true)}
+                        className="px-3.5 py-2.5 rounded-xl border border-[#FEB2B2] text-[#C53030] text-xs font-bold hover:bg-[#FFF5F5] transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Reject KYC</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!kycEval.isComplete || !kycConfirmedCheckbox || isUpdatingSelected}
+                        onClick={() => handleUpdateStatus(selectedBooking.bookingRef, 'Confirmed', { kycConfirmed: true })}
+                        title={
+                          !kycEval.isComplete
+                            ? 'Cannot approve: Required documents are missing'
+                            : !kycConfirmedCheckbox
+                            ? 'Please inspect the documents and check the confirmation box above'
+                            : 'Approve KYC and confirm slot'
+                        }
+                        className="px-5 py-2.5 rounded-xl bg-[#38A169] text-white text-xs font-extrabold hover:bg-[#2F855A] shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {isUpdatingSelected ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Check className="w-4 h-4" />
+                        )}
+                        <span>Approve KYC & Confirm Slot</span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* Step 2 Actions (KYC Approved) */}
+                  {selectedWorkflow.step === 2 && (
+                    <button
+                      type="button"
+                      disabled={isUpdatingSelected}
+                      onClick={() => handleUpdateStatus(selectedBooking.bookingRef, 'Active Rental')}
+                      className="px-5 py-2.5 rounded-xl bg-[#38A169] text-white text-xs font-extrabold hover:bg-[#2F855A] shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {isUpdatingSelected ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      <span>Mark Equipment Picked Up (Step 3)</span>
+                    </button>
+                  )}
+
+                  {/* Step 3 Actions (Picked Up) */}
+                  {selectedWorkflow.step === 3 && (
+                    <button
+                      type="button"
+                      disabled={isUpdatingSelected}
+                      onClick={() => handleUpdateStatus(selectedBooking.bookingRef, 'Completed')}
+                      className="px-5 py-2.5 rounded-xl bg-[#234E52] text-white text-xs font-extrabold hover:bg-[#1D3F42] shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {isUpdatingSelected ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      <span>Mark Equipment Returned (Step 4)</span>
+                    </button>
+                  )}
+
+                  {/* Step 4: Returned */}
+                  {selectedWorkflow.step === 4 && (
+                    <div className="px-4 py-2 rounded-xl bg-[#F0FFF4] text-[#22543D] border border-[#9AE6B4] text-xs font-extrabold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-[#38A169]" />
+                      <span>Rental Complete & Returned</span>
+                    </div>
+                  )}
+
+                  {/* Delete Booking Action */}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTargetBooking(selectedBooking)}
+                    className="p-2.5 rounded-xl border border-[#FEB2B2] text-[#C53030] text-xs font-bold hover:bg-[#FFF5F5] transition-all cursor-pointer"
+                    title="Delete this reservation permanently"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
             </div>
-
-            {/* Modal Footer Actions */}
-            <div className="px-6 py-4 bg-white border-t border-[#E8E4F0] flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedBooking(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-[#6B6B8A] hover:bg-[#FAFAF7] cursor-pointer"
-              >
-                Close Drawer
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDeleteTargetBooking(selectedBooking)}
-                  className="px-3.5 py-2.5 rounded-xl border border-[#FEB2B2] text-[#C53030] text-xs font-bold hover:bg-[#FFF5F5] transition-all flex items-center gap-1.5 cursor-pointer"
-                  title="Delete this reservation permanently"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Remove Booking</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleUpdateStatus(selectedBooking.bookingRef, 'Confirmed')}
-                  className="px-5 py-2.5 rounded-xl bg-[#38A169] text-white text-xs font-extrabold hover:bg-[#2F855A] shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Approve KYC & Confirm Slot</span>
-                </button>
-              </div>
-            </div>
-
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ─────────────────────────────────────────────────────────────
           4. FULLSCREEN DOCUMENT PREVIEW POPUP

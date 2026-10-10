@@ -851,7 +851,7 @@ export default function App() {
       startDate: booking.startDate,
       endDate: booking.endDate,
       hub: booking.handoverMode === 'meetup' ? booking.meetupLocation : 'Grab Express Delivery (Metro Manila)',
-      status: 'Confirmed'
+      status: 'Deposit Paid'
     };
 
     // Payload structure for Google Sheets & Google Drive
@@ -1175,13 +1175,14 @@ export default function App() {
             </div>
 
             {/* Main Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#1A1A2E] tracking-tight leading-[1.1]">
-              Mag-vlog na. <br />
-              <span className="relative inline-block mt-1">
-                <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-[#6B46C1] via-[#DD6B20] to-[#2C7A7B]">
-                  Wag nang mag-ipon.
+            <h1 className="text-3xl sm:text-5xl lg:text-5xl xl:text-[3.5rem] font-black text-[#1A1A2E] tracking-tight leading-[1.15]">
+              Your creative bestie <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#6B46C1] via-[#DD6B20] to-[#2C7A7B]">
+                for every trip, concert &amp;{' '}
+                <span className="relative inline-block">
+                  <span className="relative z-10">core memory</span>
+                  <span className="absolute bottom-1 left-0 w-full h-3 bg-[#F5C6A8]/55 -rotate-1 rounded-md -z-0"></span>
                 </span>
-                <span className="absolute bottom-2 left-0 w-full h-3 bg-[#F5C6A8]/50 -rotate-1 rounded-md -z-0"></span>
               </span>
             </h1>
 
