@@ -962,187 +962,263 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // ── 8. PUBLIC NEW CUSTOMER BOOKING SUBMISSION ──
-    // Backend Validation 1: GCash payment receipt is strictly mandatory
-    if (!body.receiptFile || typeof body.receiptFile !== "string" || body.receiptFile.length < 50) {
+    // ── 8. PUBLIC NEW CUSTOMER BOOKING SUBMISSION (CONCURRENCY & OVERLAP PROTECTED) ──
+    const lock = LockService.getScriptLock();
+    try {
+      // Mutual exclusion: wait up to 30 seconds for any in-flight booking submission to complete
+      lock.waitLock(30000);
+    } catch (lockErr) {
       return ContentService.createTextOutput(JSON.stringify({
         status: "error",
-        code: "MISSING_RECEIPT",
-        message: "GCash payment receipt upload is required to complete and secure your booking."
+        code: "SERVER_BUSY",
+        message: "The reservation server is currently processing another transaction. Please wait a moment and try again."
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Backend Validation 2: Student Exemption requires Contact 1 Parent/Guardian ID
-    if (body.isStudentExemption) {
-      if (!body.contact1IdFile || typeof body.contact1IdFile !== "string" || body.contact1IdFile.length < 50) {
+    try {
+      // Backend Validation 1: GCash payment receipt is strictly mandatory
+      if (!body.receiptFile || typeof body.receiptFile !== "string" || body.receiptFile.length < 50) {
         return ContentService.createTextOutput(JSON.stringify({
           status: "error",
-          code: "MISSING_GUARDIAN_ID",
-          message: "Emergency Contact 1 (Parent / Guardian) Government ID upload is required when applying for Student Exemption."
+          code: "MISSING_RECEIPT",
+          message: "GCash payment receipt upload is required to complete and secure your booking."
         })).setMimeType(ContentService.MimeType.JSON);
       }
-    }
 
-    // Find or create exactly ONE designated private folder for this booking
-    const rootFolder = getOrCreateRootFolder();
-    const targetRef = String(body.bookingRef || "PNF-BOOKING").trim();
-    const bookingFolder = getOrCreateBookingFolder(rootFolder, targetRef, body.customerName);
-
-    // Save only applicable submitted KYC documents to the designated customer folder
-    // Uses clean, recognizable file naming without duplicate accumulation
-    const id1Url = saveBase64ToDrive(bookingFolder, body.id1File, "01_Primary_Gov_ID");
-    if (body.id1BackFile) saveBase64ToDrive(bookingFolder, body.id1BackFile, "01b_Primary_Gov_ID_Back");
-    const id2Url = saveBase64ToDrive(bookingFolder, body.id2File, body.isStudentExemption ? "02_Student_ID_COR" : "02_Secondary_ID");
-    if (body.id2BackFile) saveBase64ToDrive(bookingFolder, body.id2BackFile, "02b_Secondary_ID_Back");
-    const authSlipUrl = saveBase64ToDrive(bookingFolder, body.authorizationSlipFile, "03_Handwritten_Auth_Slip");
-    if (body.selfieWithIdsFile) saveBase64ToDrive(bookingFolder, body.selfieWithIdsFile, "03b_Selfie_Holding_IDs_And_Slip");
-    const billingUrl = saveBase64ToDrive(bookingFolder, body.deliveryReceiptsFile, "04_Proof_Of_Address");
-    if (body.billOwnerIdFile) saveBase64ToDrive(bookingFolder, body.billOwnerIdFile, "04b_Bill_Owner_Gov_ID");
-    const selfieVideoUrl = saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification");
-    const receiptUrl = saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
-    const guardianIdUrl = body.contact1IdFile ? saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Emergency_Contact1_ID") : "";
-    if (body.contact2IdFile) saveBase64ToDrive(bookingFolder, body.contact2IdFile, "08_Emergency_Contact2_ID");
-    const driveFolderUrl = bookingFolder.getUrl();
-
-    // Ensure Bookings Sheet exists with proper columns
-    let bookingsSheet = ss.getSheetByName("Bookings");
-    if (!bookingsSheet) {
-      bookingsSheet = ss.insertSheet("Bookings");
-    }
-    ensureColumns(bookingsSheet, 27);
-
-    if (bookingsSheet.getLastRow() === 0 || bookingsSheet.getRange(1, 1).getValue() === "") {
-      const standardHeaders = [
-        "Booking Ref", "Timestamp", "Customer Name", "Contact Number", "Social Media Handle",
-        "Camera Rented", "Start Date", "End Date", "Rental Days", "Handover Method",
-        "Address / Hub", "Shoot Type", "Rental Total", "Security Deposit", "Downpayment Paid",
-        "Balance Due", "GCash Ref Number", "Booking Status", "Notes & Emergency Contacts",
-        "Customer Documents Folder", // ⭐ Placed immediately after Notes
-        "Primary ID URL", "Secondary ID URL", "Auth Slip URL", "Billing Proof URL",
-        "Selfie Video URL", "Payment Receipt URL", "Guardian ID URL"
-      ];
-      bookingsSheet.getRange(1, 1, 1, standardHeaders.length).setValues([standardHeaders]);
-    }
-
-    const colMap = getHeaderIndexMap(bookingsSheet);
-
-    // Duplicate Prevention Check: If a row with this bookingRef already exists, update in place!
-    const bData = bookingsSheet.getDataRange().getValues();
-    let existingRowIndex = -1;
-    for (let i = 1; i < bData.length; i++) {
-      if (String(bData[i][colMap.bookingRef]).trim() === targetRef) {
-        existingRowIndex = i + 1; // 1-indexed
-        break;
+      // Backend Validation 2: Student Exemption requires Contact 1 Parent/Guardian ID
+      if (body.isStudentExemption) {
+        if (!body.contact1IdFile || typeof body.contact1IdFile !== "string" || body.contact1IdFile.length < 50) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "error",
+            code: "MISSING_GUARDIAN_ID",
+            message: "Emergency Contact 1 (Parent / Guardian) Government ID upload is required when applying for Student Exemption."
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
       }
-    }
 
-    if (existingRowIndex !== -1) {
-      // Update existing row safely without duplicating records
-      bookingsSheet.getRange(existingRowIndex, colMap.timestamp + 1).setValue(new Date());
-      bookingsSheet.getRange(existingRowIndex, colMap.customerName + 1).setValue(body.customerName);
-      bookingsSheet.getRange(existingRowIndex, colMap.contactNumber + 1).setValue(body.contactNumber);
-      bookingsSheet.getRange(existingRowIndex, colMap.socialMediaHandle + 1).setValue(body.socialMediaHandle);
-      bookingsSheet.getRange(existingRowIndex, colMap.cameraRented + 1).setValue(body.cameraRented);
-      bookingsSheet.getRange(existingRowIndex, colMap.startDate + 1).setValue(body.startDate);
-      bookingsSheet.getRange(existingRowIndex, colMap.endDate + 1).setValue(body.endDate);
-      bookingsSheet.getRange(existingRowIndex, colMap.rentalDays + 1).setValue(body.rentalDays);
-      bookingsSheet.getRange(existingRowIndex, colMap.handoverMethod + 1).setValue(body.handoverMethod);
-      bookingsSheet.getRange(existingRowIndex, colMap.address + 1).setValue(body.address || "Meetup Point");
-      bookingsSheet.getRange(existingRowIndex, colMap.shootType + 1).setValue(body.shootType);
-      bookingsSheet.getRange(existingRowIndex, colMap.rentalTotal + 1).setValue(body.rentalTotal);
-      bookingsSheet.getRange(existingRowIndex, colMap.securityDeposit + 1).setValue(body.securityDeposit);
-      bookingsSheet.getRange(existingRowIndex, colMap.downpaymentPaid + 1).setValue(body.downpaymentPaid);
-      bookingsSheet.getRange(existingRowIndex, colMap.balanceDue + 1).setValue(body.balanceDue);
-      bookingsSheet.getRange(existingRowIndex, colMap.gcashRefNumber + 1).setValue(body.gcashRefNumber);
-      bookingsSheet.getRange(existingRowIndex, colMap.status + 1).setValue("Deposit Paid");
-      if (body.notes) {
-        bookingsSheet.getRange(existingRowIndex, colMap.notes + 1).setValue(body.notes);
+      // Backend Validation 3: Authoritative Overlap & Availability Check
+      const targetRef = String(body.bookingRef || "PNF-BOOKING").trim();
+      const reqCamId = String(body.cameraId || "dji-pocket-3").trim().toLowerCase();
+      const reqStart = String(body.startDate || "").trim();
+      const reqEnd = String(body.endDate || "").trim();
+
+      if (!reqStart || !reqEnd) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          code: "INVALID_DATES",
+          message: "Valid rental start date and end date are required."
+        })).setMimeType(ContentService.MimeType.JSON);
       }
-      bookingsSheet.getRange(existingRowIndex, colMap.driveFolderUrl + 1).setValue(driveFolderUrl);
-      if (id1Url) bookingsSheet.getRange(existingRowIndex, colMap.id1Url + 1).setValue(id1Url);
-      if (id2Url) bookingsSheet.getRange(existingRowIndex, colMap.id2Url + 1).setValue(id2Url);
-      if (authSlipUrl) bookingsSheet.getRange(existingRowIndex, colMap.authSlipUrl + 1).setValue(authSlipUrl);
-      if (billingUrl) bookingsSheet.getRange(existingRowIndex, colMap.billingUrl + 1).setValue(billingUrl);
-      if (selfieVideoUrl) bookingsSheet.getRange(existingRowIndex, colMap.selfieVideoUrl + 1).setValue(selfieVideoUrl);
-      if (receiptUrl) bookingsSheet.getRange(existingRowIndex, colMap.receiptUrl + 1).setValue(receiptUrl);
-      if (guardianIdUrl) bookingsSheet.getRange(existingRowIndex, colMap.guardianIdUrl + 1).setValue(guardianIdUrl);
-    } else {
-      // Append New Row with 27 Columns: Column 20 is the dedicated Customer Documents Folder link!
-      bookingsSheet.appendRow([
-        body.bookingRef,
-        new Date(),
-        body.customerName,
-        body.contactNumber,
-        body.socialMediaHandle,
-        body.cameraRented,
-        body.startDate,
-        body.endDate,
-        body.rentalDays,
-        body.handoverMethod,
-        body.address || "Meetup Point",
-        body.shootType,
-        body.rentalTotal,
-        body.securityDeposit,
-        body.downpaymentPaid,
-        body.balanceDue,
-        body.gcashRefNumber,
-        "Deposit Paid",
-        body.notes || "",
-        driveFolderUrl, // ⭐ Col 20: Dedicated Customer Documents Folder
-        id1Url,
-        id2Url,
-        authSlipUrl,
-        billingUrl,
-        selfieVideoUrl,
-        receiptUrl,
-        guardianIdUrl
-      ]);
-    }
 
-    // Append / Update Calendar Sync Sheet
-    let calendarSheet = ss.getSheetByName("Calendar Sync");
-    if (!calendarSheet) {
-      calendarSheet = ss.insertSheet("Calendar Sync");
-      calendarSheet.appendRow(["Camera ID", "Start Date", "End Date", "Customer Tag", "Booking Ref", "Status"]);
-    }
+      // Check against active bookings in Bookings sheet
+      const bSheetCheck = ss.getSheetByName("Bookings");
+      if (bSheetCheck && bSheetCheck.getLastRow() > 1) {
+        const checkColMap = getHeaderIndexMap(bSheetCheck);
+        const bRows = bSheetCheck.getDataRange().getValues().slice(1);
 
-    let existingCalIndex = -1;
-    if (calendarSheet.getLastRow() > 1) {
-      const cData = calendarSheet.getDataRange().getValues();
-      for (let k = 1; k < cData.length; k++) {
-        if (String(cData[k][4]).trim() === targetRef) {
-          existingCalIndex = k + 1;
+        for (let i = 0; i < bRows.length; i++) {
+          const rowRef = String(bRows[i][checkColMap.bookingRef] || "").trim();
+          // Allow re-submission / file updates for the EXACT same booking reference
+          if (rowRef === targetRef) continue;
+
+          const rowStatus = String(bRows[i][checkColMap.status] || "").trim().toLowerCase();
+          // Skip inactive / cancelled / rejected bookings
+          if (rowStatus.includes("cancel") || rowStatus.includes("reject") || rowStatus.includes("completed")) {
+            continue;
+          }
+
+          const rowCam = String(bRows[i][checkColMap.cameraRented] || "").toLowerCase();
+          const isSameCamera = reqCamId === "dji-pocket-3"
+            ? (rowCam.includes("pocket") || rowCam.includes("dji") || !rowCam)
+            : rowCam.includes(reqCamId);
+
+          if (isSameCamera) {
+            const bookedStart = bRows[i][checkColMap.startDate]
+              ? Utilities.formatDate(new Date(bRows[i][checkColMap.startDate]), "GMT+8", "yyyy-MM-dd")
+              : "";
+            const bookedEnd = bRows[i][checkColMap.endDate]
+              ? Utilities.formatDate(new Date(bRows[i][checkColMap.endDate]), "GMT+8", "yyyy-MM-dd")
+              : "";
+
+            if (bookedStart && bookedEnd) {
+              // Standard interval overlap condition: reqStart <= bookedEnd && bookedStart <= reqEnd
+              if (reqStart <= bookedEnd && bookedStart <= reqEnd) {
+                return ContentService.createTextOutput(JSON.stringify({
+                  status: "error",
+                  code: "DATE_CONFLICT",
+                  message: "The requested rental dates (" + reqStart + " to " + reqEnd + ") conflict with an existing reservation for this camera (" + bookedStart + " to " + bookedEnd + "). Please select different dates."
+                })).setMimeType(ContentService.MimeType.JSON);
+              }
+            }
+          }
+        }
+      }
+
+      // Find or create exactly ONE designated private folder for this booking
+      const rootFolder = getOrCreateRootFolder();
+      const bookingFolder = getOrCreateBookingFolder(rootFolder, targetRef, body.customerName);
+
+      // Save only applicable submitted KYC documents to the designated customer folder
+      // Uses clean, recognizable file naming without duplicate accumulation
+      const id1Url = saveBase64ToDrive(bookingFolder, body.id1File, "01_Primary_Gov_ID");
+      if (body.id1BackFile) saveBase64ToDrive(bookingFolder, body.id1BackFile, "01b_Primary_Gov_ID_Back");
+      const id2Url = saveBase64ToDrive(bookingFolder, body.id2File, body.isStudentExemption ? "02_Student_ID_COR" : "02_Secondary_ID");
+      if (body.id2BackFile) saveBase64ToDrive(bookingFolder, body.id2BackFile, "02b_Secondary_ID_Back");
+      const authSlipUrl = saveBase64ToDrive(bookingFolder, body.authorizationSlipFile, "03_Handwritten_Auth_Slip");
+      if (body.selfieWithIdsFile) saveBase64ToDrive(bookingFolder, body.selfieWithIdsFile, "03b_Selfie_Holding_IDs_And_Slip");
+      const billingUrl = saveBase64ToDrive(bookingFolder, body.deliveryReceiptsFile, "04_Proof_Of_Address");
+      if (body.billOwnerIdFile) saveBase64ToDrive(bookingFolder, body.billOwnerIdFile, "04b_Bill_Owner_Gov_ID");
+      const selfieVideoUrl = saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification");
+      const receiptUrl = saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
+      const guardianIdUrl = body.contact1IdFile ? saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Emergency_Contact1_ID") : "";
+      if (body.contact2IdFile) saveBase64ToDrive(bookingFolder, body.contact2IdFile, "08_Emergency_Contact2_ID");
+      const driveFolderUrl = bookingFolder.getUrl();
+
+      // Ensure Bookings Sheet exists with proper columns
+      let bookingsSheet = ss.getSheetByName("Bookings");
+      if (!bookingsSheet) {
+        bookingsSheet = ss.insertSheet("Bookings");
+      }
+      ensureColumns(bookingsSheet, 27);
+
+      if (bookingsSheet.getLastRow() === 0 || bookingsSheet.getRange(1, 1).getValue() === "") {
+        const standardHeaders = [
+          "Booking Ref", "Timestamp", "Customer Name", "Contact Number", "Social Media Handle",
+          "Camera Rented", "Start Date", "End Date", "Rental Days", "Handover Method",
+          "Address / Hub", "Shoot Type", "Rental Total", "Security Deposit", "Downpayment Paid",
+          "Balance Due", "GCash Ref Number", "Booking Status", "Notes & Emergency Contacts",
+          "Customer Documents Folder", // ⭐ Placed immediately after Notes
+          "Primary ID URL", "Secondary ID URL", "Auth Slip URL", "Billing Proof URL",
+          "Selfie Video URL", "Payment Receipt URL", "Guardian ID URL"
+        ];
+        bookingsSheet.getRange(1, 1, 1, standardHeaders.length).setValues([standardHeaders]);
+      }
+
+      const colMap = getHeaderIndexMap(bookingsSheet);
+
+      // Duplicate Prevention Check: If a row with this bookingRef already exists, update in place!
+      const bData = bookingsSheet.getDataRange().getValues();
+      let existingRowIndex = -1;
+      for (let i = 1; i < bData.length; i++) {
+        if (String(bData[i][colMap.bookingRef]).trim() === targetRef) {
+          existingRowIndex = i + 1; // 1-indexed
           break;
         }
       }
-    }
 
-    if (existingCalIndex !== -1) {
-      calendarSheet.getRange(existingCalIndex, 1, 1, 6).setValues([[
-        body.cameraId || "dji-pocket-3",
-        body.startDate,
-        body.endDate,
-        body.socialMediaHandle || body.customerName,
-        body.bookingRef,
-        "Deposit Paid"
-      ]]);
-    } else {
-      calendarSheet.appendRow([
-        body.cameraId || "dji-pocket-3",
-        body.startDate,
-        body.endDate,
-        body.socialMediaHandle || body.customerName,
-        body.bookingRef,
-        "Deposit Paid"
-      ]);
-    }
+      if (existingRowIndex !== -1) {
+        // Update existing row safely without duplicating records
+        bookingsSheet.getRange(existingRowIndex, colMap.timestamp + 1).setValue(new Date());
+        bookingsSheet.getRange(existingRowIndex, colMap.customerName + 1).setValue(body.customerName);
+        bookingsSheet.getRange(existingRowIndex, colMap.contactNumber + 1).setValue(body.contactNumber);
+        bookingsSheet.getRange(existingRowIndex, colMap.socialMediaHandle + 1).setValue(body.socialMediaHandle);
+        bookingsSheet.getRange(existingRowIndex, colMap.cameraRented + 1).setValue(body.cameraRented);
+        bookingsSheet.getRange(existingRowIndex, colMap.startDate + 1).setValue(body.startDate);
+        bookingsSheet.getRange(existingRowIndex, colMap.endDate + 1).setValue(body.endDate);
+        bookingsSheet.getRange(existingRowIndex, colMap.rentalDays + 1).setValue(body.rentalDays);
+        bookingsSheet.getRange(existingRowIndex, colMap.handoverMethod + 1).setValue(body.handoverMethod);
+        bookingsSheet.getRange(existingRowIndex, colMap.address + 1).setValue(body.address || "Meetup Point");
+        bookingsSheet.getRange(existingRowIndex, colMap.shootType + 1).setValue(body.shootType);
+        bookingsSheet.getRange(existingRowIndex, colMap.rentalTotal + 1).setValue(body.rentalTotal);
+        bookingsSheet.getRange(existingRowIndex, colMap.securityDeposit + 1).setValue(body.securityDeposit);
+        bookingsSheet.getRange(existingRowIndex, colMap.downpaymentPaid + 1).setValue(body.downpaymentPaid);
+        bookingsSheet.getRange(existingRowIndex, colMap.balanceDue + 1).setValue(body.balanceDue);
+        bookingsSheet.getRange(existingRowIndex, colMap.gcashRefNumber + 1).setValue(body.gcashRefNumber);
+        bookingsSheet.getRange(existingRowIndex, colMap.status + 1).setValue("Deposit Paid");
+        if (body.notes) {
+          bookingsSheet.getRange(existingRowIndex, colMap.notes + 1).setValue(body.notes);
+        }
+        bookingsSheet.getRange(existingRowIndex, colMap.driveFolderUrl + 1).setValue(driveFolderUrl);
+        if (id1Url) bookingsSheet.getRange(existingRowIndex, colMap.id1Url + 1).setValue(id1Url);
+        if (id2Url) bookingsSheet.getRange(existingRowIndex, colMap.id2Url + 1).setValue(id2Url);
+        if (authSlipUrl) bookingsSheet.getRange(existingRowIndex, colMap.authSlipUrl + 1).setValue(authSlipUrl);
+        if (billingUrl) bookingsSheet.getRange(existingRowIndex, colMap.billingUrl + 1).setValue(billingUrl);
+        if (selfieVideoUrl) bookingsSheet.getRange(existingRowIndex, colMap.selfieVideoUrl + 1).setValue(selfieVideoUrl);
+        if (receiptUrl) bookingsSheet.getRange(existingRowIndex, colMap.receiptUrl + 1).setValue(receiptUrl);
+        if (guardianIdUrl) bookingsSheet.getRange(existingRowIndex, colMap.guardianIdUrl + 1).setValue(guardianIdUrl);
+      } else {
+        // Append New Row with 27 Columns: Column 20 is the dedicated Customer Documents Folder link!
+        bookingsSheet.appendRow([
+          body.bookingRef,
+          new Date(),
+          body.customerName,
+          body.contactNumber,
+          body.socialMediaHandle,
+          body.cameraRented,
+          body.startDate,
+          body.endDate,
+          body.rentalDays,
+          body.handoverMethod,
+          body.address || "Meetup Point",
+          body.shootType,
+          body.rentalTotal,
+          body.securityDeposit,
+          body.downpaymentPaid,
+          body.balanceDue,
+          body.gcashRefNumber,
+          "Deposit Paid",
+          body.notes || "",
+          driveFolderUrl, // ⭐ Col 20: Dedicated Customer Documents Folder
+          id1Url,
+          id2Url,
+          authSlipUrl,
+          billingUrl,
+          selfieVideoUrl,
+          receiptUrl,
+          guardianIdUrl
+        ]);
+      }
 
-    // Return success along with the Google Drive dedicated folder URL
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      bookingRef: body.bookingRef,
-      driveFolderUrl: driveFolderUrl
-    })).setMimeType(ContentService.MimeType.JSON);
+      // Append / Update Calendar Sync Sheet
+      let calendarSheet = ss.getSheetByName("Calendar Sync");
+      if (!calendarSheet) {
+        calendarSheet = ss.insertSheet("Calendar Sync");
+        calendarSheet.appendRow(["Camera ID", "Start Date", "End Date", "Customer Tag", "Booking Ref", "Status"]);
+      }
+
+      let existingCalIndex = -1;
+      if (calendarSheet.getLastRow() > 1) {
+        const cData = calendarSheet.getDataRange().getValues();
+        for (let k = 1; k < cData.length; k++) {
+          if (String(cData[k][4]).trim() === targetRef) {
+            existingCalIndex = k + 1;
+            break;
+          }
+        }
+      }
+
+      if (existingCalIndex !== -1) {
+        calendarSheet.getRange(existingCalIndex, 1, 1, 6).setValues([[
+          body.cameraId || "dji-pocket-3",
+          body.startDate,
+          body.endDate,
+          body.socialMediaHandle || body.customerName,
+          body.bookingRef,
+          "Deposit Paid"
+        ]]);
+      } else {
+        calendarSheet.appendRow([
+          body.cameraId || "dji-pocket-3",
+          body.startDate,
+          body.endDate,
+          body.socialMediaHandle || body.customerName,
+          body.bookingRef,
+          "Deposit Paid"
+        ]);
+      }
+
+      // Return success along with the Google Drive dedicated folder URL
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        bookingRef: body.bookingRef,
+        driveFolderUrl: driveFolderUrl
+      })).setMimeType(ContentService.MimeType.JSON);
+
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (lockReleaseErr) {}
+    }
 
   } catch (err) {
     Logger.log("doPost Error: " + err.toString());

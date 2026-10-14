@@ -340,6 +340,7 @@ export default function App() {
   const [sheetSyncError, setSheetSyncError] = useState<string | null>(null);
   const [sheetLastSynced, setSheetLastSynced] = useState<Date | null>(null);
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [bookingSubmitError, setBookingSubmitError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
 
   const showToast = (message: string, type: 'error' | 'success' | 'info' = 'info') => {
@@ -494,6 +495,8 @@ export default function App() {
           showToast(`Synced ${parsed.length} live bookings from Google Sheets!`, 'success');
         }
       } else {
+        setBookings([]);
+        setSheetLastSynced(new Date());
         if (isManualRefresh) {
           showToast('Connected to Google Sheets: All dates are currently open.', 'info');
         }
@@ -820,6 +823,7 @@ export default function App() {
         handoverMode: calcHandover,
       }));
     }
+    setBookingSubmitError(null);
     setModalStep(1);
     setIsModalOpen(true);
   };
@@ -1044,28 +1048,28 @@ export default function App() {
       receiptFile: booking.receiptFile
     };
 
+    // Pre-flight check: Re-verify date availability before submitting
+    const currentConflict = checkCameraDateConflict(booking.cameraId, booking.startDate, booking.endDate, bookings);
+    if (currentConflict.hasConflict) {
+      const conflictMsg = currentConflict.message || 'The selected dates conflict with an existing confirmed booking. Please choose different dates.';
+      setBookingSubmitError(conflictMsg);
+      showToast(conflictMsg, 'error');
+      return;
+    }
+
     const targetUrl = (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_DEPLOYED_WEB_APP_URL_HERE')
       ? APPS_SCRIPT_URL
       : (import.meta.env?.VITE_APPS_SCRIPT_URL as string) || '';
 
-    setIsSubmittingBooking(true);
-
     if (!targetUrl) {
-      // Local fallback simulation when URL is not configured yet
-      try {
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setBookings(prev => [newBookingRecord, ...prev]);
-        setBooking(prev => ({
-          ...prev,
-          bookingRef: newRef,
-        }));
-        setModalStep(6);
-        showToast('Booking secured locally! Set APPS_SCRIPT_URL at the top of App.tsx to sync live with Google Sheets.', 'info');
-      } finally {
-        setIsSubmittingBooking(false);
-      }
+      const configError = 'Reservation backend URL is not configured. Please contact PackAndFilm support.';
+      setBookingSubmitError(configError);
+      showToast(configError, 'error');
       return;
     }
+
+    setIsSubmittingBooking(true);
+    setBookingSubmitError(null);
 
     try {
       const response = await fetch(targetUrl, {
@@ -1077,37 +1081,38 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      let driveLink: string | null = null;
-      try {
-        const resJson = await response.json();
-        if (resJson && resJson.driveFolderUrl) {
-          driveLink = resJson.driveFolderUrl;
-        }
-      } catch {
-        // non-JSON response fallback
+      if (!response.ok) {
+        throw new Error(`Reservation server error (HTTP status ${response.status}). Please try again.`);
       }
 
-      // Advance to Step 6, trigger confetti, and show the exact booking reference
+      const resJson = await response.json().catch(() => null);
+
+      if (!resJson) {
+        throw new Error('Invalid response received from reservation server. Please verify your connection.');
+      }
+
+      if (resJson.status === 'error') {
+        throw new Error(resJson.message || 'The reservation server rejected the booking. Please review your details and try again.');
+      }
+
+      const driveLink = resJson.driveFolderUrl || null;
+
+      // Real confirmed booking verified by backend:
       setBookings(prev => [newBookingRecord, ...prev]);
       setBooking(prev => ({
         ...prev,
         bookingRef: newRef,
         driveFolderUrl: driveLink,
       }));
+      setBookingSubmitError(null);
       setModalStep(6);
-      showToast('Reservation & documents uploaded to Google Drive!', 'success');
+      showToast('Reservation & documents secured in Google Drive!', 'success');
     } catch (err: any) {
-      console.error('Error syncing booking to Google Sheets:', err);
-      // Friendly toast notification when connection drops
-      showToast('Connection to Google Sheets dropped. Your booking has been secured locally with reference ' + newRef, 'error');
-
-      // Still advance to Step 6 so user gets their exact booking confirmation
-      setBookings(prev => [newBookingRecord, ...prev]);
-      setBooking(prev => ({
-        ...prev,
-        bookingRef: newRef,
-      }));
-      setModalStep(6);
+      console.error('Error submitting booking to Google Sheets:', err);
+      const errorMsg = err?.message || 'Failed to submit reservation to Google Sheets. Please check your connection and try again.';
+      setBookingSubmitError(errorMsg);
+      showToast(errorMsg, 'error');
+      // DO NOT advance to Step 6 on failure! Customer remains on Step 5 with form inputs preserved.
     } finally {
       setIsSubmittingBooking(false);
     }
@@ -4159,6 +4164,16 @@ export default function App() {
               {/* ───────────────── STEP 5: GCASH DOWNPAYMENT DRAWER ───────────────── */}
               {modalStep === 5 && (
                 <div className="space-y-4 animate-fadeIn relative">
+                  {bookingSubmitError && (
+                    <div className="p-4 rounded-2xl bg-[#FFF5F5] border-2 border-red-300 text-red-700 flex items-start gap-3 animate-fadeIn shadow-xs">
+                      <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <div className="font-black text-red-800">Reservation Could Not Be Completed</div>
+                        <p className="mt-0.5 leading-relaxed font-semibold">{bookingSubmitError}</p>
+                      </div>
+                    </div>
+                  )}
+
                   {isSubmittingBooking && (
                     <div className="absolute inset-0 bg-white/90 backdrop-blur-xs rounded-2xl z-30 flex flex-col items-center justify-center p-6 text-center animate-fadeIn shadow-sm border border-[#E8E4F0]">
                       <div className="w-12 h-12 rounded-2xl bg-[#EDE8FC] flex items-center justify-center mb-3 shadow-inner">
