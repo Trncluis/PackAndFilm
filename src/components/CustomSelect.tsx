@@ -14,7 +14,8 @@ interface CustomSelectProps {
   value: string;
   onChange: (val: string) => void;
   options: SelectOption[] | string[];
-  label?: string;
+  label?: React.ReactNode;
+  isRequired?: boolean;
   placeholder?: string;
   icon?: React.ReactNode;
   hasError?: boolean;
@@ -28,6 +29,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
   onChange,
   options,
   label,
+  isRequired = false,
   placeholder = 'Select an option',
   icon,
   hasError = false,
@@ -72,8 +74,9 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
   return (
     <div className={`relative w-full ${className}`} ref={containerRef}>
       {label && (
-        <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5">
-          {label}
+        <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5 flex items-center gap-1">
+          <span>{label}</span>
+          {isRequired && <span className="text-red-500 font-bold">*</span>}
         </label>
       )}
 

@@ -935,6 +935,22 @@ function doPost(e) {
         bSheet.getRange(targetRow, colMap.guardianIdUrl + 1).setValue(url);
       }
 
+      if (body.id1BackFile) {
+        saveBase64ToDrive(bookingFolder, body.id1BackFile, "01b_Primary_Gov_ID_Back");
+      }
+      if (body.id2BackFile) {
+        saveBase64ToDrive(bookingFolder, body.id2BackFile, "02b_Secondary_ID_Back");
+      }
+      if (body.selfieWithIdsFile) {
+        saveBase64ToDrive(bookingFolder, body.selfieWithIdsFile, "03b_Selfie_Holding_IDs_And_Slip");
+      }
+      if (body.billOwnerIdFile) {
+        saveBase64ToDrive(bookingFolder, body.billOwnerIdFile, "04b_Bill_Owner_Gov_ID");
+      }
+      if (body.contact2IdFile) {
+        saveBase64ToDrive(bookingFolder, body.contact2IdFile, "08_Emergency_Contact2_ID");
+      }
+
       // Ensure Customer Documents Folder link is populated
       bSheet.getRange(targetRow, colMap.driveFolderUrl + 1).setValue(bookingFolder.getUrl());
 
@@ -975,12 +991,17 @@ function doPost(e) {
     // Save only applicable submitted KYC documents to the designated customer folder
     // Uses clean, recognizable file naming without duplicate accumulation
     const id1Url = saveBase64ToDrive(bookingFolder, body.id1File, "01_Primary_Gov_ID");
+    if (body.id1BackFile) saveBase64ToDrive(bookingFolder, body.id1BackFile, "01b_Primary_Gov_ID_Back");
     const id2Url = saveBase64ToDrive(bookingFolder, body.id2File, body.isStudentExemption ? "02_Student_ID_COR" : "02_Secondary_ID");
+    if (body.id2BackFile) saveBase64ToDrive(bookingFolder, body.id2BackFile, "02b_Secondary_ID_Back");
     const authSlipUrl = saveBase64ToDrive(bookingFolder, body.authorizationSlipFile, "03_Handwritten_Auth_Slip");
+    if (body.selfieWithIdsFile) saveBase64ToDrive(bookingFolder, body.selfieWithIdsFile, "03b_Selfie_Holding_IDs_And_Slip");
     const billingUrl = saveBase64ToDrive(bookingFolder, body.deliveryReceiptsFile, "04_Proof_Of_Address");
+    if (body.billOwnerIdFile) saveBase64ToDrive(bookingFolder, body.billOwnerIdFile, "04b_Bill_Owner_Gov_ID");
     const selfieVideoUrl = saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification");
     const receiptUrl = saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
-    const guardianIdUrl = body.contact1IdFile ? saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Parent_Guardian_ID") : "";
+    const guardianIdUrl = body.contact1IdFile ? saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Emergency_Contact1_ID") : "";
+    if (body.contact2IdFile) saveBase64ToDrive(bookingFolder, body.contact2IdFile, "08_Emergency_Contact2_ID");
     const driveFolderUrl = bookingFolder.getUrl();
 
     // Ensure Bookings Sheet exists with proper columns

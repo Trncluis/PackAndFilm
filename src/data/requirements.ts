@@ -8,75 +8,77 @@ export interface RentalRequirementStep {
 }
 
 export const PASIG_MEETUP_HUBS = [
-  'Pasig City: SM Megamall (Building A/B Ground Lobby)',
-  'Pasig City: Estancia Mall / Capitol Commons',
-  'Pasig City: Kapitolyo Food Hub (Pioneer / East Capitol Dr)',
-  'Pasig City: Arcovia City (C-5 Pasig)',
-  'Pasig City: Ortigas MRT Station / Robinsons Galleria'
+  'SM East Ortigas',
+  'Bridgetowne',
+  'Opus Mall'
 ];
 
 export const FIVE_STEP_REQUIREMENTS: RentalRequirementStep[] = [
   {
     step: 1,
-    title: 'Two Valid IDs + Written Authorization Slip',
-    badge: 'Identity Verification',
-    desc: 'Upload 2 valid government IDs plus a handwritten authorization slip and a live selfie holding both.',
+    title: 'Personal Identification',
+    badge: 'Two Valid IDs',
+    desc: 'Two valid IDs (front & back) with handwritten authorization slip and selfie.',
     details: [
-      'ID #1: Primary Gov ID (Passport, UMID, Driver\'s License, National ID).',
-      'ID #2: Secondary ID (Company ID, Postal ID, PRC, or Student ID).',
-      'Handwritten Slip: Write "For PackAndFilm rental purposes only", current date, and 3 specimen signatures on clean paper.',
-      'Selfie: Take a clear front camera selfie holding your primary ID and the handwritten slip side by side.'
+      'Two (2) valid IDs (front and back). At least one ID must show your current address and signature.',
+      'Write 3 specimen signatures and "For Pack and Film Camera Rental purposes only" on a paper and take a photo together with your IDs.',
+      'Submit a selfie holding your 2 valid IDs and the paper.',
+      'Students may submit: Valid Student ID + Current (COR) + Parent/Guardian Government ID.'
     ],
-    mandatoryText: 'Required for all primary renters before equipment handover'
+    mandatoryText: 'Required for identity verification before release'
   },
   {
     step: 2,
-    title: 'Proof of Address / E-Commerce Receipts',
-    badge: 'Address Match',
-    desc: 'Verify your residential address in Metro Manila.',
+    title: 'Proof of Billing',
+    badge: 'Address Verification',
+    desc: 'Proof of residential billing matching the name and address on your valid ID.',
     details: [
-      'Option A: Latest utility bill (Meralco, Maynilad, Converge, Credit Card) under your name within the last 3 months.',
-      'Option B: Screenshots of 2 successfully delivered Shopee or Lazada orders showing matching full legal name and complete delivery address.'
+      'Must match the name and address on your valid ID.',
+      'Accepted: utility bills, bank statements, delivery receipts, etc.',
+      'For delivery receipts (Shopee, Lazada, TikTok), send at least 2 screenshots showing your name and address.',
+      'If bills are under someone else\'s name, kindly provide their ID for verification.'
     ],
-    mandatoryText: 'Address must match delivery/meetup area'
+    mandatoryText: 'Address must match valid ID record'
   },
   {
     step: 3,
-    title: 'Active Personal Instagram or Facebook Account',
+    title: 'Active Social Media Accounts',
     badge: 'Identity Match',
-    desc: 'Submit your active personal Instagram or Facebook profile so our team can verify and contact you.',
+    desc: 'Submit your main personal Instagram or Facebook account for verification.',
     details: [
-      'Must be your active personal account that you regularly use.',
-      'Dummy, newly created burner, or empty placeholder accounts are not accepted.',
-      'Used for fast handover coordination and verification updates.'
+      'Must be your main personal account.',
+      'We do not accept: locked/private accounts, business-only accounts, dummy accounts, or suspicious/new profiles.',
+      'We may decline rentals if verification is incomplete or suspicious.',
+      'For students, please provide active Facebook and Instagram accounts of parent/guardian.'
     ],
-    mandatoryText: 'Used for direct coordination on IG & Messenger'
+    mandatoryText: 'Used for direct coordination and verification'
   },
   {
     step: 4,
-    title: 'Two (2) Emergency Contacts',
-    badge: 'Safety Network',
-    desc: 'Provide two reachable emergency contacts for security and verification.',
+    title: 'Emergency Contact Persons',
+    badge: 'Two Reachable Contacts',
+    desc: 'Provide two emergency contacts in case we cannot reach you during the rental period.',
     details: [
-      'Contact 1: Family Member / Guardian (Government ID required if applying for Student Exemption).',
-      'Contact 2: Second Emergency Contact (Friend, colleague, or travel companion — No ID required).'
+      'Kindly provide the full name, active contact number, and FB/IG profile link in case we cannot reach you during the rental period.',
+      'Once booking is confirmed, we\'ll contact these persons and inform them that they are your emergency contacts. Please inform them to respond to our message or call.'
     ],
-    mandatoryText: 'Contacted solely in emergency situations'
+    mandatoryText: 'Required contact network for equipment security'
   },
   {
     step: 5,
-    title: '5-Second Verification Video & Handover Agreement',
+    title: 'Other Requirements',
     badge: 'Final Clearance',
-    desc: 'Quick face confirmation and digital terms sign-off prior to unit handoff.',
+    desc: 'Selfie holding 2 IDs stating rental details and admin friend request.',
     details: [
-      'Record a brief 5-second selfie video stating: "Hi PackAndFilm, I am [Your Name] and I agree to the camera rental terms."',
-      'Digital acknowledgment of equipment checklist and sanitization seal in Pasig City.'
+      'Submit a selfie holding your 2 valid IDs stating your rental details (Full Name, rental dates, camera unit, and rental purpose).',
+      'Send a friend request to our Facebook admin account ("PackAndFilm Camera Rentals") for verification and security purposes.',
+      'Once approved, sign the digital rental agreement sent by the owner prior to handover.'
     ],
-    mandatoryText: 'Quick 30-second completion right from your phone'
+    mandatoryText: 'Quick verification directly from your phone'
   }
 ];
 
 export const STUDENT_EXEMPTION_NOTICE = {
-  title: 'Student Exemption Available',
-  desc: 'Enrolled students can waive the secondary government ID requirement by presenting a valid Student ID + current Term Certificate of Registration (COR) + Parent / Guardian ID verification.'
+  title: 'Student Alternative Available',
+  desc: 'Enrolled students may submit: Valid Student ID + Current Certificate of Registration (COR) + Parent/Guardian Government ID.'
 };

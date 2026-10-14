@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShieldCheck,
-  Lock,
-  KeyRound,
   RefreshCw,
   Search,
   CheckCircle2,
@@ -25,10 +23,7 @@ import {
   ShieldAlert,
   Trash2,
   AlertTriangle,
-  XCircle,
-  Clock,
-  CheckCheck,
-  Info
+  XCircle
 } from 'lucide-react';
 
 export interface AdminBookingItem {
@@ -53,21 +48,34 @@ export interface AdminBookingItem {
   status: string;
   notes: string;
   id1Url?: string;
+  id1BackUrl?: string;
   id2Url?: string;
+  id2BackUrl?: string;
   authSlipUrl?: string;
+  selfieWithIdsUrl?: string;
   billingUrl?: string;
+  billOwnerIdUrl?: string;
   selfieVideoUrl?: string;
   receiptUrl?: string;
   guardianIdUrl?: string;
+  contact2IdUrl?: string;
   driveFolderUrl?: string;
   id1File?: string | null;
+  id1BackFile?: string | null;
   id2File?: string | null;
+  id2BackFile?: string | null;
   authorizationSlipFile?: string | null;
+  selfieWithIdsFile?: string | null;
   deliveryReceiptsFile?: string | null;
+  billOwnerIdFile?: string | null;
   selfieFile?: string | null;
   receiptFile?: string | null;
   contact1IdFile?: string | null;
+  contact2IdFile?: string | null;
   isStudentExemption?: boolean;
+  termsAccepted?: boolean;
+  termsVersion?: string;
+  meetupHandlingFee?: number | string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -190,18 +198,32 @@ export function evaluateKycDocuments(booking: AdminBookingItem): KycEvaluationRe
   const docItems: KycDocumentItem[] = [
     {
       id: 'id1',
-      name: '1. Primary Government ID',
+      name: '1. Primary Government ID (Front)',
       shortLabel: 'Primary ID',
       required: true,
       url: booking.id1Url || booking.id1File || null
     },
+    ...(booking.id1BackUrl || booking.id1BackFile ? [{
+      id: 'id1Back',
+      name: '1b. Primary Government ID (Back)',
+      shortLabel: 'Primary ID Back',
+      required: false,
+      url: booking.id1BackUrl || booking.id1BackFile || null
+    }] : []),
     {
       id: 'id2',
-      name: isStudent ? '2. Student ID & COR' : '2. Secondary Government ID',
+      name: isStudent ? '2. Student ID & COR' : '2. Secondary Government ID (Front)',
       shortLabel: isStudent ? 'Student ID' : 'Secondary ID',
       required: true,
       url: booking.id2Url || booking.id2File || null
     },
+    ...((booking.id2BackUrl || booking.id2BackFile) ? [{
+      id: 'id2Back',
+      name: '2b. Secondary Government ID (Back)',
+      shortLabel: 'Secondary ID Back',
+      required: false,
+      url: booking.id2BackUrl || booking.id2BackFile || null
+    }] : []),
     {
       id: 'authSlip',
       name: '3. Handwritten Authorization Slip',
@@ -209,16 +231,30 @@ export function evaluateKycDocuments(booking: AdminBookingItem): KycEvaluationRe
       required: true,
       url: booking.authSlipUrl || booking.authorizationSlipFile || null
     },
+    ...(booking.selfieWithIdsUrl || booking.selfieWithIdsFile ? [{
+      id: 'selfieWithIds',
+      name: '3b. Selfie Holding IDs & Slip',
+      shortLabel: 'Selfie with IDs',
+      required: false,
+      url: booking.selfieWithIdsUrl || booking.selfieWithIdsFile || null
+    }] : []),
     {
       id: 'billing',
-      name: '4. Proof of Address / Shopee Receipt',
+      name: '4. Proof of Address / Delivery Receipts',
       shortLabel: 'Address Proof',
       required: true,
       url: booking.billingUrl || booking.deliveryReceiptsFile || null
     },
+    ...(booking.billOwnerIdUrl || booking.billOwnerIdFile ? [{
+      id: 'billOwnerId',
+      name: '4b. Bill Owner Government ID',
+      shortLabel: 'Bill Owner ID',
+      required: false,
+      url: booking.billOwnerIdUrl || booking.billOwnerIdFile || null
+    }] : []),
     {
       id: 'selfie',
-      name: '5. Selfie Video / Photo Verification',
+      name: '5. Selfie Video Verification',
       shortLabel: 'Selfie Video',
       required: true,
       isVideo: true,
@@ -236,10 +272,20 @@ export function evaluateKycDocuments(booking: AdminBookingItem): KycEvaluationRe
   if (isStudent || booking.guardianIdUrl || booking.contact1IdFile) {
     docItems.push({
       id: 'guardianId',
-      name: '7. Parent / Guardian ID (Student Exemption)',
-      shortLabel: 'Guardian ID',
+      name: isStudent ? '7. Parent / Guardian ID (Student Exemption)' : '7. Emergency Contact 1 Valid ID',
+      shortLabel: 'Contact 1 ID',
       required: isStudent,
       url: booking.guardianIdUrl || booking.contact1IdFile || null
+    });
+  }
+
+  if (booking.contact2IdUrl || booking.contact2IdFile) {
+    docItems.push({
+      id: 'contact2Id',
+      name: '8. Emergency Contact 2 Valid ID',
+      shortLabel: 'Contact 2 ID',
+      required: false,
+      url: booking.contact2IdUrl || booking.contact2IdFile || null
     });
   }
 
@@ -315,7 +361,10 @@ const KycArtifactCard: React.FC<KycArtifactCardProps> = ({
     return (
       <div className="p-3.5 rounded-2xl bg-white border-2 border-[#FEB2B2] space-y-2">
         <div className="flex items-center justify-between">
-          <span className="font-bold text-[11px] text-[#1A1A2E]">{title}</span>
+          <div className="flex items-center gap-1.5">
+            {icon}
+            <span className="font-bold text-[11px] text-[#1A1A2E]">{title}</span>
+          </div>
           <span className="text-[10px] font-extrabold text-[#C53030] bg-[#FFF5F5] px-2 py-0.5 rounded-full border border-[#FEB2B2]">
             {isRequired ? 'Missing Required File' : 'Optional'}
           </span>
@@ -333,7 +382,10 @@ const KycArtifactCard: React.FC<KycArtifactCardProps> = ({
       isInspected ? 'border-[#38A169]' : 'border-[#E8E4F0] hover:border-[#1A1A2E]'
     }`}>
       <div className="flex items-center justify-between">
-        <span className="font-bold text-[11px] text-[#1A1A2E]">{title}</span>
+        <div className="flex items-center gap-1.5">
+          {icon}
+          <span className="font-bold text-[11px] text-[#1A1A2E]">{title}</span>
+        </div>
         {isInspected ? (
           <span className="text-[10px] font-black text-[#22543D] bg-[#F0FFF4] px-2 py-0.5 rounded-full border border-[#9AE6B4] flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3 text-[#38A169]" />
@@ -454,7 +506,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [inspectedDocs, setInspectedDocs] = useState<Record<string, boolean>>({});
   const [kycConfirmedCheckbox, setKycConfirmedCheckbox] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
 
   // Clear All Bookings & Delete Action States
   const [showClearAllModal, setShowClearAllModal] = useState(false);
@@ -474,7 +525,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setInspectedDocs({});
       setKycConfirmedCheckbox(false);
       setShowRejectModal(false);
-      setRejectReason('');
       setWorkflowErrorMsg(null);
     }
   }, [selectedBooking?.bookingRef]);
@@ -1256,7 +1306,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {filteredBookings.map((b) => {
                 const workflow = getBookingWorkflowStep(b.status);
                 const isUpdating = updatingRef === b.bookingRef;
-                const kycEval = evaluateKycDocuments(b);
 
                 return (
                   <div

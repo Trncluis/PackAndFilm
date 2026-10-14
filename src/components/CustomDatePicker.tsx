@@ -12,11 +12,14 @@ interface CustomDatePickerProps {
   value: string; // 'YYYY-MM-DD'
   onChange: (val: string) => void;
   minDate?: string; // 'YYYY-MM-DD'
-  label?: string;
+  label?: React.ReactNode;
+  isRequired?: boolean;
   placeholder?: string;
   bookedRanges?: BookedRange[];
   hasConflict?: boolean;
   conflictMessage?: string;
+  hasError?: boolean;
+  errorMessage?: string;
   rangeStart?: string;
   rangeEnd?: string;
   isEndDate?: boolean;
@@ -27,10 +30,13 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
   onChange,
   minDate,
   label,
+  isRequired = false,
   placeholder = 'Select date',
   bookedRanges = [],
   hasConflict = false,
   conflictMessage,
+  hasError = false,
+  errorMessage,
   rangeStart,
   rangeEnd,
   isEndDate = false,
@@ -186,8 +192,9 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
   return (
     <div className="relative w-full" ref={containerRef}>
       {label && (
-        <label className="block text-xs font-extrabold text-[#1A1A2E] mb-1.5">
-          {label}
+        <label className="block text-xs font-extrabold text-[#1A1A2E] mb-1.5 flex items-center gap-1">
+          <span>{label}</span>
+          {isRequired && <span className="text-red-500 font-bold">*</span>}
         </label>
       )}
 
@@ -198,15 +205,15 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
         className={`w-full min-h-[50px] px-4 py-2.5 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-3 bg-[#FAFAF7] cursor-pointer group ${
           isOpen
             ? 'border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] bg-white ring-2 ring-[#C9B8F0]/40'
-            : hasConflict
-            ? 'border-[#FEB2B2] bg-[#FFF5F5] hover:border-red-400'
+            : hasConflict || hasError
+            ? 'border-[#FEB2B2] bg-[#FFF5F5] hover:border-red-400 ring-2 ring-red-100'
             : 'border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-white hover:shadow-[2px_2px_0px_#1A1A2E]'
         }`}
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <div
             className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
-              hasConflict
+              hasConflict || hasError
                 ? 'bg-[#FED7D7] text-[#C53030]'
                 : isEndDate
                 ? 'bg-[#FEF0E7] text-[#C05621]'
@@ -392,12 +399,16 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
         </div>
       )}
 
-      {/* Inline Conflict Notice */}
-      {hasConflict && conflictMessage && (
+      {/* Inline Conflict or Error Notice */}
+      {hasConflict && conflictMessage ? (
         <p className="mt-1.5 text-xs text-red-600 font-semibold flex items-center gap-1">
           <span>⚠️</span> {conflictMessage}
         </p>
-      )}
+      ) : hasError && errorMessage ? (
+        <p className="mt-1.5 text-xs text-red-600 font-semibold flex items-center gap-1">
+          <span>⚠️</span> {errorMessage}
+        </p>
+      ) : null}
     </div>
   );
 });

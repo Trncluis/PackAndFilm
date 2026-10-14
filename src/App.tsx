@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Camera,
@@ -20,32 +20,23 @@ import {
   Upload,
   Copy,
   ExternalLink,
-  HardDrive,
-  Cpu,
-  Layers,
-  Heart,
   HelpCircle,
   ArrowRight,
-  Star,
   Zap,
   Check,
   MessageCircle,
   FileText,
   ShoppingBag,
-  Sliders,
   Menu,
   AlertCircle,
   CalendarX,
   CalendarCheck,
   CheckCheck,
   FileCheck,
-  UserCheck,
   Video,
   GraduationCap,
   Loader2,
-  RefreshCw,
-  Clock,
-  Lock
+  Clock
 } from 'lucide-react';
 
 import { CAMERAS, CameraItem } from './data/cameras';
@@ -60,12 +51,18 @@ import {
   FIVE_STEP_REQUIREMENTS,
   STUDENT_EXEMPTION_NOTICE
 } from './data/requirements';
+import {
+  RENTAL_CONFIG,
+  HOW_TO_BOOK_STEPS,
+  TERMS_AND_CONDITIONS_DATA,
+  TERMS_ACKNOWLEDGEMENT_TEXT
+} from './data/rentalConfig';
 
 import { CustomDatePicker } from './components/CustomDatePicker';
 import { CustomSelect } from './components/CustomSelect';
 import { AdminDashboard } from './components/AdminDashboard';
 
-const DOWNPAYMENT_FEE = 300;
+const DOWNPAYMENT_FEE = RENTAL_CONFIG.reservationFee;
 
 // Google Apps Script Webhook URL for Live Google Sheets Integration
 const APPS_SCRIPT_URL: string = "https://script.google.com/macros/s/AKfycbziRdlYg7VekgaVnhThEhXb_I1XScjYc8pSomjXM1wG_iMqYiIfR8PG3IUWE6YPhAkx/exec";
@@ -87,25 +84,40 @@ interface BookingState {
   id1Type: string;
   id1File: string | null;
   id1Name: string;
+  id1BackFile: string | null;
+  id1BackName: string;
   id2Type: string;
   id2File: string | null;
   id2Name: string;
+  id2BackFile: string | null;
+  id2BackName: string;
   authorizationSlipFile: string | null;
+  selfieWithIdsFile: string | null;
   deliveryReceiptsFile: string | null;
+  isBillUnderOtherName: boolean;
+  billOwnerIdFile: string | null;
+  billOwnerIdName: string;
   emergencyContact1Name: string;
   emergencyContact1Phone: string;
   emergencyContact1Rel: string;
   contact1IdFile: string | null;
   contact1IdName: string;
+  emergencyContact1Social: string;
   emergencyContact2Name: string;
   emergencyContact2Phone: string;
   emergencyContact2Rel: string;
+  contact2IdFile: string | null;
+  contact2IdName: string;
+  emergencyContact2Social: string;
   selfieVideoConfirmed: boolean;
   isStudentExemption: boolean;
   studentCORFile: string | null;
   selfieFile: string | null;
   gcashRefNumber: string;
   receiptFile: string | null;
+  termsAccepted: boolean;
+  termsVersion: string;
+  termsAcceptedAt?: string;
   bookingRef: string;
   driveFolderUrl?: string | null;
 }
@@ -157,8 +169,21 @@ export default function App() {
   const [calcHandover, setCalcHandover] = useState<'meetup' | 'courier'>('meetup');
 
   // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalStep, setModalStep] = useState<number>(1);
+  const [isModalOpen, setIsModalOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('open_modal') === 'true' || !!p.get('step');
+    }
+    return false;
+  });
+  const [modalStep, setModalStep] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const stepParam = p.get('step');
+      if (stepParam) return parseInt(stepParam, 10);
+    }
+    return 1;
+  });
   const [copiedGcash, setCopiedGcash] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
   const [previewBagItem, setPreviewBagItem] = useState<number | null>(null);
@@ -166,45 +191,67 @@ export default function App() {
   // FAQ Accordion State
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
+  // Terms and Conditions State
+  const [openTermsClause, setOpenTermsClause] = useState<number | null>(null);
+  const [showTermsModal, setShowTermsModal] = useState<boolean>(false);
+
   // Form State for Booking
-  const [booking, setBooking] = useState<BookingState>({
-    cameraId: 'dji-pocket-3',
-    startDate: todayStr,
-    endDate: nextDay,
-    handoverMode: 'meetup',
-    meetupLocation: PASIG_MEETUP_HUBS[0],
-    fullName: '',
-    mobileNumber: '',
-    email: '',
-    gcashAccountName: '',
-    gcashAccountNumber: '',
-    deliveryAddress: '',
-    socialHandle: '',
-    shootType: 'Travel / Vacation Vlogging',
-    id1Type: 'Philippine Passport',
-    id1File: null,
-    id1Name: '',
-    id2Type: 'Company ID / Secondary Gov ID',
-    id2File: null,
-    id2Name: '',
-    authorizationSlipFile: null,
-    deliveryReceiptsFile: null,
-    emergencyContact1Name: '',
-    emergencyContact1Phone: '',
-    emergencyContact1Rel: 'Family Member / Guardian',
-    contact1IdFile: null,
-    contact1IdName: '',
-    emergencyContact2Name: '',
-    emergencyContact2Phone: '',
-    emergencyContact2Rel: 'Friend / Colleague',
-    selfieVideoConfirmed: false,
-    isStudentExemption: false,
-    studentCORFile: null,
-    selfieFile: null,
-    gcashRefNumber: '',
-    receiptFile: null,
-    bookingRef: '',
-    driveFolderUrl: null,
+  const [booking, setBooking] = useState<BookingState>(() => {
+    const hasMockFiles = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mock_files') === 'true';
+    return {
+      cameraId: 'dji-pocket-3',
+      startDate: todayStr,
+      endDate: nextDay,
+      handoverMode: 'meetup',
+      meetupLocation: PASIG_MEETUP_HUBS[0],
+      fullName: '',
+      mobileNumber: '',
+      email: '',
+      gcashAccountName: '',
+      gcashAccountNumber: '',
+      deliveryAddress: '',
+      socialHandle: '',
+      shootType: 'Travel / Vacation Vlogging',
+      id1Type: 'Philippine Passport',
+      id1File: hasMockFiles ? 'data:image/png;base64,mock_id1' : null,
+      id1Name: hasMockFiles ? 'mock_passport.jpg' : '',
+      id1BackFile: hasMockFiles ? 'data:image/png;base64,mock_id1back' : null,
+      id1BackName: hasMockFiles ? 'mock_passport_back.jpg' : '',
+      id2Type: 'Company ID / Secondary Gov ID',
+      id2File: hasMockFiles ? 'data:image/png;base64,mock_id2' : null,
+      id2Name: hasMockFiles ? 'mock_secondary_id.jpg' : '',
+      id2BackFile: hasMockFiles ? 'data:image/png;base64,mock_id2back' : null,
+      id2BackName: hasMockFiles ? 'mock_secondary_back.jpg' : '',
+      authorizationSlipFile: hasMockFiles ? 'data:image/png;base64,mock_auth' : null,
+      selfieWithIdsFile: hasMockFiles ? 'data:image/png;base64,mock_selfie' : null,
+      deliveryReceiptsFile: hasMockFiles ? 'data:image/png;base64,mock_receipt' : null,
+      isBillUnderOtherName: false,
+      billOwnerIdFile: null,
+      billOwnerIdName: '',
+      emergencyContact1Name: '',
+      emergencyContact1Phone: '',
+      emergencyContact1Rel: 'Family Member',
+      contact1IdFile: hasMockFiles ? 'data:image/png;base64,mock_contact1_id' : null,
+      contact1IdName: hasMockFiles ? 'parent_guardian_gov_id.jpg' : '',
+      emergencyContact1Social: '',
+      emergencyContact2Name: '',
+      emergencyContact2Phone: '',
+      emergencyContact2Rel: 'Friend / Colleague',
+      contact2IdFile: null,
+      contact2IdName: '',
+      emergencyContact2Social: '',
+      selfieVideoConfirmed: hasMockFiles,
+      isStudentExemption: false,
+      studentCORFile: null,
+      selfieFile: hasMockFiles ? 'data:video/mp4;base64,mock_video' : null,
+      gcashRefNumber: hasMockFiles ? '1234567890123' : '',
+      receiptFile: hasMockFiles ? 'data:image/png;base64,mock_receipt_payment' : null,
+      termsAccepted: false,
+      termsVersion: RENTAL_CONFIG.termsVersion,
+      termsAcceptedAt: '',
+      bookingRef: '',
+      driveFolderUrl: null,
+    };
   });
 
   const modalCamera = useMemo(
@@ -216,22 +263,19 @@ export default function App() {
   const calculateQuote = useCallback((start: string, end: string, mode: 'meetup' | 'courier', camera: CameraItem = selectedCamera) => {
     const isPocket3 = camera.id === 'dji-pocket-3';
 
-    // Helper to get daily rate and tier label based on duration
+    // Helper to get daily rate and tier label based on duration from handout
     const getDailyRateInfo = (d: number) => {
       if (isPocket3) {
-        if (d <= 1) {
-          return { rate: 450, isBulk: false, tierLabel: '1 Day Rate' };
-        }
-        if (d === 2) {
-          return { rate: 450, isBulk: false, tierLabel: '2–3 Days Tier (₱450/d)' };
+        if (d <= 2) {
+          return { rate: 450, isBulk: false, tierLabel: '1–2 Days (₱450/day)' };
         }
         if (d === 3) {
-          return { rate: 420, isBulk: true, tierLabel: '2–3 Days Tier (₱420/d)' };
+          return { rate: 420, isBulk: true, tierLabel: '3 Days Tier (₱420/day)' };
         }
         if (d <= 5) {
-          return { rate: 380, isBulk: true, tierLabel: '4–5 Days Tier (₱380/d)' };
+          return { rate: 380, isBulk: true, tierLabel: '4–5 Days Tier (₱380/day)' };
         }
-        return { rate: 350, isBulk: true, tierLabel: '6+ Days Long Term (₱350/d)' };
+        return { rate: 350, isBulk: true, tierLabel: '6+ Days Long Term (₱350/day)' };
       }
 
       // Fallback for future cameras
@@ -240,45 +284,25 @@ export default function App() {
       return { rate, isBulk, tierLabel: isBulk ? 'Bulk Rate' : 'Standard Rate' };
     };
 
-    if (!start || !end) {
-      const initialInfo = getDailyRateInfo(1);
-      const deposit = isPocket3 ? 1000 : (mode === 'courier' ? camera.courierDeposit : camera.meetupDeposit);
-      const rentalTotal = initialInfo.rate;
-      const downpayment = DOWNPAYMENT_FEE;
-      const remainingRentalBalance = Math.max(0, rentalTotal - downpayment);
-      const paymentOnHandover = remainingRentalBalance + deposit;
-      return {
-        days: 1,
-        rate: initialInfo.rate,
-        tierLabel: initialInfo.tierLabel,
-        rentalTotal,
-        baseRental: rentalTotal,
-        deposit,
-        total: rentalTotal + deposit,
-        totalPackageValue: rentalTotal + deposit,
-        downpayment,
-        remainingRentalBalance,
-        paymentOnHandover,
-        refundAfterReturn: deposit,
-        balanceDue: paymentOnHandover,
-        isBulk: false
-      };
+    let days = 1;
+    if (start && end) {
+      const d1 = new Date(start);
+      const d2 = new Date(end);
+      const diffTime = d2.getTime() - d1.getTime();
+      days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (days <= 0 || isNaN(days)) days = 1;
     }
-
-    const d1 = new Date(start);
-    const d2 = new Date(end);
-    const diffTime = d2.getTime() - d1.getTime();
-    let days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (days <= 0 || isNaN(days)) days = 1;
 
     const rateInfo = getDailyRateInfo(days);
     const rentalTotal = days * rateInfo.rate;
-    // Security deposit is strictly ₱1,000 for both meetups and Grab Express courier delivery
-    const deposit = isPocket3 ? 1000 : (mode === 'courier' ? camera.courierDeposit : camera.meetupDeposit);
-    const total = rentalTotal + deposit;
-    const downpayment = DOWNPAYMENT_FEE;
+    // Security deposit is strictly ₱1,000 for DJI Pocket 3
+    const deposit = isPocket3 ? RENTAL_CONFIG.securityDeposit : (mode === 'courier' ? camera.courierDeposit : camera.meetupDeposit);
+    // Meetup handling fee: ₱200 for meet-up transactions; ₱0 for Grab Express (renter pays rider directly)
+    const meetupHandlingFee = mode === 'meetup' ? RENTAL_CONFIG.meetupHandlingFee : 0;
+    const downpayment = DOWNPAYMENT_FEE; // ₱300 non-refundable reservation fee credited to rental
     const remainingRentalBalance = Math.max(0, rentalTotal - downpayment);
-    const paymentOnHandover = remainingRentalBalance + deposit;
+    const paymentOnHandover = remainingRentalBalance + deposit + meetupHandlingFee;
+    const totalPackageValue = rentalTotal + deposit + meetupHandlingFee;
     const refundAfterReturn = deposit;
     const balanceDue = paymentOnHandover;
 
@@ -289,8 +313,10 @@ export default function App() {
       rentalTotal,
       baseRental: rentalTotal,
       deposit,
-      total,
-      totalPackageValue: total,
+      meetupFee: meetupHandlingFee,
+      meetupHandlingFee,
+      total: totalPackageValue,
+      totalPackageValue,
       downpayment,
       remainingRentalBalance,
       paymentOnHandover,
@@ -387,8 +413,8 @@ export default function App() {
     return {
       id,
       cameraId: matchedCameraId,
-      title: 'Reserved Slot • Camera Rental',
-      renterTag: 'Metro Manila Service Hub',
+      title: `${customer} • Camera Rental`,
+      renterTag: social,
       startDate,
       endDate,
       hub,
@@ -519,9 +545,10 @@ export default function App() {
     }));
   };
 
-  // Form Step Validation State
+  // Form Step Validation State & Auto-Scroll
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [stepAttempted, setStepAttempted] = useState<Record<number, boolean>>({});
+  const modalBodyRef = useRef<HTMLDivElement>(null);
 
   const clearFieldError = (fieldName: string) => {
     setValidationErrors(prev => {
@@ -532,9 +559,66 @@ export default function App() {
     });
   };
 
+  const scrollToField = (fieldKey: string) => {
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-field-key="${fieldKey}"]`) || document.getElementById(`field-${fieldKey}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+          el.focus({ preventScroll: true });
+        } else {
+          const input = el.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+            'input:not([type="hidden"]):not([type="file"]), textarea, select'
+          );
+          if (input) {
+            input.focus({ preventScroll: true });
+          } else {
+            const focusable = el.querySelector<HTMLElement>('button, label, input[type="file"], input[type="checkbox"]');
+            if (focusable) {
+              focusable.focus({ preventScroll: true });
+            }
+          }
+        }
+      }
+    }, 60);
+  };
+
   const validateStep = (stepNumber: number): boolean => {
     setStepAttempted(prev => ({ ...prev, [stepNumber]: true }));
     const errors: Record<string, string> = {};
+
+    const stepFieldOrder: Record<number, string[]> = {
+      1: ['cameraId', 'startDate', 'endDate', 'dateConflict'],
+      2: booking.handoverMode === 'meetup' ? ['meetupLocation'] : ['deliveryAddress'],
+      3: [
+        'id1File',
+        'id1BackFile',
+        'id2File',
+        ...(booking.isStudentExemption ? [] : ['id2BackFile']),
+        'authorizationSlipFile',
+        'selfieWithIdsFile',
+        'deliveryReceiptsFile',
+        ...(booking.isBillUnderOtherName ? ['billOwnerIdFile'] : []),
+        'selfieVideoConfirmed',
+        'selfieFile',
+      ],
+      4: [
+        'fullName',
+        'mobileNumber',
+        'email',
+        'shootType',
+        'socialHandle',
+        'emergencyContact1Name',
+        'emergencyContact1Phone',
+        'emergencyContact1Social',
+        ...(booking.isStudentExemption ? ['contact1IdFile'] : []),
+        'emergencyContact2Name',
+        'emergencyContact2Phone',
+        'gcashAccountName',
+        'gcashAccountNumber',
+      ],
+      5: ['gcashRefNumber', 'receiptFile', 'termsAccepted'],
+    };
 
     if (stepNumber === 1) {
       const chosenCam = CAMERAS.find(c => c.id === booking.cameraId);
@@ -556,7 +640,7 @@ export default function App() {
     } else if (stepNumber === 2) {
       if (booking.handoverMode === 'meetup') {
         if (!booking.meetupLocation || !booking.meetupLocation.trim()) {
-          errors.meetupLocation = 'Please select your preferred Pasig meetup station.';
+          errors.meetupLocation = 'Please select your preferred meetup station (SM East Ortigas, Bridgetowne, or Opus Mall).';
         }
       } else if (booking.handoverMode === 'courier') {
         if (!booking.deliveryAddress || booking.deliveryAddress.trim().length < 8) {
@@ -564,32 +648,51 @@ export default function App() {
         }
       }
     } else if (stepNumber === 3) {
+      // 1. Personal Identification
       if (!booking.id1File) {
-        errors.id1File = 'Primary Government ID upload is strictly required.';
+        errors.id1File = 'Primary Valid ID (Front) upload is required.';
       }
+      if (!booking.id1BackFile) {
+        errors.id1BackFile = 'Primary Valid ID (Back) upload is required.';
+      }
+
       if (booking.isStudentExemption) {
         if (!booking.id2File) {
-          errors.id2File = 'Student ID and Semester COR upload is required for student exemption.';
+          errors.id2File = 'Student ID and Current Certificate of Registration (COR) upload is required.';
         }
       } else {
         if (!booking.id2File) {
-          errors.id2File = 'Secondary Government or Company ID upload is strictly required.';
+          errors.id2File = 'Secondary Valid ID (Front) upload is required.';
+        }
+        if (!booking.id2BackFile) {
+          errors.id2BackFile = 'Secondary Valid ID (Back) upload is required.';
         }
       }
+
+      // Authorization Slip
       if (!booking.authorizationSlipFile) {
-        errors.authorizationSlipFile = 'Handwritten authorization slip with 3 specimen signatures is required.';
+        errors.authorizationSlipFile = 'Handwritten authorization slip photo with IDs (date, 3 specimen signatures & "For Pack and Film Camera Rental purposes only") is required.';
       }
+
+      // Selfie holding IDs and slip
+      if (!booking.selfieWithIdsFile) {
+        errors.selfieWithIdsFile = 'Selfie photo holding your 2 valid IDs and handwritten authorization slip is required.';
+      }
+
+      // 2. Proof of Billing / Delivery Receipts
       if (!booking.deliveryReceiptsFile) {
-        errors.deliveryReceiptsFile = 'Proof of billing or 2 online order delivery receipts is required.';
+        errors.deliveryReceiptsFile = 'Proof of billing or 2 online delivery receipts (Shopee/Lazada/TikTok) showing your name and address is required.';
       }
-      if (!booking.socialHandle || booking.socialHandle.trim().length < 2) {
-        errors.socialHandle = 'Active Instagram or TikTok profile handle is required.';
+      if (booking.isBillUnderOtherName && !booking.billOwnerIdFile) {
+        errors.billOwnerIdFile = 'Valid government ID of the person named on the bill is required for verification.';
       }
+
+      // 3. Selfie Video Verification
       if (!booking.selfieVideoConfirmed) {
-        errors.selfieVideoConfirmed = 'You must confirm the 5-second verification video agreement.';
+        errors.selfieVideoConfirmed = 'You must confirm the selfie video statement requirement.';
       }
       if (!booking.selfieFile) {
-        errors.selfieFile = '5-second verification video or live selfie upload is required.';
+        errors.selfieFile = 'Selfie video holding your 2 valid IDs stating rental details is required.';
       }
     } else if (stepNumber === 4) {
       if (!booking.fullName || booking.fullName.trim().length < 3) {
@@ -603,24 +706,48 @@ export default function App() {
       if (!booking.email || !emailPattern.test(booking.email.trim())) {
         errors.email = 'Please provide a valid email address.';
       }
+      if (!booking.shootType || !booking.shootType.trim()) {
+        errors.shootType = 'Please select your shoot or event purpose.';
+      }
       if (!booking.socialHandle || booking.socialHandle.trim().length < 2) {
-        errors.socialHandle = 'Please provide an active personal Instagram or Facebook account.';
+        errors.socialHandle = 'Please provide your main personal active Facebook or Instagram account.';
       }
-      if (!booking.emergencyContact1Name.trim() || !booking.emergencyContact1Phone.trim()) {
-        errors.emergencyContact1 = 'Emergency Contact 1 (Family Member / Guardian) name and mobile number are required.';
+
+      // Emergency Contact 1: Primary family member, relative, or guardian reference
+      if (!booking.emergencyContact1Name || !booking.emergencyContact1Name.trim()) {
+        errors.emergencyContact1Name = booking.isStudentExemption
+          ? 'Parent or Legal Guardian full legal name is required for Student Exemption.'
+          : 'Emergency Contact 1 (Family Member / Guardian) full legal name is required.';
       }
+      const c1PhoneDigits = (booking.emergencyContact1Phone || '').replace(/\D/g, '');
+      if (!c1PhoneDigits || c1PhoneDigits.length < 10) {
+        errors.emergencyContact1Phone = 'Emergency Contact 1 active contact number is required.';
+      }
+      if (!booking.emergencyContact1Social || !booking.emergencyContact1Social.trim()) {
+        errors.emergencyContact1Social = 'FB/IG profile link or handle for Emergency Contact 1 is required.';
+      }
+
+      // Parent/Guardian Government ID Upload: Required ONLY when Student Exemption applies
       if (booking.isStudentExemption && !booking.contact1IdFile) {
-        errors.contact1IdFile = 'Parent / Guardian Government ID upload is required for Student Exemption verification.';
+        errors.contact1IdFile = 'Parent / Guardian Valid Government ID upload is required for Student Exemption.';
       }
-      if (!booking.emergencyContact2Name.trim() || !booking.emergencyContact2Phone.trim()) {
-        errors.emergencyContact2 = 'Emergency Contact 2 (Second Contact) name and mobile number are required.';
+
+      // Emergency Contact 2: Friend, colleague, or travel companion (No ID upload required)
+      if (!booking.emergencyContact2Name || !booking.emergencyContact2Name.trim()) {
+        errors.emergencyContact2Name = 'Emergency Contact 2 full legal name is required.';
       }
+      const c2PhoneDigits = (booking.emergencyContact2Phone || '').replace(/\D/g, '');
+      if (!c2PhoneDigits || c2PhoneDigits.length < 10) {
+        errors.emergencyContact2Phone = 'Emergency Contact 2 active contact number is required.';
+      }
+
+      // Security Deposit Refund GCash
       if (!booking.gcashAccountName || booking.gcashAccountName.trim().length < 2) {
-        errors.gcashAccountName = 'GCash Account Name is required for your deposit refund.';
+        errors.gcashAccountName = 'GCash Account Name is required for your ₱1,000 deposit refund.';
       }
       const gcashDigits = (booking.gcashAccountNumber || '').replace(/\D/g, '');
       if (!gcashDigits || gcashDigits.length < 10) {
-        errors.gcashAccountNumber = 'Valid GCash Mobile Number is required for your deposit refund.';
+        errors.gcashAccountNumber = 'Valid GCash Mobile Number is required for your ₱1,000 deposit refund.';
       }
     } else if (stepNumber === 5) {
       const cleanRef = (booking.gcashRefNumber || '').replace(/\s+/g, '');
@@ -630,13 +757,21 @@ export default function App() {
       if (!booking.receiptFile) {
         errors.receiptFile = 'GCash payment receipt upload is required to complete your booking.';
       }
+      if (!booking.termsAccepted) {
+        errors.termsAccepted = 'You must actively review and agree to the Terms and Conditions before submitting payment.';
+      }
     }
 
     setValidationErrors(errors);
 
     const hasErrors = Object.keys(errors).length > 0;
     if (hasErrors) {
-      const firstErrorMsg = Object.values(errors)[0];
+      const fieldOrder = stepFieldOrder[stepNumber] || [];
+      const firstField = fieldOrder.find(k => errors[k]) || Object.keys(errors)[0];
+      if (firstField) {
+        scrollToField(firstField);
+      }
+      const firstErrorMsg = errors[firstField] || Object.values(errors)[0];
       showToast(firstErrorMsg, 'error');
       return false;
     }
@@ -770,14 +905,19 @@ export default function App() {
     e: React.ChangeEvent<HTMLInputElement>,
     field:
       | 'id1File'
+      | 'id1BackFile'
       | 'id2File'
+      | 'id2BackFile'
       | 'selfieFile'
+      | 'selfieWithIdsFile'
       | 'receiptFile'
       | 'authorizationSlipFile'
       | 'deliveryReceiptsFile'
+      | 'billOwnerIdFile'
       | 'studentCORFile'
-      | 'contact1IdFile',
-    nameField?: 'id1Name' | 'id2Name'
+      | 'contact1IdFile'
+      | 'contact2IdFile',
+    nameField?: 'id1Name' | 'id1BackName' | 'id2Name' | 'id2BackName' | 'billOwnerIdName' | 'contact1IdName' | 'contact2IdName'
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -798,14 +938,19 @@ export default function App() {
   const handleRemoveFile = (
     field:
       | 'id1File'
+      | 'id1BackFile'
       | 'id2File'
+      | 'id2BackFile'
       | 'selfieFile'
+      | 'selfieWithIdsFile'
       | 'receiptFile'
       | 'authorizationSlipFile'
       | 'deliveryReceiptsFile'
+      | 'billOwnerIdFile'
       | 'studentCORFile'
-      | 'contact1IdFile',
-    nameField?: 'id1Name' | 'id2Name'
+      | 'contact1IdFile'
+      | 'contact2IdFile',
+    nameField?: 'id1Name' | 'id1BackName' | 'id2Name' | 'id2BackName' | 'billOwnerIdName' | 'contact1IdName' | 'contact2IdName'
   ) => {
     setBooking(prev => ({
       ...prev,
@@ -834,12 +979,17 @@ export default function App() {
     const randomCode = Math.floor(1000 + Math.random() * 9000);
     const newRef = `#PNF-2026-${randomCode}`;
 
+    const c1Name = booking.emergencyContact1Name;
+    const c1Phone = booking.emergencyContact1Phone;
+    const c1Rel = booking.emergencyContact1Rel || (booking.isStudentExemption ? 'Parent / Legal Guardian' : 'Family Member');
+    const c1Social = booking.emergencyContact1Social;
+
     const emergencyContactsText = [
-      booking.emergencyContact1Name
-        ? `${booking.emergencyContact1Name} (${booking.emergencyContact1Phone} - ${booking.emergencyContact1Rel})`
+      c1Name
+        ? `${c1Name} (${c1Phone} - ${c1Rel}) [Social: ${c1Social || 'N/A'}]`
         : '',
       booking.emergencyContact2Name
-        ? `${booking.emergencyContact2Name} (${booking.emergencyContact2Phone} - ${booking.emergencyContact2Rel})`
+        ? `${booking.emergencyContact2Name} (${booking.emergencyContact2Phone} - ${booking.emergencyContact2Rel || 'Friend'}) [Social: ${booking.emergencyContact2Social || 'N/A'}]`
         : ''
     ].filter(Boolean).join('; ') || 'None provided';
 
@@ -850,7 +1000,7 @@ export default function App() {
       renterTag: booking.socialHandle || (booking.fullName ? `@${booking.fullName.toLowerCase().replace(/[^a-z0-9_.]/g, '')}` : '@renter'),
       startDate: booking.startDate,
       endDate: booking.endDate,
-      hub: booking.handoverMode === 'meetup' ? booking.meetupLocation : 'Grab Express Delivery (Metro Manila)',
+      hub: booking.handoverMode === 'meetup' ? `Meetup: ${booking.meetupLocation}` : 'Grab Express Delivery (Metro Manila)',
       status: 'Deposit Paid'
     };
 
@@ -865,22 +1015,31 @@ export default function App() {
       startDate: booking.startDate,
       endDate: booking.endDate,
       rentalDays: modalQuote.days,
-      handoverMethod: booking.handoverMode === 'meetup' ? `Free Pasig Meetup (${booking.meetupLocation})` : 'Grab Express Delivery',
+      handoverMethod: booking.handoverMode === 'meetup' ? `Meetup (${booking.meetupLocation} - ₱200 Fee)` : 'Grab Express Delivery (Renter shoulders fee)',
       address: booking.handoverMode === 'meetup' ? booking.meetupLocation : (booking.deliveryAddress || 'Metro Manila'),
       shootType: booking.shootType || 'Travel / Vacation Vlogging',
       rentalTotal: modalQuote.rentalTotal,
       securityDeposit: modalQuote.deposit,
+      meetupHandlingFee: modalQuote.meetupFee,
       downpaymentPaid: DOWNPAYMENT_FEE,
       balanceDue: modalQuote.balanceDue,
       gcashRefNumber: booking.gcashRefNumber || 'N/A',
+      termsAccepted: booking.termsAccepted,
+      termsVersion: booking.termsVersion || RENTAL_CONFIG.termsVersion,
+      termsAcceptedAt: booking.termsAcceptedAt || new Date().toISOString(),
       notes: 'Emergency Contacts: ' + emergencyContactsText,
       // KYC Uploaded Files passed to Google Apps Script -> Google Drive:
       id1File: booking.id1File,
+      id1BackFile: booking.id1BackFile,
       id2File: booking.isStudentExemption ? (booking.studentCORFile || booking.id2File) : booking.id2File,
-      contact1IdFile: booking.contact1IdFile,
+      id2BackFile: booking.id2BackFile,
+      contact1IdFile: booking.isStudentExemption ? booking.contact1IdFile : null,
+      contact2IdFile: null,
       isStudentExemption: booking.isStudentExemption,
       authorizationSlipFile: booking.authorizationSlipFile,
+      selfieWithIdsFile: booking.selfieWithIdsFile,
       deliveryReceiptsFile: booking.deliveryReceiptsFile,
+      billOwnerIdFile: booking.billOwnerIdFile,
       selfieFile: booking.selfieFile,
       receiptFile: booking.receiptFile
     };
@@ -957,39 +1116,43 @@ export default function App() {
   // Dynamic Bag items derived from selected camera
   const currentBagItems = selectedCamera.bagItems;
 
-  // FAQ items updated for Metro Manila service
+  // FAQ items updated directly from PDF handouts (Requirements, T&C, How to Book)
   const faqs = [
     {
-      q: 'Where are your meetup hubs located?',
-      a: 'Free meetups are available around Pasig City at SM Megamall (Building A/B Ground Lobby), Estancia Mall / Capitol Commons, Kapitolyo Food Strip (Pioneer/East Capitol), Arcovia City (C-5), and Ortigas MRT Station / Robinsons Galleria. For all other areas across Metro Manila, we provide same-day Grab Express Delivery.'
+      q: 'Where are your meetup locations and what are the fees?',
+      a: 'Meet-ups are held at SM East Ortigas, Bridgetowne, or Opus Mall between 8:00 AM and 8:00 PM. A ₱200 handling fee is charged for all meet-up transactions. For delivery, we use Grab Express ONLY (owner books the rider for both release and return, and the renter shoulders all delivery fees).'
     },
     {
-      q: 'What are the 5 required verification steps for KYC?',
-      a: 'We require: 1. Two Valid IDs + handwritten authorization slip ("For PackAndFilm rental purposes only", date, 3 signatures) + selfie holding both; 2. Proof of address (utility bill or 2 delivered Shopee/Lazada receipts); 3. Active personal social media account; 4. Two emergency contacts; and 5. A 5-second verification selfie video. Active college students enjoy an exemption with their Student ID + Semester COR.'
+      q: 'What are your rental operating hours?',
+      a: 'Our rental operating window is strictly 8:00 AM – 8:00 PM ONLY. All gear pickups, meetups, deliveries, and returns must be scheduled within this period.'
     },
     {
-      q: 'How does the Security Deposit refund work?',
-      a: 'Your security deposit (strictly ₱1,000 for both Meetup and Grab Express delivery on Pocket 3) is 100% refundable. Once we inspect the equipment after return (under 15 minutes), your deposit is returned straight to your GCash account with zero deductions.'
+      q: 'How does the ₱300 downpayment work?',
+      a: 'A ₱300 down payment and complete requirements within 24 hours are needed to reserve your calendar slot. This ₱300 is credited directly toward your total rental fee (not an extra charge!). Full payment of the remaining rental balance must be settled prior to equipment release.'
     },
     {
-      q: 'Which camera is currently available for rent?',
-      a: 'The DJI Osmo Pocket 3 Standard Kit is our flagship active rental camera available for booking today! Additional cameras (like the Insta360 X4 and Fujifilm X100VI) are currently marked as Coming Soon as we expand our gear inventory.'
+      q: 'How does the ₱1,000 Security Deposit refund work?',
+      a: 'A ₱1,000 Security Deposit is required before release. The deposit is fully refunded within 24 hours of the equipment being returned, provided it is in the same condition as when rented. It covers any unpaid balances, damages, loss, or unreturned accessories.'
     },
     {
-      q: 'Can I extend my rental while I already have the camera?',
-      a: 'Yes, provided no other renter has reserved that specific camera for the succeeding dates! Simply send us an IG DM or Messenger chat at least 12 hours before your scheduled return time.'
+      q: 'What is your cancellation policy?',
+      a: 'Strictly NO cancellation once the booking has been confirmed. Any cancellation by the renter may result in a ₱500 cancellation penalty, in addition to the forfeiture of the ₱300 non-refundable reservation fee. All payments made (excluding security deposit) are strictly non-refundable and non-transferable.'
     },
     {
-      q: 'What happens if the unit gets scratched or damaged?',
-      a: 'Normal minor wear on silicone covers is fine. However, hardware damage, dropped impact, or water ingress will be deducted from your deposit or billed per official brand service center quotation. Please always keep protective covers on!'
+      q: 'What is your Late Return Policy?',
+      a: 'To avoid affecting the next renter’s booking, equipment must be returned on time. A ₱150/hour late fee is charged automatically starting 30 minutes after the agreed return time. If equipment is more than 2 hours late, the fee automatically converts to one (1) full extra day’s rental at standard daily rate, plus a ₱2,000 inconvenience fee.'
     },
     {
-      q: 'How do I transfer footage to my iPhone or Android?',
-      a: 'Super easy! We include plug-and-play OTG Card Readers for Lightning and USB-C. Just remove the memory card, plug it into your phone, and export your 4K/8K clips directly to your Photos or Files app in seconds!'
+      q: 'What documents are required to rent?',
+      a: 'Requirements: 1. Two (2) valid IDs (front & back) with at least one showing current address & signature; 2. Handwritten authorization slip (date, 3 specimen signatures, "For Pack and Film Camera Rental purposes only") and selfie holding your IDs and slip; 3. Proof of billing / 2 online delivery receipts (Shopee/Lazada/TikTok); 4. Main personal social media account; 5. Two emergency contacts with valid ID photos and profile links; 6. 5-second selfie video holding your 2 IDs stating rental details.'
     },
     {
-      q: 'Is the ₱300 downpayment refundable if I cancel?',
-      a: 'The ₱300 downpayment locks the camera dates exclusively for you. You can reschedule for free up to 48 hours prior to handover. Cancellations under 48 hours forfeit the downpayment.'
+      q: 'Are students eligible to rent without a secondary government ID?',
+      a: 'Yes! Enrolled students may submit: Valid Student ID + Current Certificate of Registration (COR) + Parent/Guardian Government ID (front & back).'
+    },
+    {
+      q: 'How do I transfer photos and videos to my smartphone?',
+      a: 'Super easy! We provide high-speed OTG card readers for both iPhone (Lightning / USB-C) and Android. You can export your clips directly into your phone Photos or Files app in seconds. Please remember to back up your footage before return, as memory cards are wiped immediately upon return.'
     }
   ];
 
@@ -1082,11 +1245,13 @@ export default function App() {
           </a>
 
           {/* Desktop Nav Links */}
-          <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-[#1A1A2E]">
+          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-[#1A1A2E]">
             <a href="#catalog" className="hover:text-[#6B46C1] transition-colors">Camera Catalog</a>
             <a href="#bag" className="hover:text-[#6B46C1] transition-colors">What&apos;s in the Bag</a>
-            <a href="#kyc-requirements" className="hover:text-[#6B46C1] transition-colors">5-Step KYC</a>
+            <a href="#kyc-requirements" className="hover:text-[#6B46C1] transition-colors">Requirements</a>
+            <a href="#how" className="hover:text-[#6B46C1] transition-colors">How to Book</a>
             <a href="#pricing" className="hover:text-[#6B46C1] transition-colors">Pricing & Calculator</a>
+            <a href="#terms" className="hover:text-[#6B46C1] transition-colors">Terms</a>
             <a href="#faq" className="hover:text-[#6B46C1] transition-colors">FAQ</a>
           </nav>
 
@@ -1116,7 +1281,7 @@ export default function App() {
 
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden mt-3 pt-3 border-t border-[#E8E4F0] flex flex-col gap-3 pb-2 px-2 animate-fadeIn">
+          <div className="md:hidden mt-3 pt-3 border-t border-[#E8E4F0] flex flex-col gap-2.5 pb-2 px-2 animate-fadeIn">
             <a
               href="#catalog"
               onClick={() => setMobileMenuOpen(false)}
@@ -1136,7 +1301,14 @@ export default function App() {
               onClick={() => setMobileMenuOpen(false)}
               className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
             >
-              5-Step KYC Policies
+              Rental Requirements
+            </a>
+            <a
+              href="#how"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
+            >
+              How to Book
             </a>
             <a
               href="#pricing"
@@ -1144,6 +1316,13 @@ export default function App() {
               className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
             >
               Pricing Calculator
+            </a>
+            <a
+              href="#terms"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
+            >
+              Terms & Conditions
             </a>
             <a
               href="#faq"
@@ -1188,7 +1367,7 @@ export default function App() {
 
             {/* Subheading */}
             <p className="text-lg sm:text-xl text-[#6B6B8A] font-medium max-w-xl leading-relaxed">
-              Rent the <strong className="text-[#1A1A2E] font-bold">DJI Osmo Pocket 3 Standard Kit</strong> starting at just <span className="underline decoration-[#C9B8F0] decoration-4 font-bold text-[#1A1A2E]">₱450/day</span> (as low as ₱350/day on 6+ days). Free Pasig meetups & same-day Grab Express Delivery across Metro Manila.
+              Rent the <strong className="text-[#1A1A2E] font-bold">DJI Osmo Pocket 3 Standard Kit</strong> starting at just <span className="underline decoration-[#C9B8F0] decoration-4 font-bold text-[#1A1A2E]">₱450/day</span> (as low as ₱350/day on 6+ days). Meet-up at SM East, Bridgetowne, or Opus &amp; Grab Express Delivery across Metro Manila (8:00 AM – 8:00 PM).
             </p>
 
             {/* CTAs */}
@@ -1204,31 +1383,31 @@ export default function App() {
                 href="#kyc-requirements"
                 className="flex-1 sm:flex-none px-6 py-4 rounded-full font-bold text-base bg-white text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FEF0E7] transition-all text-center"
               >
-                5-Step KYC Rules
+                Rental Requirements
               </a>
             </div>
 
             {/* Trust Badges Strip */}
             <div className="w-full pt-4 border-t border-[#E8E4F0]/80">
               <p className="text-xs uppercase font-extrabold text-[#6B6B8A] tracking-wider mb-3">
-                Metro Manila
+                Metro Manila • 8:00 AM – 8:00 PM
               </p>
               <div className="flex flex-wrap gap-2.5">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white border border-[#E8E4F0] text-[#1A1A2E] shadow-sm">
                   <MapPin className="w-3.5 h-3.5 text-[#DD6B20]" />
-                  Pasig Meetup Area
+                  SM East • Bridgetowne • Opus
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white border border-[#E8E4F0] text-[#1A1A2E] shadow-sm">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#319795]" />
-                  5-Step KYC Verified
+                  <Clock className="w-3.5 h-3.5 text-[#319795]" />
+                  8:00 AM – 8:00 PM
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white border border-[#E8E4F0] text-[#1A1A2E] shadow-sm">
                   <CreditCard className="w-3.5 h-3.5 text-[#6B46C1]" />
-                  ₱300 Downpayment Slot
+                  ₱300 Slot Downpayment
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white border border-[#E8E4F0] text-[#1A1A2E] shadow-sm">
                   <Truck className="w-3.5 h-3.5 text-[#DD6B20]" />
-                  Grab Express Delivery
+                  Grab Express Delivery ONLY
                 </span>
               </div>
             </div>
@@ -1415,7 +1594,7 @@ export default function App() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          4. HOW IT WORKS SECTION (3 Simple Steps)
+          4. HOW TO BOOK SECTION (5 Simple Steps from Handout)
       ───────────────────────────────────────────────────────────── */}
       <section id="how" className="py-16 sm:py-20 px-4 sm:px-8">
         <div className="max-w-7xl mx-auto">
@@ -1423,79 +1602,88 @@ export default function App() {
           <div className="text-center max-w-2xl mx-auto mb-14">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] text-xs font-bold mb-3">
               <Zap className="w-3.5 h-3.5 text-[#DD6B20]" />
-              <span>Super Simple Process</span>
+              <span>Guidelines for Smooth Rentals</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-black text-[#1A1A2E] tracking-tight">
-              Rent in 3 Easy Steps
+              How to Book
             </h2>
             <p className="mt-2 text-base text-[#6B6B8A] font-medium">
-              No complicated paper contracts. Quick digital verification and fulfillment across Metro Manila.
+              Guidelines for smooth rentals • Simple 5-step process from initial inquiry to handover.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 relative">
+            {HOW_TO_BOOK_STEPS.map((s, idx) => {
+              const badgeColors = [
+                'bg-[#C9B8F0]',
+                'bg-[#F5C6A8]',
+                'bg-[#A8DBC8]',
+                'bg-[#EDE8FC]',
+                'bg-[#FEF0E7]'
+              ];
+              const iconColors = [
+                'bg-[#EDE8FC] text-[#6B46C1]',
+                'bg-[#FEF0E7] text-[#DD6B20]',
+                'bg-[#E8F7F1] text-[#234E52]',
+                'bg-[#EDE8FC] text-[#553C9A]',
+                'bg-[#FEF0E7] text-[#C05621]'
+              ];
+              const icons = [
+                <Calendar key="1" className="w-6 h-6" />,
+                <ShieldCheck key="2" className="w-6 h-6" />,
+                <CreditCard key="3" className="w-6 h-6" />,
+                <FileCheck key="4" className="w-6 h-6" />,
+                <Camera key="5" className="w-6 h-6" />
+              ];
 
-            {/* Step 1 */}
-            <div className="bg-white rounded-[28px] border-2 border-[#1A1A2E] shadow-[5px_5px_0px_0px_#1A1A2E] p-7 flex flex-col justify-between relative group hover:-translate-y-1 transition-all">
-              <div className="absolute -top-3.5 left-6 bg-[#C9B8F0] text-[#1A1A2E] font-black text-xs px-3 py-1 rounded-full border border-[#1A1A2E]">
-                STEP 01
-              </div>
-              <div>
-                <div className="w-14 h-14 rounded-2xl bg-[#EDE8FC] flex items-center justify-center mb-6 mt-2">
-                  <Calendar className="w-7 h-7 text-[#6B46C1]" />
+              return (
+                <div
+                  key={s.step}
+                  className="bg-white rounded-[28px] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] shadow-none hover:shadow-[5px_5px_0px_0px_#1A1A2E] p-6 flex flex-col justify-between relative group hover:-translate-y-1 transition-all duration-200"
+                >
+                  <div className={`absolute -top-3.5 left-6 ${badgeColors[idx % badgeColors.length]} text-[#1A1A2E] font-black text-xs px-3 py-1 rounded-full border border-[#E8E4F0] group-hover:border-[#1A1A2E] transition-colors`}>
+                    STEP {s.step}
+                  </div>
+                  <div>
+                    <div className={`w-12 h-12 rounded-2xl ${iconColors[idx % iconColors.length]} flex items-center justify-center mb-5 mt-2`}>
+                      {icons[idx % icons.length]}
+                    </div>
+                    <div className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-[#6B46C1] mb-1.5 bg-[#EDE8FC] px-2 py-0.5 rounded-md">
+                      {s.badge}
+                    </div>
+                    <h3 className="text-lg font-black text-[#1A1A2E] leading-snug">
+                      {s.title}
+                    </h3>
+                    <p className="mt-2.5 text-xs text-[#6B6B8A] leading-relaxed font-medium">
+                      {s.desc}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="text-xl font-black text-[#1A1A2E]">Pick Dates & Handover</h3>
-                <p className="mt-2.5 text-sm text-[#6B6B8A] leading-relaxed">
-                  Select your shoot or trip schedule. Pick between free Pasig meetups (Megamall, Estancia, Kapitolyo, Arcovia, Ortigas MRT) or doorstep Grab Express Delivery across Metro Manila.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-[#E8E4F0] flex items-center text-xs font-bold text-[#553C9A]">
-                <span>Lock dates with ₱300 downpayment</span>
-              </div>
-            </div>
+              );
+            })}
+          </div>
 
-            {/* Step 2 */}
-            <div className="bg-white rounded-[28px] border-2 border-[#1A1A2E] shadow-[5px_5px_0px_0px_#1A1A2E] p-7 flex flex-col justify-between relative group hover:-translate-y-1 transition-all">
-              <div className="absolute -top-3.5 left-6 bg-[#F5C6A8] text-[#1A1A2E] font-black text-xs px-3 py-1 rounded-full border border-[#1A1A2E]">
-                STEP 02
-              </div>
-              <div>
-                <div className="w-14 h-14 rounded-2xl bg-[#FEF0E7] flex items-center justify-center mb-6 mt-2">
-                  <ShieldCheck className="w-7 h-7 text-[#DD6B20]" />
-                </div>
-                <h3 className="text-xl font-black text-[#1A1A2E]">Quick 15-Min KYC</h3>
-                <p className="mt-2.5 text-sm text-[#6B6B8A] leading-relaxed">
-                  Upload 2 valid IDs (Student IDs warmly accepted!) plus a quick live verification selfie and your active social handle. Approved in 15 mins.
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-[#E8E4F0] flex items-center text-xs font-bold text-[#DD6B20]">
-                <span>100% Secure & encrypted verification</span>
-              </div>
+          {/* Handout Footer Call-Out */}
+          <div className="mt-10 p-5 sm:p-6 rounded-2xl bg-[#EDE8FC] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] shadow-none hover:shadow-[4px_4px_0px_0px_#1A1A2E] flex flex-col sm:flex-row items-center justify-between gap-4 transition-all duration-200">
+            <div className="text-center sm:text-left">
+              <span className="text-sm font-black text-[#1A1A2E] block">
+                Thank you for choosing PackAndFilm as your creative bestie! Happy shooting!
+              </span>
+              <span className="text-xs font-semibold text-[#553C9A] mt-0.5 block">
+                DM US NOW or book directly through our fast checkout form below.
+              </span>
             </div>
-
-            {/* Step 3 */}
-            <div className="bg-white rounded-[28px] border-2 border-[#1A1A2E] shadow-[5px_5px_0px_0px_#1A1A2E] p-7 flex flex-col justify-between relative group hover:-translate-y-1 transition-all">
-              <div className="absolute -top-3.5 left-6 bg-[#A8DBC8] text-[#1A1A2E] font-black text-xs px-3 py-1 rounded-full border border-[#1A1A2E]">
-                STEP 03
-              </div>
-              <div>
-                <div className="w-14 h-14 rounded-2xl bg-[#E8F7F1] flex items-center justify-center mb-6 mt-2">
-                  <Camera className="w-7 h-7 text-[#234E52]" />
-                </div>
-                <h3 className="text-xl font-black text-[#1A1A2E]">Shoot, Export & Return</h3>
-                <p className="mt-2.5 text-sm text-[#6B6B8A] leading-relaxed">
-                  Receive the sealed sanitised bag, film your high-energy vlog, export clips to your phone with the OTG reader, and return to claim your deposit refund!
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-[#E8E4F0] flex items-center text-xs font-bold text-[#234E52]">
-                <span>Instant GCash deposit refund upon check</span>
-              </div>
-            </div>
-
+            <button
+              onClick={() => handleOpenBookingModal()}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full font-black text-xs bg-[#1A1A2E] text-white hover:bg-[#6B46C1] transition-all shadow-md cursor-pointer shrink-0"
+            >
+              <span>Book Your Camera Now</span>
+              <ArrowRight className="w-4 h-4 text-[#F5C6A8]" />
+            </button>
           </div>
 
           {/* Why Rent With Us • What You Can Expect Section */}
-          <div className="mt-14 p-6 sm:p-8 rounded-3xl bg-white border-2 border-[#1A1A2E] shadow-[6px_6px_0px_0px_#1A1A2E]">
+          <div className="mt-14 p-6 sm:p-8 rounded-3xl bg-white border-2 border-[#E8E4F0] hover:border-[#1A1A2E] shadow-none hover:shadow-[6px_6px_0px_0px_#1A1A2E] transition-all duration-200">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-[#E8E4F0]">
               <div>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EDE8FC] text-[#553C9A] text-xs font-bold mb-2">
@@ -1737,7 +1925,7 @@ export default function App() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          STRICT 5-STEP KYC REQUIREMENTS & POLICIES SECTION
+          RENTAL REQUIREMENTS & VERIFICATION SECTION
       ───────────────────────────────────────────────────────────── */}
       <section id="kyc-requirements" className="py-16 sm:py-20 px-4 sm:px-8 bg-white border-y border-[#E8E4F0]">
         <div className="max-w-7xl mx-auto">
@@ -1745,13 +1933,13 @@ export default function App() {
           <div className="text-center max-w-2xl mx-auto mb-12">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] text-xs font-bold mb-3">
               <ShieldCheck className="w-3.5 h-3.5 text-[#DD6B20]" />
-              <span>Safety & Equipment Protection</span>
+              <span>Safety & Transparent Verification</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-black text-[#1A1A2E] tracking-tight">
-              Strict 5-Step KYC Verification
+              Rental Requirements
             </h2>
             <p className="mt-2 text-base text-[#6B6B8A] font-medium">
-              We protect both our equipment and your deposit. Complete verification right on your phone in under 15 minutes.
+              We protect both our equipment and your deposit. Simple, clear guidelines verified directly from your phone.
             </p>
           </div>
 
@@ -1760,7 +1948,7 @@ export default function App() {
             {FIVE_STEP_REQUIREMENTS.map((req) => (
               <div
                 key={req.step}
-                className="bg-[#FAFAF7] rounded-[24px] border-2 border-[#E8E4F0] p-6 flex flex-col justify-between hover:border-[#1A1A2E] transition-all"
+                className="group bg-[#FAFAF7] rounded-[24px] border-2 border-[#E8E4F0] p-6 flex flex-col justify-between hover:border-[#1A1A2E] hover:shadow-[5px_5px_0px_0px_#1A1A2E] hover:-translate-y-1 transition-all duration-200"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -1796,7 +1984,7 @@ export default function App() {
             ))}
 
             {/* Student Exemption Highlight Card */}
-            <div className="bg-[#E8F7F1] rounded-[24px] border-2 border-[#A8DBC8] p-6 flex flex-col justify-between">
+            <div className="group bg-[#E8F7F1] rounded-[24px] border-2 border-[#A8DBC8] hover:border-[#1A1A2E] p-6 flex flex-col justify-between hover:shadow-[5px_5px_0px_0px_#1A1A2E] hover:-translate-y-1 transition-all duration-200">
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <GraduationCap className="w-6 h-6 text-[#234E52]" />
@@ -1808,20 +1996,22 @@ export default function App() {
                   {STUDENT_EXEMPTION_NOTICE.desc}
                 </p>
                 <div className="mt-4 p-3 bg-white/80 rounded-xl text-[11px] text-[#234E52] font-semibold space-y-1">
-                  <div>✓ Valid Student ID</div>
-                  <div>✓ Current Term Certificate of Registration (COR)</div>
-                  <div>✓ Verified Parent / Guardian Government ID</div>
+                  <div>✓ Valid Student ID (front &amp; back)</div>
+                  <div>✓ Current Certificate of Registration (COR)</div>
+                  <div>✓ Parent / Guardian Government ID</div>
                 </div>
               </div>
 
               <div className="mt-5 pt-3 border-t border-[#A8DBC8] text-[10px] font-black text-[#234E52]">
-                PASIG & METRO MANILA STUDENTS WELCOME!
+                STUDENTS NATIONWIDE WELCOME!
               </div>
             </div>
           </div>
 
         </div>
       </section>
+
+
 
       {/* ─────────────────────────────────────────────────────────────
           5. INTERACTIVE PRICING CALCULATOR
@@ -2092,7 +2282,7 @@ export default function App() {
                 {/* Handover Mode Selection */}
                 <div>
                   <label className="block text-xs font-extrabold uppercase tracking-wider text-[#6B6B8A] mb-2">
-                    Step 3: Handover & Return Method (Metro Manila)
+                    Step 3: Handover &amp; Return Method (Metro Manila)
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
@@ -2105,14 +2295,15 @@ export default function App() {
                         }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-sm text-[#1A1A2E]">Free Pasig Meetups</span>
+                        <span className="font-extrabold text-sm text-[#1A1A2E]">Meet-up Hubs</span>
                         {calcHandover === 'meetup' && <Check className="w-4 h-4 text-[#553C9A]" />}
                       </div>
                       <p className="mt-1 text-xs text-[#6B6B8A] leading-tight">
-                        Megamall, Estancia, Kapitolyo, Arcovia, Ortigas MRT.
+                        SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 8:00 PM).
                       </p>
-                      <div className="mt-2 text-[11px] font-bold text-[#553C9A]">
-                        Deposit: ₱{selectedCamera.meetupDeposit.toLocaleString()} (Refundable)
+                      <div className="mt-2 text-[11px] font-bold text-[#553C9A] flex items-center justify-between">
+                        <span>Handling Fee: +₱200</span>
+                        <span>Deposit: ₱{RENTAL_CONFIG.securityDeposit.toLocaleString()}</span>
                       </div>
                     </button>
 
@@ -2125,14 +2316,15 @@ export default function App() {
                         }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-sm text-[#1A1A2E]">Grab Express Delivery</span>
+                        <span className="font-extrabold text-sm text-[#1A1A2E]">Grab Express ONLY</span>
                         {calcHandover === 'courier' && <Check className="w-4 h-4 text-[#C05621]" />}
                       </div>
                       <p className="mt-1 text-xs text-[#6B6B8A] leading-tight">
-                        Same-day Grab Express across Metro Manila. Courier fee shoulder by renter.
+                        Owner books rider for release &amp; return. Renter shoulders delivery fee.
                       </p>
-                      <div className="mt-2 text-[11px] font-bold text-[#C05621]">
-                        Deposit: ₱{selectedCamera.courierDeposit.toLocaleString()} (Refundable)
+                      <div className="mt-2 text-[11px] font-bold text-[#C05621] flex items-center justify-between">
+                        <span>8:00 AM – 8:00 PM ONLY</span>
+                        <span>Deposit: ₱{RENTAL_CONFIG.securityDeposit.toLocaleString()}</span>
                       </div>
                     </button>
 
@@ -2146,15 +2338,15 @@ export default function App() {
                       <Sparkles className="w-4 h-4 text-[#234E52]" />
                     </div>
                     <div className="text-xs">
-                      <span className="font-extrabold text-[#234E52]">Bulk Rate Applied! </span>
+                      <span className="font-extrabold text-[#234E52]">Tier Discount Applied! </span>
                       <span className="text-[#234E52]">
-                        You unlocked ₱{selectedCamera.bulkRate}/day (saved ₱{(selectedCamera.standardRate - selectedCamera.bulkRate) * currentQuote.days} total for {currentQuote.days} days).
+                        You unlocked ₱{currentQuote.rate}/day ({currentQuote.tierLabel}).
                       </span>
                     </div>
                   </div>
                 ) : (
                   <div className="p-3.5 rounded-2xl bg-[#FAFAF7] border border-[#E8E4F0] flex items-center justify-between text-xs text-[#6B6B8A]">
-                    <span>Tip: Rent for 3 days or more to unlock the <strong>₱{selectedCamera.bulkRate}/day</strong> bulk discount rate.</span>
+                    <span>Tip: Rent for 3+ days to unlock lower daily rates (down to <strong>₱350/day</strong> on 6+ days).</span>
                   </div>
                 )}
 
@@ -2181,6 +2373,22 @@ export default function App() {
                       </span>
                     </div>
 
+                    {currentQuote.meetupFee > 0 && (
+                      <div className="flex justify-between items-center text-[#553C9A]">
+                        <span>Meetup Handling Fee</span>
+                        <span className="font-bold">
+                          +₱{currentQuote.meetupFee.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+
+                    {calcHandover === 'courier' && (
+                      <div className="flex justify-between items-center text-[#C05621] text-xs">
+                        <span>Grab Express Delivery Fee</span>
+                        <span className="font-semibold">Paid by Renter to Rider</span>
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-1 text-[#6B6B8A]">
                         <span>Security Deposit</span>
@@ -2194,7 +2402,7 @@ export default function App() {
                     <div className="pt-3 border-t border-[#E8E4F0] flex justify-between items-center">
                       <span className="font-extrabold text-[#1A1A2E]">Total Package Value</span>
                       <span className="font-black text-xl text-[#1A1A2E]">
-                        ₱{currentQuote.total.toLocaleString()}
+                        ₱{currentQuote.totalPackageValue.toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -2210,7 +2418,9 @@ export default function App() {
                     <div className="flex justify-between items-center text-xs">
                       <div>
                         <span className="font-bold text-[#1A1A2E] block">2. Total Payment on Handover:</span>
-                        <span className="text-[10px] text-[#6B6B8A]">₱{currentQuote.remainingRentalBalance.toLocaleString()} rental bal + ₱{currentQuote.deposit.toLocaleString()} deposit</span>
+                        <span className="text-[10px] text-[#6B6B8A]">
+                          ₱{currentQuote.remainingRentalBalance.toLocaleString()} rental bal + ₱{currentQuote.deposit.toLocaleString()} deposit{currentQuote.meetupFee > 0 ? ' + ₱200 meetup' : ''}
+                        </span>
                       </div>
                       <span className="font-extrabold text-sm text-[#1A1A2E]">
                         ₱{currentQuote.paymentOnHandover.toLocaleString()}
@@ -2219,7 +2429,7 @@ export default function App() {
                     <div className="flex justify-between items-center text-xs pt-1.5 border-t border-[#E8E4F0]">
                       <div>
                         <span className="font-bold text-[#2F855A] block">3. Security Deposit Refund:</span>
-                        <span className="text-[10px] text-[#2F855A]/80">Sent to GCash within 15 mins of return</span>
+                        <span className="text-[10px] text-[#2F855A]/80">Sent to GCash within 24 hours of inspection</span>
                       </div>
                       <span className="font-extrabold text-[#2F855A]">
                         + ₱{currentQuote.deposit.toLocaleString()}
@@ -2260,6 +2470,84 @@ export default function App() {
 
             </div>
 
+          </div>
+
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          TERMS AND CONDITIONS ACCORDION SECTION
+      ───────────────────────────────────────────────────────────── */}
+      <section id="terms" className="py-16 sm:py-20 px-4 sm:px-8 bg-[#FAFAF7] border-b border-[#E8E4F0]">
+        <div className="max-w-4xl mx-auto">
+
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] text-xs font-bold mb-3">
+              <FileText className="w-3.5 h-3.5 text-[#DD6B20]" />
+              <span>Guidelines for Smooth Rentals</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#1A1A2E] tracking-tight">
+              Terms &amp; Conditions
+            </h2>
+            <p className="mt-2 text-base text-[#6B6B8A] font-medium">
+              Transparent, straightforward rental policies. Please review these terms before booking.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {TERMS_AND_CONDITIONS_DATA.map((clause, index) => {
+              const isOpen = openTermsClause === index;
+              return (
+                <div
+                  key={clause.number}
+                  className={`rounded-2xl border-2 transition-all ${isOpen
+                    ? 'border-[#1A1A2E] bg-white shadow-[3px_3px_0px_#1A1A2E]'
+                    : 'border-[#E8E4F0] bg-white hover:border-[#C9B8F0]'
+                    }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenTermsClause(isOpen ? null : index)}
+                    className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-4 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-8 h-8 rounded-xl bg-[#EDE8FC] text-[#553C9A] flex items-center justify-center font-black text-xs shrink-0">
+                        {clause.number}
+                      </span>
+                      <div>
+                        <span className="font-extrabold text-sm sm:text-base text-[#1A1A2E] block">
+                          {clause.title}
+                        </span>
+                        <span className="text-[11px] text-[#6B6B8A] font-medium hidden sm:block">
+                          {clause.highlight}
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-transform ${isOpen ? 'rotate-180 bg-[#C9B8F0] text-[#1A1A2E]' : 'bg-[#FAFAF7] text-[#6B6B8A]'
+                        }`}
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="px-5 pb-5 text-xs text-[#4A4A68] space-y-2 border-t border-[#E8E4F0]/60 pt-3 leading-relaxed">
+                      {clause.content.map((p, idx) => (
+                        <p key={idx} className="flex items-start gap-2">
+                          <span className="text-[#6B46C1] font-bold mt-0.5">•</span>
+                          <span>{p}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-8 p-4 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] text-center text-xs text-[#553C9A] font-semibold">
+            {TERMS_ACKNOWLEDGEMENT_TEXT}
           </div>
 
         </div>
@@ -2370,7 +2658,7 @@ export default function App() {
               Metro Manila’s favorite pastel aesthetic camera rental for DJI Osmo Pocket 3, Insta360 X4 & Fujifilm X100VI. Designed for creators, concert-goers, and vloggers. Mag-vlog na, wag nang mag-ipon.
             </p>
             <div className="pt-2 text-xs text-gray-500 font-mono">
-              Pasig Meetups (Megamall, Estancia, Kapitolyo, Arcovia & Ortigas MRT) • Same-Day Grab Express Delivery across Metro Manila.
+              Meetups at SM East Ortigas, Bridgetowne &amp; Opus Mall (₱200 fee) • Grab Express Delivery ONLY across Metro Manila (8:00 AM – 8:00 PM).
             </div>
           </div>
 
@@ -2466,11 +2754,11 @@ export default function App() {
                     )}
                   </div>
                   <p className="text-xs text-[#6B6B8A]">
-                    {modalStep === 1 && 'Confirm rental duration & dates'}
-                    {modalStep === 2 && 'Choose pickup location or Grab Express Delivery'}
-                    {modalStep === 3 && 'ID upload & identity verification'}
+                    {modalStep === 1 && 'Confirm rental duration & dates (8:00 AM – 8:00 PM)'}
+                    {modalStep === 2 && 'Choose Meetup (₱200 fee) or Grab Express Delivery'}
+                    {modalStep === 3 && 'ID verification & document uploads (confidential)'}
                     {modalStep === 4 && 'Renter contact details & refund info'}
-                    {modalStep === 5 && 'GCash downpayment (₱300) confirmation'}
+                    {modalStep === 5 && 'GCash downpayment (₱300) & Terms agreement'}
                     {modalStep === 6 && 'Ready for handover! Check your details'}
                   </p>
                 </div>
@@ -2497,7 +2785,7 @@ export default function App() {
             )}
 
             {/* Modal Scrollable Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+            <div ref={modalBodyRef} className="p-6 overflow-y-auto space-y-6 flex-1">
 
               {/* ───────────────── STEP 1: DATES & PRICING BREAKDOWN ───────────────── */}
               {modalStep === 1 && (
@@ -2508,7 +2796,7 @@ export default function App() {
                       <span className="text-[10px] font-bold uppercase text-[#6B6B8A] block">Selected Camera Unit</span>
                       <span className="text-sm font-black text-[#1A1A2E]">{modalCamera.name}</span>
                     </div>
-                    <div className="w-full sm:w-64">
+                    <div data-field-key="cameraId" className="w-full sm:w-64">
                       <CustomSelect
                         value={booking.cameraId}
                         options={CAMERAS.map(c => ({
@@ -2547,50 +2835,71 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <CustomDatePicker
-                      label="Start Date (Pickup / Delivery)"
-                      placeholder="Select pickup date"
-                      value={booking.startDate}
-                      minDate={todayStr}
-                      rangeStart={booking.startDate}
-                      rangeEnd={booking.endDate}
-                      bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
-                      hasConflict={modalConflict.hasConflict}
-                      conflictMessage={validationErrors.startDate}
-                      onChange={(val) => {
-                        setBooking(b => ({
-                          ...b,
-                          startDate: val,
-                          endDate: val > b.endDate ? val : b.endDate,
-                        }));
-                        clearFieldError('startDate');
-                        clearFieldError('endDate');
-                        clearFieldError('dateConflict');
-                      }}
-                    />
+                    <div data-field-key="startDate">
+                      <CustomDatePicker
+                        label="Start Date (Pickup / Delivery)"
+                        isRequired={true}
+                        placeholder="Select pickup date"
+                        value={booking.startDate}
+                        minDate={todayStr}
+                        rangeStart={booking.startDate}
+                        rangeEnd={booking.endDate}
+                        bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                        hasConflict={modalConflict.hasConflict}
+                        conflictMessage={modalConflict.message}
+                        hasError={!!validationErrors.startDate}
+                        errorMessage={validationErrors.startDate}
+                        onChange={(val) => {
+                          setBooking(b => ({
+                            ...b,
+                            startDate: val,
+                            endDate: val > b.endDate ? val : b.endDate,
+                          }));
+                          clearFieldError('startDate');
+                          clearFieldError('endDate');
+                          clearFieldError('dateConflict');
+                        }}
+                      />
+                    </div>
 
-                    <CustomDatePicker
-                      label="End Date (Return Date)"
-                      placeholder="Select return date"
-                      value={booking.endDate}
-                      minDate={booking.startDate || todayStr}
-                      rangeStart={booking.startDate}
-                      rangeEnd={booking.endDate}
-                      isEndDate={true}
-                      bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
-                      hasConflict={modalConflict.hasConflict}
-                      conflictMessage={validationErrors.endDate}
-                      onChange={(val) => {
-                        setBooking(b => ({ ...b, endDate: val }));
-                        clearFieldError('endDate');
-                        clearFieldError('dateConflict');
-                      }}
-                    />
+                    <div data-field-key="endDate">
+                      <CustomDatePicker
+                        label="End Date (Return Date)"
+                        isRequired={true}
+                        placeholder="Select return date"
+                        value={booking.endDate}
+                        minDate={booking.startDate || todayStr}
+                        rangeStart={booking.startDate}
+                        rangeEnd={booking.endDate}
+                        isEndDate={true}
+                        bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                        hasConflict={modalConflict.hasConflict}
+                        conflictMessage={modalConflict.message}
+                        hasError={!!validationErrors.endDate}
+                        errorMessage={validationErrors.endDate}
+                        onChange={(val) => {
+                          setBooking(b => ({ ...b, endDate: val }));
+                          clearFieldError('endDate');
+                          clearFieldError('dateConflict');
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Rental Hours Notice Banner */}
+                  <div className="p-3 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-center justify-between gap-3 text-xs text-[#553C9A]">
+                    <div className="flex items-center gap-2 font-bold">
+                      <Clock className="w-4 h-4 text-[#553C9A] shrink-0" />
+                      <span>Rental Period: 8:00 AM – 8:00 PM ONLY</span>
+                    </div>
+                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white text-[#553C9A] border border-[#C9B8F0] shrink-0">
+                      Standard Schedule
+                    </span>
                   </div>
 
                   {/* Modal Conflict Alert or Green Availability Check */}
                   {modalConflict.hasConflict ? (
-                    <div className="p-3.5 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#9B2C2C] space-y-2 animate-fadeIn">
+                    <div data-field-key="dateConflict" className="p-3.5 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#9B2C2C] space-y-2 animate-fadeIn">
                       <div className="flex items-start gap-2.5">
                         <div className="w-7 h-7 rounded-lg bg-[#FED7D7] flex items-center justify-center shrink-0 mt-0.5">
                           <CalendarX className="w-4 h-4 text-[#C53030]" />
@@ -2647,13 +2956,13 @@ export default function App() {
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-[#6B6B8A]">Rental Duration</span>
                       <span className="font-bold text-[#1A1A2E]">
-                        {modalQuote.days} {modalQuote.days === 1 ? 'Day' : 'Days'}
+                        {modalQuote.days} {modalQuote.days === 1 ? 'Day' : 'Days'} • {modalQuote.tierLabel}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-[#6B6B8A]">
-                        Rental Rate {modalQuote.isBulk && '(Bulk Discount Active!)'}
+                        Rental Rate {modalQuote.isBulk && '(Tier Discount Active!)'}
                       </span>
                       <span className="font-bold text-[#1A1A2E]">₱{modalQuote.rate}/day</span>
                     </div>
@@ -2662,6 +2971,13 @@ export default function App() {
                       <span className="font-semibold text-[#6B6B8A]">Base Rental Cost</span>
                       <span className="font-bold text-[#1A1A2E]">₱{modalQuote.rentalTotal.toLocaleString()}</span>
                     </div>
+
+                    {booking.handoverMode === 'meetup' && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-[#6B6B8A]">Meet-up Handling Fee</span>
+                        <span className="font-bold text-[#553C9A]">₱200</span>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5">
@@ -2683,12 +2999,14 @@ export default function App() {
                       <div className="p-2.5 rounded-xl bg-[#007DFE]/10 border border-[#007DFE]/20">
                         <span className="block font-black text-xs text-[#007DFE]">1. Pay Now via GCash</span>
                         <span className="block font-black text-sm text-[#007DFE] mt-0.5">₱{DOWNPAYMENT_FEE}</span>
-                        <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">Credited toward rental</span>
+                        <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">Credited toward rental fee</span>
                       </div>
                       <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#1A1A2E]/20">
                         <span className="block font-black text-xs text-[#1A1A2E]">2. Pay on Handover</span>
                         <span className="block font-black text-sm text-[#1A1A2E] mt-0.5">₱{modalQuote.paymentOnHandover.toLocaleString()}</span>
-                        <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">₱{modalQuote.remainingRentalBalance.toLocaleString()} bal + ₱{modalQuote.deposit.toLocaleString()} dep</span>
+                        <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">
+                          ₱{modalQuote.remainingRentalBalance.toLocaleString()} bal + ₱{modalQuote.deposit.toLocaleString()} dep{modalQuote.meetupFee > 0 ? ' + ₱200 meetup' : ''}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -2703,7 +3021,7 @@ export default function App() {
                       Select Your Preferred Handover Option
                     </span>
                     <span className="text-[11px] font-extrabold text-[#553C9A] bg-[#EDE8FC] px-2 py-0.5 rounded-full">
-                      Service Area: Metro Manila
+                      8:00 AM – 8:00 PM ONLY
                     </span>
                   </div>
 
@@ -2717,14 +3035,15 @@ export default function App() {
                         }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-black text-sm text-[#1A1A2E]">Free Pasig Meetups</span>
+                        <span className="font-black text-sm text-[#1A1A2E]">Meet-up (₱200 Fee)</span>
                         {booking.handoverMode === 'meetup' && <Check className="w-4 h-4 text-[#553C9A]" />}
                       </div>
                       <p className="mt-1 text-xs text-[#6B6B8A]">
-                        Megamall, Estancia, Kapitolyo, Arcovia, Ortigas MRT.
+                        SM East Ortigas, Bridgetowne, or Opus Mall.
                       </p>
-                      <div className="mt-3 text-xs font-bold text-[#553C9A]">
-                        Deposit: ₱{modalCamera.meetupDeposit.toLocaleString()} (Refundable)
+                      <div className="mt-3 text-xs font-bold text-[#553C9A] flex items-center justify-between">
+                        <span>₱200 handling fee applies</span>
+                        <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">₱1,000 Deposit</span>
                       </div>
                     </div>
 
@@ -2741,21 +3060,23 @@ export default function App() {
                         {booking.handoverMode === 'courier' && <Check className="w-4 h-4 text-[#C05621]" />}
                       </div>
                       <p className="mt-1 text-xs text-[#6B6B8A]">
-                        Sent directly from our Pasig base. Courier fee paid by renter.
+                        Grab Express ONLY. Owner books rider for release & return; renter shoulders fees.
                       </p>
-                      <div className="mt-3 text-xs font-bold text-[#C05621]">
-                        Deposit: ₱{modalCamera.courierDeposit.toLocaleString()} (Refundable)
+                      <div className="mt-3 text-xs font-bold text-[#C05621] flex items-center justify-between">
+                        <span>Metro Manila delivery</span>
+                        <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">₱1,000 Deposit</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Location Specific Input */}
                   {booking.handoverMode === 'meetup' ? (
-                    <div>
+                    <div data-field-key="meetupLocation">
                       <CustomSelect
-                        label="Choose Free Pasig Meetup Station: *"
+                        label="Choose Meet-up Hub (₱200 Handling Fee):"
+                        isRequired={true}
                         value={booking.meetupLocation}
-                        options={PASIG_MEETUP_HUBS.map(hub => ({ value: hub, label: hub }))}
+                        options={PASIG_MEETUP_HUBS.map(hub => ({ value: hub, label: `${hub} (₱200 handling fee)` }))}
                         hasError={!!validationErrors.meetupLocation}
                         errorMessage={validationErrors.meetupLocation}
                         onChange={(val) => {
@@ -2764,17 +3085,18 @@ export default function App() {
                         }}
                       />
                       <p className="mt-1.5 text-[11px] text-[#6B6B8A]">
-                        Exact landmark meeting spot (e.g. Ground Lobby or Cafe entrance) will be verified on Messenger.
+                        Available at SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 8:00 PM). Exact landmark verified prior to meet-up.
                       </p>
                     </div>
                   ) : (
-                    <div>
-                      <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5">
-                        Delivery Address for Grab Express Delivery: *
+                    <div data-field-key="deliveryAddress">
+                      <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5 flex items-center gap-1">
+                        <span>Delivery Address for Grab Express Delivery:</span>
+                        <span className="text-red-500 font-bold">*</span>
                       </label>
                       <textarea
                         rows={2}
-                        placeholder="House/Condo Unit, Street, Barangay, City, Landmark"
+                        placeholder="House/Condo Unit, Street, Barangay, City, Landmark (Metro Manila)"
                         value={booking.deliveryAddress}
                         onChange={(e) => {
                           setBooking(b => ({ ...b, deliveryAddress: e.target.value }));
@@ -2791,35 +3113,35 @@ export default function App() {
                         </p>
                       )}
                       <p className="mt-1 text-[11px] text-[#6B6B8A]">
-                        Sent safely across Metro Manila via Grab Express motorcycle courier.
+                        Grab Express ONLY (8:00 AM – 8:00 PM). Owner books the rider for both release and return of the device; renter shoulders all delivery fees.
                       </p>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* ───────────────── STEP 3: STRICT 5-STEP KYC UPLOAD ───────────────── */}
+              {/* ───────────────── STEP 3: RENTAL REQUIREMENTS & VERIFICATION ───────────────── */}
               {modalStep === 3 && (
                 <div className="space-y-4 animate-fadeIn">
 
-                  {/* Notice Banner */}
+                  {/* Reassurance Banner */}
                   <div className="p-3.5 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-[#553C9A] shrink-0 mt-0.5" />
                     <div className="text-xs text-[#553C9A] leading-relaxed">
-                      <strong>Equipment Verification:</strong> Attach your verification documents below. All files are securely kept and reviewed before unit handover.
+                      <strong>Confidential Verification:</strong> Pack and Film camera rental requires renters to submit a digital copy of valid IDs for identity verification. We keep this confidentially until your equipment is safely returned, after which copies are securely deleted.
                     </div>
                   </div>
 
-                  {/* Student Exemption Toggle */}
+                  {/* Student Applicant Toggle */}
                   <div className="p-3.5 rounded-2xl bg-[#E8F7F1] border-2 border-[#A8DBC8] flex items-center justify-between gap-3">
                     <div className="flex items-start gap-2.5">
                       <GraduationCap className="w-5 h-5 text-[#234E52] shrink-0 mt-0.5" />
                       <div>
                         <span className="text-xs font-black text-[#234E52] block">
-                          Applying for Student Exemption?
+                          Applying as a Student?
                         </span>
                         <span className="text-[11px] text-[#234E52]/80 leading-tight block mt-0.5">
-                          Waives the secondary government ID by uploading your Student ID + COR and Parent/Guardian ID in Step 4.
+                          Students may submit: Valid Student ID + Current (COR) + Parent/Guardian Government ID.
                         </span>
                       </div>
                     </div>
@@ -2827,29 +3149,45 @@ export default function App() {
                       <input
                         type="checkbox"
                         checked={booking.isStudentExemption}
-                        onChange={(e) => setBooking(b => ({ ...b, isStudentExemption: e.target.checked }))}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setBooking(b => ({
+                            ...b,
+                            isStudentExemption: checked,
+                            id1Type: checked ? 'Valid Student ID' : 'Philippine Passport',
+                          }));
+                          clearFieldError('id2File');
+                          clearFieldError('id2BackFile');
+                          clearFieldError('contact1IdFile');
+                        }}
                         className="sr-only peer"
                       />
                       <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#38A169]"></div>
                     </label>
                   </div>
 
-                  {/* 1. Primary ID */}
-                  <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-2 transition-colors ${validationErrors.id1File ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
+                  {/* 1A. Primary ID (Front & Back) */}
+                  <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-2.5 transition-colors ${validationErrors.id1File || validationErrors.id1BackFile ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
                     }`}>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
-                        <span>Step 1A: Primary Government ID *</span>
-                        {booking.id1File && <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
+                        <span>1A. {booking.isStudentExemption ? 'Valid Student ID (Front & Back)' : 'Primary Valid Government ID (Front & Back)'}</span>
+                        <span className="text-red-500 font-bold">*</span>
+                        {(booking.id1File && (booking.isStudentExemption || booking.id1BackFile)) && (
+                          <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>
+                        )}
                       </span>
                       <div className="w-full sm:w-56">
                         <CustomSelect
                           value={booking.id1Type}
-                          options={[
+                          options={booking.isStudentExemption ? [
+                            { value: 'Valid Student ID', label: 'Valid Student ID' }
+                          ] : [
                             { value: 'Philippine Passport', label: 'Philippine Passport' },
                             { value: "Driver's License", label: "Driver's License" },
                             { value: 'National ID / UMID', label: 'National ID / UMID' },
                             { value: 'PRC ID', label: 'PRC ID' },
+                            { value: 'Postal ID / SSS / Voter', label: 'Postal ID / SSS / Voter' }
                           ]}
                           size="sm"
                           onChange={(val) => {
@@ -2860,97 +3198,221 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 pt-1">
-                      <label className="cursor-pointer px-3.5 py-2 rounded-xl bg-[#FAFAF7] border-2 border-[#C9B8F0] text-xs font-bold text-[#6B46C1] hover:bg-[#EDE8FC] transition-colors inline-flex items-center gap-1.5 shadow-xs">
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>{booking.id1File ? 'Replace Primary ID' : 'Upload Primary ID (Photo / PDF) *'}</span>
-                        <input
-                          type="file"
-                          accept="image/*,application/pdf"
-                          className="hidden"
-                          onChange={(e) => handleRealFileUpload(e, 'id1File', 'id1Name')}
-                        />
-                      </label>
-
-                      {booking.id1File && (
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-[#38A169] font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span className="truncate max-w-[150px]">{booking.id1Name || 'Document Attached'}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {/* Front Upload */}
+                      <div data-field-key="id1File">
+                        <label className={`cursor-pointer w-full px-3 py-2 rounded-xl border-2 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs ${validationErrors.id1File
+                          ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                          : 'bg-[#FAFAF7] border-[#C9B8F0] text-[#6B46C1] hover:bg-[#EDE8FC]'
+                          }`}>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span className="truncate flex items-center gap-1">
+                            <span>{booking.id1File ? 'Change Front Photo' : 'Upload Front Photo'}</span>
+                            <span className="text-red-500 font-bold">*</span>
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveFile('id1File', 'id1Name')}
-                            className="text-red-500 hover:text-red-700 text-[11px] underline cursor-pointer"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => handleRealFileUpload(e, 'id1File', 'id1Name')}
+                          />
+                        </label>
+                        {booking.id1File && (
+                          <div className="flex items-center justify-between text-[11px] pt-1 px-1">
+                            <span className="text-[#38A169] font-bold truncate max-w-[150px]">{booking.id1Name || 'Front Attached'}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFile('id1File', 'id1Name')}
+                              className="text-red-500 hover:text-red-700 underline text-[10px]"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                        {validationErrors.id1File && (
+                          <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                            <span>⚠️</span> {validationErrors.id1File}
+                          </p>
+                        )}
+                      </div>
 
-                    {validationErrors.id1File && (
-                      <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
-                        <span>⚠️</span> {validationErrors.id1File}
-                      </p>
-                    )}
+                      {/* Back Upload */}
+                      <div data-field-key="id1BackFile">
+                        <label className={`cursor-pointer w-full px-3 py-2 rounded-xl border-2 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs ${validationErrors.id1BackFile
+                          ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                          : 'bg-[#FAFAF7] border-[#C9B8F0] text-[#6B46C1] hover:bg-[#EDE8FC]'
+                          }`}>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span className="truncate flex items-center gap-1">
+                            <span>{booking.id1BackFile ? 'Change Back Photo' : 'Upload Back Photo'}</span>
+                            <span className="text-red-500 font-bold">*</span>
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => handleRealFileUpload(e, 'id1BackFile', 'id1BackName')}
+                          />
+                        </label>
+                        {booking.id1BackFile && (
+                          <div className="flex items-center justify-between text-[11px] pt-1 px-1">
+                            <span className="text-[#38A169] font-bold truncate max-w-[150px]">{booking.id1BackName || 'Back Attached'}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFile('id1BackFile', 'id1BackName')}
+                              className="text-red-500 hover:text-red-700 underline text-[10px]"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                        {validationErrors.id1BackFile && (
+                          <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                            <span>⚠️</span> {validationErrors.id1BackFile}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* 1B. Secondary ID or Student COR */}
-                  <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-2 transition-colors ${validationErrors.id2File ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
+                  {/* 1B. Secondary ID (Front & Back) OR Current COR */}
+                  <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-2.5 transition-colors ${validationErrors.id2File || validationErrors.id2BackFile ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
                     }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
-                        <span>{booking.isStudentExemption ? 'Step 1B: Student ID + Semester COR *' : 'Step 1B: Secondary ID / Company ID *'}</span>
-                        {booking.id2File && <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
+                        <span>1B. {booking.isStudentExemption ? 'Current Certificate of Registration (COR)' : 'Secondary Valid ID (Front & Back)'}</span>
+                        <span className="text-red-500 font-bold">*</span>
+                        {(booking.id2File && (booking.isStudentExemption || booking.id2BackFile)) && (
+                          <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>
+                        )}
                       </span>
                       <span className="text-[10px] text-[#6B6B8A] font-semibold">
-                        {booking.isStudentExemption ? 'Exemption active' : 'Company / Postal'}
+                        {booking.isStudentExemption ? 'Current Semester' : 'Address & Signature'}
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 pt-1">
-                      <label className="cursor-pointer px-3.5 py-2 rounded-xl bg-[#FAFAF7] border-2 border-[#F5C6A8] text-xs font-bold text-[#DD6B20] hover:bg-[#FEF0E7] transition-colors inline-flex items-center gap-1.5 shadow-xs">
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>{booking.id2File ? 'Replace Document' : (booking.isStudentExemption ? 'Upload Student ID / COR *' : 'Upload Secondary ID *')}</span>
-                        <input
-                          type="file"
-                          accept="image/*,application/pdf"
-                          className="hidden"
-                          onChange={(e) => handleRealFileUpload(e, 'id2File', 'id2Name')}
-                        />
-                      </label>
-
-                      {booking.id2File && (
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-[#38A169] font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span className="truncate max-w-[150px]">{booking.id2Name || 'Document Attached'}</span>
+                    {booking.isStudentExemption ? (
+                      <div data-field-key="id2File">
+                        <label className={`cursor-pointer w-full px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs ${validationErrors.id2File
+                          ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                          : 'bg-[#FAFAF7] border-[#F5C6A8] text-[#DD6B20] hover:bg-[#FEF0E7]'
+                          }`}>
+                          <Upload className="w-3.5 h-3.5" />
+                          <span className="flex items-center gap-1">
+                            <span>{booking.id2File ? 'Change Certificate of Registration (COR)' : 'Upload Current (COR) PDF or Photo'}</span>
+                            <span className="text-red-500 font-bold">*</span>
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveFile('id2File', 'id2Name')}
-                            className="text-red-500 hover:text-red-700 text-[11px] underline cursor-pointer"
-                          >
-                            Remove
-                          </button>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="hidden"
+                            onChange={(e) => handleRealFileUpload(e, 'id2File', 'id2Name')}
+                          />
+                        </label>
+                        {booking.id2File && (
+                          <div className="flex items-center justify-between text-[11px] pt-1 px-1">
+                            <span className="text-[#38A169] font-bold truncate max-w-[200px]">{booking.id2Name || 'COR Attached'}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFile('id2File', 'id2Name')}
+                              className="text-red-500 hover:text-red-700 underline text-[10px]"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                        {validationErrors.id2File && (
+                          <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                            <span>⚠️</span> {validationErrors.id2File}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        {/* Front Upload */}
+                        <div data-field-key="id2File">
+                          <label className={`cursor-pointer w-full px-3 py-2 rounded-xl border-2 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs ${validationErrors.id2File
+                            ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                            : 'bg-[#FAFAF7] border-[#F5C6A8] text-[#DD6B20] hover:bg-[#FEF0E7]'
+                            }`}>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span className="truncate flex items-center gap-1">
+                              <span>{booking.id2File ? 'Change Front Photo' : 'Upload Secondary Front'}</span>
+                              <span className="text-red-500 font-bold">*</span>
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              className="hidden"
+                              onChange={(e) => handleRealFileUpload(e, 'id2File', 'id2Name')}
+                            />
+                          </label>
+                          {booking.id2File && (
+                            <div className="flex items-center justify-between text-[11px] pt-1 px-1">
+                              <span className="text-[#38A169] font-bold truncate max-w-[150px]">{booking.id2Name || 'Front Attached'}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFile('id2File', 'id2Name')}
+                                className="text-red-500 hover:text-red-700 underline text-[10px]"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                          {validationErrors.id2File && (
+                            <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                              <span>⚠️</span> {validationErrors.id2File}
+                            </p>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    {validationErrors.id2File && (
-                      <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
-                        <span>⚠️</span> {validationErrors.id2File}
-                      </p>
+                        {/* Back Upload */}
+                        <div data-field-key="id2BackFile">
+                          <label className={`cursor-pointer w-full px-3 py-2 rounded-xl border-2 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs ${validationErrors.id2BackFile
+                            ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                            : 'bg-[#FAFAF7] border-[#F5C6A8] text-[#DD6B20] hover:bg-[#FEF0E7]'
+                            }`}>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span className="truncate flex items-center gap-1">
+                              <span>{booking.id2BackFile ? 'Change Back Photo' : 'Upload Secondary Back'}</span>
+                              <span className="text-red-500 font-bold">*</span>
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              className="hidden"
+                              onChange={(e) => handleRealFileUpload(e, 'id2BackFile', 'id2BackName')}
+                            />
+                          </label>
+                          {booking.id2BackFile && (
+                            <div className="flex items-center justify-between text-[11px] pt-1 px-1">
+                              <span className="text-[#38A169] font-bold truncate max-w-[150px]">{booking.id2BackName || 'Back Attached'}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFile('id2BackFile', 'id2BackName')}
+                                className="text-red-500 hover:text-red-700 underline text-[10px]"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                          {validationErrors.id2BackFile && (
+                            <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                              <span>⚠️</span> {validationErrors.id2BackFile}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  {/* 2. Written Authorization Note Slip */}
-                  <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-1.5 transition-colors ${validationErrors.authorizationSlipFile ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
+                  {/* 1C. Handwritten Authorization Slip + IDs */}
+                  <div data-field-key="authorizationSlipFile" className={`p-3.5 rounded-2xl bg-white border-2 space-y-1.5 transition-colors ${validationErrors.authorizationSlipFile ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
                     }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
-                        <span>Step 2: Handwritten Authorization Slip + 3 Signatures *</span>
+                        <span>1C. Handwritten Authorization Paper Photo with IDs</span>
+                        <span className="text-red-500 font-bold">*</span>
                         {booking.authorizationSlipFile && <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
                       </span>
                       <span className="text-[10px] text-[#553C9A] font-extrabold bg-[#EDE8FC] px-2 py-0.5 rounded">
@@ -2958,12 +3420,18 @@ export default function App() {
                       </span>
                     </div>
                     <p className="text-[11px] text-[#6B6B8A]">
-                      Write &quot;For PackAndFilm rental purposes only&quot;, current date, and 3 specimen signatures on clean paper.
+                      Write the date, 3 specimen signatures, and <strong>&quot;For Pack and Film Camera Rental purposes only&quot;</strong> on a paper and take a photo together with your IDs.
                     </p>
                     <div className="flex flex-wrap items-center gap-3 pt-1">
-                      <label className="cursor-pointer px-3.5 py-2 rounded-xl bg-[#FAFAF7] border-2 border-[#A8DBC8] text-xs font-bold text-[#234E52] hover:bg-[#E8F7F1] transition-colors inline-flex items-center gap-1.5 shadow-xs">
+                      <label className={`cursor-pointer px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.authorizationSlipFile
+                        ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                        : 'bg-[#FAFAF7] border-[#A8DBC8] text-[#234E52] hover:bg-[#E8F7F1]'
+                        }`}>
                         <FileCheck className="w-3.5 h-3.5" />
-                        <span>{booking.authorizationSlipFile ? 'Replace Slip' : 'Upload Handwritten Slip *'}</span>
+                        <span className="flex items-center gap-1">
+                          <span>{booking.authorizationSlipFile ? 'Replace Slip Photo' : 'Upload Paper Photo with IDs'}</span>
+                          <span className="text-red-500 font-bold">*</span>
+                        </span>
                         <input
                           type="file"
                           accept="image/*,application/pdf"
@@ -2996,22 +3464,84 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* 3. Proof of Billing / 2 Shopee Delivery Receipts */}
-                  <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-1.5 transition-colors ${validationErrors.deliveryReceiptsFile ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
+                  {/* 1D. Selfie Holding 2 Valid IDs and Paper */}
+                  <div data-field-key="selfieWithIdsFile" className={`p-3.5 rounded-2xl bg-white border-2 space-y-1.5 transition-colors ${validationErrors.selfieWithIdsFile ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
                     }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
-                        <span>Step 3: Proof of Billing OR 2 Delivery Receipts *</span>
+                        <span>1D. Selfie Holding Your 2 Valid IDs & Paper</span>
+                        <span className="text-red-500 font-bold">*</span>
+                        {booking.selfieWithIdsFile && <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#6B6B8A]">
+                      Submit a clear selfie holding your 2 valid IDs and the handwritten slip.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      <label className={`cursor-pointer px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.selfieWithIdsFile
+                        ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                        : 'bg-[#FAFAF7] border-[#C9B8F0] text-[#553C9A] hover:bg-[#EDE8FC]'
+                        }`}>
+                        <Upload className="w-3.5 h-3.5" />
+                        <span className="flex items-center gap-1">
+                          <span>{booking.selfieWithIdsFile ? 'Replace Selfie Photo' : 'Upload Selfie Holding IDs & Paper'}</span>
+                          <span className="text-red-500 font-bold">*</span>
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleRealFileUpload(e, 'selfieWithIdsFile')}
+                        />
+                      </label>
+
+                      {booking.selfieWithIdsFile && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-[#38A169] font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Selfie Attached</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile('selfieWithIdsFile')}
+                            className="text-red-500 hover:text-red-700 text-[11px] underline cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {validationErrors.selfieWithIdsFile && (
+                      <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                        <span>⚠️</span> {validationErrors.selfieWithIdsFile}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 2. Proof of Billing / 2 Online Delivery Receipts */}
+                  <div data-field-key="deliveryReceiptsFile" className={`p-3.5 rounded-2xl bg-white border-2 space-y-2 transition-colors ${validationErrors.deliveryReceiptsFile || validationErrors.billOwnerIdFile ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
+                    }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
+                        <span>2. Proof of Billing (Must match name & address)</span>
+                        <span className="text-red-500 font-bold">*</span>
                         {booking.deliveryReceiptsFile && <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
                       </span>
                     </div>
                     <p className="text-[11px] text-[#6B6B8A]">
-                      Utility bill (last 3 mos) or screenshots of 2 delivered online orders showing matching name and address.
+                      Accepted: utility bills, bank statements, or at least 2 screenshots of delivered online orders (Shopee, Lazada, TikTok) showing your name and address.
                     </p>
                     <div className="flex flex-wrap items-center gap-3 pt-1">
-                      <label className="cursor-pointer px-3.5 py-2 rounded-xl bg-[#FAFAF7] border-2 border-[#E8E4F0] text-xs font-bold text-[#1A1A2E] hover:bg-[#EDE8FC] hover:border-[#1A1A2E] transition-colors inline-flex items-center gap-1.5 shadow-xs">
+                      <label className={`cursor-pointer px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.deliveryReceiptsFile
+                        ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                        : 'bg-[#FAFAF7] border-[#E8E4F0] text-[#1A1A2E] hover:bg-[#EDE8FC] hover:border-[#1A1A2E]'
+                        }`}>
                         <Upload className="w-3.5 h-3.5" />
-                        <span>{booking.deliveryReceiptsFile ? 'Replace Address Proof' : 'Upload Bill / Receipts *'}</span>
+                        <span className="flex items-center gap-1">
+                          <span>{booking.deliveryReceiptsFile ? 'Replace Billing Proof' : 'Upload Bill / 2 Delivery Receipts'}</span>
+                          <span className="text-red-500 font-bold">*</span>
+                        </span>
                         <input
                           type="file"
                           accept="image/*,application/pdf"
@@ -3037,6 +3567,57 @@ export default function App() {
                       )}
                     </div>
 
+                    {/* Toggle: If bill is under someone else's name */}
+                    <div className="pt-2 border-t border-[#E8E4F0] space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#1A1A2E]">
+                        <input
+                          type="checkbox"
+                          checked={booking.isBillUnderOtherName}
+                          onChange={(e) => {
+                            setBooking(b => ({ ...b, isBillUnderOtherName: e.target.checked }));
+                            if (!e.target.checked) clearFieldError('billOwnerIdFile');
+                          }}
+                          className="rounded text-[#6B46C1] focus:ring-0 w-4 h-4 cursor-pointer"
+                        />
+                        <span>Bill is under someone else&apos;s name (e.g. parent or landlord)</span>
+                      </label>
+
+                      {booking.isBillUnderOtherName && (
+                        <div data-field-key="billOwnerIdFile" className="p-3 rounded-xl bg-[#FFF9F2] border border-[#F5C6A8] space-y-2">
+                          <p className="text-[11px] text-[#7B341E] leading-relaxed">
+                            Kindly provide their valid government ID for verification:
+                          </p>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <label className={`cursor-pointer px-3 py-1.5 rounded-lg border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.billOwnerIdFile
+                              ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                              : 'bg-white border-[#F5C6A8] text-[#DD6B20] hover:bg-[#FEF0E7]'
+                              }`}>
+                              <Upload className="w-3.5 h-3.5" />
+                              <span className="flex items-center gap-1">
+                                <span>{booking.billOwnerIdFile ? 'Change Bill Owner ID' : 'Upload Bill Owner ID'}</span>
+                                <span className="text-red-500 font-bold">*</span>
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                className="hidden"
+                                onChange={(e) => handleRealFileUpload(e, 'billOwnerIdFile', 'billOwnerIdName')}
+                              />
+                            </label>
+                            {booking.billOwnerIdFile && (
+                              <span className="text-[11px] text-[#38A169] font-bold flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span className="truncate max-w-[150px]">{booking.billOwnerIdName || 'ID Attached'}</span>
+                              </span>
+                            )}
+                          </div>
+                          {validationErrors.billOwnerIdFile && (
+                            <p className="text-xs text-red-600 font-bold">⚠️ {validationErrors.billOwnerIdFile}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     {validationErrors.deliveryReceiptsFile && (
                       <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
                         <span>⚠️</span> {validationErrors.deliveryReceiptsFile}
@@ -3044,36 +3625,20 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* 4. Social Media & Live Selfie */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-1.5 transition-colors ${validationErrors.socialHandle ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
-                      }`}>
-                      <span className="text-xs font-bold text-[#1A1A2E] block">
-                        Step 4: Active Personal IG / TikTok *
+                  {/* 5. 5-Second Selfie Video */}
+                  <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-2 transition-colors ${validationErrors.selfieFile || validationErrors.selfieVideoConfirmed ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
+                    }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
+                        <span>5. Selfie Video Stating Rental Details</span>
+                        <span className="text-red-500 font-bold">*</span>
+                        {booking.selfieFile && <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
                       </span>
-                      <input
-                        type="text"
-                        placeholder="@yourhandle"
-                        value={booking.socialHandle}
-                        onChange={(e) => {
-                          setBooking(b => ({ ...b, socialHandle: e.target.value }));
-                          clearFieldError('socialHandle');
-                        }}
-                        className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none transition-colors ${validationErrors.socialHandle ? 'border-red-400 bg-white ring-2 ring-red-200' : 'bg-[#FAFAF7] border-[#E8E4F0] focus:border-[#1A1A2E]'
-                          }`}
-                      />
-                      {validationErrors.socialHandle ? (
-                        <span className="text-[11px] text-red-600 font-bold block">⚠️ {validationErrors.socialHandle}</span>
-                      ) : (
-                        <span className="text-[10px] text-[#6B6B8A] block">Must be active personal account</span>
-                      )}
                     </div>
-
-                    <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-1.5 transition-colors ${validationErrors.selfieFile || validationErrors.selfieVideoConfirmed ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
-                      }`}>
-                      <span className="text-xs font-bold text-[#1A1A2E] block">
-                        Step 5: 5-Sec Video Verification *
-                      </span>
+                    <p className="text-[11px] text-[#6B6B8A]">
+                      Submit a short selfie video holding your 2 valid IDs stating your rental details.
+                    </p>
+                    <div data-field-key="selfieVideoConfirmed">
                       <label className="flex items-center gap-2 pt-1 cursor-pointer">
                         <input
                           type="checkbox"
@@ -3084,13 +3649,27 @@ export default function App() {
                           }}
                           className="rounded text-[#6B46C1] focus:ring-0 w-4 h-4 cursor-pointer"
                         />
-                        <span className={`text-[11px] font-bold ${validationErrors.selfieVideoConfirmed ? 'text-red-600' : 'text-[#1A1A2E]'}`}>
-                          I agree to 5-sec video agreement on handoff *
+                        <span className={`text-[11px] font-bold flex items-center gap-1 ${validationErrors.selfieVideoConfirmed ? 'text-red-600' : 'text-[#1A1A2E]'}`}>
+                          <span>I confirm this selfie video is me holding my valid IDs stating rental details</span>
+                          <span className="text-red-500 font-bold">*</span>
                         </span>
                       </label>
-                      <label className="cursor-pointer w-full mt-1 px-3 py-2 rounded-xl bg-[#FAFAF7] border-2 border-[#A8DBC8] text-xs font-bold text-[#234E52] hover:bg-[#E8F7F1] flex items-center justify-center gap-1.5 shadow-xs">
+                      {validationErrors.selfieVideoConfirmed && (
+                        <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                          <span>⚠️</span> {validationErrors.selfieVideoConfirmed}
+                        </p>
+                      )}
+                    </div>
+                    <div data-field-key="selfieFile" className="pt-1">
+                      <label className={`cursor-pointer px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.selfieFile
+                        ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                        : 'bg-[#FAFAF7] border-[#A8DBC8] text-[#234E52] hover:bg-[#E8F7F1]'
+                        }`}>
                         <Video className="w-3.5 h-3.5" />
-                        <span>{booking.selfieFile ? 'Replace Video / Selfie' : 'Upload 5-Sec Video / Selfie *'}</span>
+                        <span className="flex items-center gap-1">
+                          <span>{booking.selfieFile ? 'Replace Selfie Video' : 'Upload Selfie Video'}</span>
+                          <span className="text-red-500 font-bold">*</span>
+                        </span>
                         <input
                           type="file"
                           accept="video/*,image/*"
@@ -3099,10 +3678,10 @@ export default function App() {
                         />
                       </label>
                       {booking.selfieFile && (
-                        <div className="flex items-center justify-between text-xs pt-0.5">
+                        <div className="flex items-center gap-2 text-xs pt-1">
                           <span className="text-[#38A169] font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Media Attached ✓</span>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Video Attached ✓</span>
                           </span>
                           <button
                             type="button"
@@ -3113,10 +3692,10 @@ export default function App() {
                           </button>
                         </div>
                       )}
-                      {(validationErrors.selfieFile || validationErrors.selfieVideoConfirmed) && (
-                        <span className="text-[11px] text-red-600 font-bold block pt-1">
-                          ⚠️ {validationErrors.selfieFile || validationErrors.selfieVideoConfirmed}
-                        </span>
+                      {validationErrors.selfieFile && (
+                        <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                          <span>⚠️</span> {validationErrors.selfieFile}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -3129,13 +3708,16 @@ export default function App() {
                         <span>Please complete all required verification steps above:</span>
                       </div>
                       <ul className="list-disc list-inside text-[11px] space-y-0.5 pl-2 font-medium">
-                        {validationErrors.id1File && <li>Primary Government ID</li>}
-                        {validationErrors.id2File && <li>Secondary ID / Student Document</li>}
-                        {validationErrors.authorizationSlipFile && <li>Handwritten Authorization Slip</li>}
+                        {validationErrors.id1File && <li>Primary Valid ID (Front)</li>}
+                        {validationErrors.id1BackFile && <li>Primary Valid ID (Back)</li>}
+                        {validationErrors.id2File && <li>Secondary Valid ID or Student COR</li>}
+                        {validationErrors.id2BackFile && <li>Secondary Valid ID (Back)</li>}
+                        {validationErrors.authorizationSlipFile && <li>Handwritten Authorization Paper Photo with IDs</li>}
+                        {validationErrors.selfieWithIdsFile && <li>Selfie holding 2 valid IDs and paper</li>}
                         {validationErrors.deliveryReceiptsFile && <li>Proof of Billing / Delivery Receipts</li>}
-                        {validationErrors.socialHandle && <li>Active Instagram or TikTok handle</li>}
-                        {validationErrors.selfieVideoConfirmed && <li>5-second video handover agreement checkbox</li>}
-                        {validationErrors.selfieFile && <li>5-second verification selfie / video file</li>}
+                        {validationErrors.billOwnerIdFile && <li>Bill owner valid government ID</li>}
+                        {validationErrors.selfieVideoConfirmed && <li>Selfie video confirmation checkbox</li>}
+                        {validationErrors.selfieFile && <li>Selfie video file</li>}
                       </ul>
                     </div>
                   )}
@@ -3146,9 +3728,9 @@ export default function App() {
               {/* ───────────────── STEP 4: RENTER CONTACT DETAILS ───────────────── */}
               {modalStep === 4 && (
                 <div className="space-y-4 animate-fadeIn">
-                  <div>
+                  <div data-field-key="fullName">
                     <label className="block text-xs font-bold text-[#1A1A2E] mb-1">
-                      Full Legal Name (as shown on ID) *
+                      Full Legal Name (as shown on ID) <span className="text-red-500 font-bold">*</span>
                     </label>
                     <input
                       type="text"
@@ -3171,9 +3753,9 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
+                    <div data-field-key="mobileNumber">
                       <label className="block text-xs font-bold text-[#1A1A2E] mb-1">
-                        Active Mobile Number *
+                        Active Mobile Number <span className="text-red-500 font-bold">*</span>
                       </label>
                       <input
                         type="tel"
@@ -3195,9 +3777,9 @@ export default function App() {
                       )}
                     </div>
 
-                    <div>
+                    <div data-field-key="email">
                       <label className="block text-xs font-bold text-[#1A1A2E] mb-1">
-                        Email Address *
+                        Email Address <span className="text-red-500 font-bold">*</span>
                       </label>
                       <input
                         type="email"
@@ -3222,9 +3804,10 @@ export default function App() {
 
                   {/* Shoot Purpose & Social Media Handle */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
+                    <div data-field-key="shootType">
                       <CustomSelect
-                        label="Shoot / Event Purpose *"
+                        label="Shoot / Event Purpose"
+                        isRequired={true}
                         value={booking.shootType}
                         options={[
                           { value: 'Travel / Vacation Vlogging', label: 'Travel / Vacation Vlogging' },
@@ -3238,28 +3821,30 @@ export default function App() {
                           setBooking(b => ({ ...b, shootType: val }));
                           clearFieldError('shootType');
                         }}
+                        hasError={!!validationErrors.shootType}
+                        errorMessage={validationErrors.shootType}
                       />
                     </div>
 
-                    <div>
+                    <div data-field-key="socialHandle">
                       <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5">
-                        Active Personal Instagram or Facebook Account *
+                        Active Personal Instagram or Facebook Account <span className="text-red-500 font-bold">*</span>
                       </label>
                       <input
                         type="text"
-                        placeholder="@your_personal_handle (Instagram or Facebook)"
+                        placeholder="@your_personal_handle or FB/IG profile link"
                         value={booking.socialHandle}
                         onChange={(e) => {
                           setBooking(b => ({ ...b, socialHandle: e.target.value }));
                           clearFieldError('socialHandle');
                         }}
-                        className={`w-full min-h-[48px] px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${validationErrors.socialHandle
+                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${validationErrors.socialHandle
                           ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
                           : 'bg-white border-[#E8E4F0] focus:border-[#1A1A2E]'
                           }`}
                       />
                       <p className="mt-1 text-[11px] text-[#6B6B8A]">
-                        Please provide your personal active account so our team can coordinate pickup and verification.
+                        Must be your main personal account. Locked/dummy/business-only accounts are not accepted.
                       </p>
                       {validationErrors.socialHandle && (
                         <p className="mt-1 text-xs text-red-600 font-bold flex items-center gap-1">
@@ -3269,159 +3854,236 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Emergency Contacts (KYC Step 4) */}
-                  <div className={`p-4 rounded-2xl bg-white border-2 space-y-3 transition-colors ${validationErrors.emergencyContact1 || validationErrors.emergencyContact2 || validationErrors.contact1IdFile
+                  {/* Emergency Contacts */}
+                  <div className={`p-4 rounded-2xl bg-white border-2 space-y-3 transition-colors ${validationErrors.emergencyContact1Name || validationErrors.emergencyContact1Phone || validationErrors.emergencyContact1Social || validationErrors.contact1IdFile || validationErrors.emergencyContact2Name || validationErrors.emergencyContact2Phone
                     ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm'
                     : 'border-[#E8E4F0]'
                     }`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-[#1A1A2E]">
-                        Two Emergency Contacts *
-                      </span>
-                      <span className="text-[10px] text-[#6B6B8A] font-semibold">Immediate verification reference</span>
+                      <div>
+                        <span className="text-xs font-black text-[#1A1A2E] block">
+                          Emergency Contact Persons (2 Required) <span className="text-red-500 font-bold">*</span>
+                        </span>
+                        <p className="text-[11px] text-[#6B6B8A] mt-0.5 leading-snug">
+                          Kindly provide full name and active contact details. Contact 1 is your primary family or guardian reference{booking.isStudentExemption ? ' (parent/guardian valid ID required for student exemption)' : ''}. Contact 2 is a second reference (friend, colleague, or travel companion — no ID required).
+                        </p>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
                       {/* Contact 1: Family Member / Guardian */}
-                      <div className="flex flex-col justify-between p-3.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-3">
+                      <div className="flex flex-col justify-between p-3.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-2.5">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <label className="block text-[11px] font-bold text-[#1A1A2E]">
-                              Contact 1: Family Member / Guardian *
+                              {booking.isStudentExemption ? 'Contact 1: Parent or Legal Guardian' : 'Contact 1: Family Member / Relative'} <span className="text-red-500 font-bold">*</span>
                             </label>
                             <span className="text-[10px] text-[#553C9A] font-bold bg-[#EDE8FC] px-1.5 py-0.5 rounded">
-                              Primary
+                              {booking.isStudentExemption ? 'Parent / Guardian' : 'Primary Reference'}
                             </span>
                           </div>
-                          <input
-                            type="text"
-                            placeholder="Full Legal Name (e.g. Maria Santos)"
-                            value={booking.emergencyContact1Name}
-                            onChange={(e) => {
-                              setBooking(b => ({ ...b, emergencyContact1Name: e.target.value }));
-                              clearFieldError('emergencyContact1');
-                            }}
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
-                          />
-                          <input
-                            type="tel"
-                            placeholder="Active Mobile Number (09XX-XXX-XXXX)"
-                            value={booking.emergencyContact1Phone}
-                            onChange={(e) => {
-                              setBooking(b => ({ ...b, emergencyContact1Phone: e.target.value }));
-                              clearFieldError('emergencyContact1');
-                            }}
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
-                          />
-                          {validationErrors.emergencyContact1 && (
-                            <p className="text-xs text-red-600 font-bold flex items-center gap-1">
-                              <span>⚠️</span> {validationErrors.emergencyContact1}
+
+                          {booking.isStudentExemption && (
+                            <p className="text-[10px] text-[#DD6B20] font-semibold bg-[#FEF0E7] p-2 rounded-lg border border-[#F5C6A8]">
+                              For Student Exemption: Please provide your parent or legal guardian details and active social handle below, along with their valid government ID.
                             </p>
                           )}
+
+                          <div data-field-key="emergencyContact1Name">
+                            <input
+                              type="text"
+                              placeholder={booking.isStudentExemption ? "Parent / Guardian Full Legal Name *" : "Full Legal Name (e.g. Maria Santos) *"}
+                              value={booking.emergencyContact1Name}
+                              onChange={(e) => {
+                                setBooking(b => ({ ...b, emergencyContact1Name: e.target.value }));
+                                clearFieldError('emergencyContact1Name');
+                              }}
+                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Name
+                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                                : 'border-[#E8E4F0]'
+                                }`}
+                            />
+                            {validationErrors.emergencyContact1Name && (
+                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Name}</p>
+                            )}
+                          </div>
+
+                          <div data-field-key="emergencyContact1Phone">
+                            <input
+                              type="tel"
+                              placeholder={booking.isStudentExemption ? "Parent / Guardian Contact Number (09XX-XXX-XXXX) *" : "Active Contact Number (09XX-XXX-XXXX) *"}
+                              value={booking.emergencyContact1Phone}
+                              onChange={(e) => {
+                                setBooking(b => ({ ...b, emergencyContact1Phone: e.target.value }));
+                                clearFieldError('emergencyContact1Phone');
+                              }}
+                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Phone
+                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                                : 'border-[#E8E4F0]'
+                                }`}
+                            />
+                            {validationErrors.emergencyContact1Phone && (
+                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Phone}</p>
+                            )}
+                          </div>
+
+                          <div data-field-key="emergencyContact1Rel">
+                            <input
+                              type="text"
+                              placeholder={booking.isStudentExemption ? "Relationship (e.g. Mother, Father, Legal Guardian) *" : "Relationship (e.g. Mother, Father, Sister) *"}
+                              value={booking.emergencyContact1Rel}
+                              onChange={(e) => {
+                                setBooking(b => ({ ...b, emergencyContact1Rel: e.target.value }));
+                                clearFieldError('emergencyContact1Rel');
+                              }}
+                              className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
+                            />
+                          </div>
+
+                          <div data-field-key="emergencyContact1Social">
+                            <input
+                              type="text"
+                              placeholder={booking.isStudentExemption ? "Parent / Guardian FB / IG Link or Handle *" : "FB / IG Profile Link or Handle *"}
+                              value={booking.emergencyContact1Social}
+                              onChange={(e) => {
+                                setBooking(b => ({ ...b, emergencyContact1Social: e.target.value }));
+                                clearFieldError('emergencyContact1Social');
+                              }}
+                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Social
+                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                                : 'border-[#E8E4F0]'
+                                }`}
+                            />
+                            {validationErrors.emergencyContact1Social && (
+                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Social}</p>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Conditional Parent/Guardian ID Upload ONLY when Student Exemption applies */}
+                        {/* Contact 1 ID Upload — REQUIRED ONLY FOR STUDENT EXEMPTION */}
                         {booking.isStudentExemption && (
-                          <div className={`mt-auto pt-2.5 border-t border-[#E8E4F0] space-y-2 rounded-xl p-3 bg-white border ${validationErrors.contact1IdFile ? 'border-red-300 bg-red-50/50 ring-1 ring-red-200' : 'border-[#F5C6A8] bg-[#FFF6EE]/60'
-                            }`}>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-[#C05621] flex items-center gap-1">
-                                <ShieldCheck className="w-3.5 h-3.5 text-[#DD6B20]" />
-                                <span>Parent / Guardian Gov ID *</span>
+                          <div data-field-key="contact1IdFile" className="pt-2 border-t border-[#E8E4F0] space-y-1.5 animate-fadeIn">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-[#1A1A2E]">
+                              <span className="flex items-center gap-1">
+                                <span>Parent / Guardian Valid Government ID</span>
+                                <span className="text-red-500 font-bold">*</span>
                               </span>
-                              {booking.contact1IdFile ? (
-                                <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded border border-[#A8DBC8]">
-                                  Uploaded ✓
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-extrabold text-[#DD6B20] bg-[#FEF0E7] px-1.5 py-0.5 rounded border border-[#F5C6A8]">
-                                  Required
-                                </span>
-                              )}
+                              {booking.contact1IdFile && <span className="text-[10px] text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
                             </div>
-                            <p className="text-[10px] text-[#6B6B8A] leading-tight">
-                              Required for Student Exemption: Please upload a clear photo of this parent or guardian&apos;s government ID to verify student sponsorship.
+                            <p className="text-[10px] text-[#6B6B8A]">
+                              Required for Student Exemption: Photo of parent or legal guardian&apos;s valid government-issued ID.
                             </p>
-                            <label className="cursor-pointer w-full py-2 px-3 rounded-lg bg-white border-2 border-[#F5C6A8] text-xs font-bold text-[#DD6B20] hover:bg-[#FEF0E7] inline-flex items-center justify-center gap-1.5 transition-colors shadow-xs">
+                            <label className={`cursor-pointer w-full py-2 px-3 rounded-xl bg-white border-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs ${validationErrors.contact1IdFile
+                              ? 'border-red-400 text-red-600 bg-red-50 ring-2 ring-red-100'
+                              : 'border-[#C9B8F0] text-[#6B46C1] hover:bg-[#EDE8FC]'
+                              }`}>
                               <Upload className="w-3.5 h-3.5" />
-                              <span>{booking.contact1IdFile ? 'Change Guardian ID' : 'Upload Guardian Gov ID *'}</span>
+                              <span>{booking.contact1IdFile ? 'Change Parent / Guardian ID' : 'Upload Parent / Guardian ID *'}</span>
                               <input
                                 type="file"
                                 accept="image/*,application/pdf"
                                 className="hidden"
                                 onChange={(e) => {
-                                  handleRealFileUpload(e, 'contact1IdFile');
+                                  handleRealFileUpload(e, 'contact1IdFile', 'contact1IdName');
                                   clearFieldError('contact1IdFile');
                                 }}
                               />
                             </label>
+                            {booking.contact1IdFile && (
+                              <div className="flex items-center justify-between text-[11px] px-1">
+                                <span className="text-[#38A169] font-bold truncate max-w-[150px]">{booking.contact1IdName || 'ID Attached'}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFile('contact1IdFile', 'contact1IdName')}
+                                  className="text-red-500 hover:text-red-700 underline text-[10px]"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            )}
                             {validationErrors.contact1IdFile && (
-                              <p className="text-xs text-red-600 font-bold flex items-center gap-1">
-                                <span>⚠️</span> {validationErrors.contact1IdFile}
-                              </p>
+                              <p className="text-xs text-red-600 font-bold">⚠️ {validationErrors.contact1IdFile}</p>
                             )}
                           </div>
                         )}
                       </div>
 
-                      {/* Contact 2: Second Emergency Contact */}
-                      <div className="flex flex-col justify-between p-3.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-3">
+                      {/* Contact 2: Second Emergency Contact (Friend / Colleague — No ID upload required) */}
+                      <div className="flex flex-col justify-between p-3.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-2.5">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <label className="block text-[11px] font-bold text-[#1A1A2E]">
-                              Contact 2: Second Emergency Contact *
+                              Contact 2: Second Reference <span className="text-red-500 font-bold">*</span>
                             </label>
                             <span className="text-[10px] text-[#6B6B8A] font-semibold">
-                              Friend / Colleague
+                              Friend / Colleague / Companion
                             </span>
                           </div>
-                          <input
-                            type="text"
-                            placeholder="Full Name (e.g. Juan Cruz)"
-                            value={booking.emergencyContact2Name}
-                            onChange={(e) => {
-                              setBooking(b => ({ ...b, emergencyContact2Name: e.target.value }));
-                              clearFieldError('emergencyContact2');
-                            }}
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
-                          />
-                          <input
-                            type="tel"
-                            placeholder="Active Mobile Number (09XX-XXX-XXXX)"
-                            value={booking.emergencyContact2Phone}
-                            onChange={(e) => {
-                              setBooking(b => ({ ...b, emergencyContact2Phone: e.target.value }));
-                              clearFieldError('emergencyContact2');
-                            }}
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
-                          />
-                          {validationErrors.emergencyContact2 && (
-                            <p className="text-xs text-red-600 font-bold flex items-center gap-1">
-                              <span>⚠️</span> {validationErrors.emergencyContact2}
-                            </p>
-                          )}
+
+                          <div data-field-key="emergencyContact2Name">
+                            <input
+                              type="text"
+                              placeholder="Full Legal Name (e.g. Juan Cruz) *"
+                              value={booking.emergencyContact2Name}
+                              onChange={(e) => {
+                                setBooking(b => ({ ...b, emergencyContact2Name: e.target.value }));
+                                clearFieldError('emergencyContact2Name');
+                              }}
+                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact2Name
+                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                                : 'border-[#E8E4F0]'
+                                }`}
+                            />
+                            {validationErrors.emergencyContact2Name && (
+                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact2Name}</p>
+                            )}
+                          </div>
+
+                          <div data-field-key="emergencyContact2Phone">
+                            <input
+                              type="tel"
+                              placeholder="Active Contact Number (09XX-XXX-XXXX) *"
+                              value={booking.emergencyContact2Phone}
+                              onChange={(e) => {
+                                setBooking(b => ({ ...b, emergencyContact2Phone: e.target.value }));
+                                clearFieldError('emergencyContact2Phone');
+                              }}
+                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact2Phone
+                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                                : 'border-[#E8E4F0]'
+                                }`}
+                            />
+                            {validationErrors.emergencyContact2Phone && (
+                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact2Phone}</p>
+                            )}
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              placeholder="Relationship / Context (Optional, e.g. Travel Companion)"
+                              value={booking.emergencyContact2Rel}
+                              onChange={(e) => setBooking(b => ({ ...b, emergencyContact2Rel: e.target.value }))}
+                              className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
+                            />
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              placeholder="FB / IG Profile Link or Handle (Optional)"
+                              value={booking.emergencyContact2Social}
+                              onChange={(e) => setBooking(b => ({ ...b, emergencyContact2Social: e.target.value }))}
+                              className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
+                            />
+                          </div>
                         </div>
 
-                        {/* Helper card ONLY visible when Student Exemption is selected */}
-                        {booking.isStudentExemption && (
-                          <div className="mt-auto pt-2.5 border-t border-[#E8E4F0] rounded-xl p-3 bg-white border border-[#E8E4F0] flex flex-col justify-between space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-[#1A1A2E] flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-[#38A169]" />
-                                <span>Second Contact Reference</span>
-                              </span>
-                              <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded border border-[#A8DBC8]">
-                                No ID Required ✓
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-[#6B6B8A] leading-tight">
-                              No ID upload required for Contact 2. We only require their active mobile number as a secondary point of contact for handover coordination.
-                            </p>
-                            <div className="py-2 px-3 rounded-lg bg-[#FAFAF7] border border-[#E8E4F0] text-xs font-semibold text-[#6B6B8A] flex items-center justify-center gap-1">
-                              <span>Mobile Contact Only</span>
-                            </div>
-                          </div>
-                        )}
+                        <div className="pt-2 border-t border-[#E8E4F0]">
+                          <p className="text-[10px] text-[#6B6B8A] leading-tight">
+                            Note: ID upload is not required for Emergency Contact 2.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3431,17 +4093,22 @@ export default function App() {
                     ? 'border-red-400 bg-red-50/50 shadow-sm'
                     : 'border-[#A8DBC8]'
                     }`}>
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-[#234E52]" />
-                      <span className="text-xs font-extrabold text-[#234E52]">
-                        GCash Account for Security Deposit Refund: *
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-[#234E52]" />
+                        <span className="text-xs font-extrabold text-[#234E52]">
+                          GCash Account for ₱1,000 Security Deposit Refund <span className="text-red-500 font-bold">*</span>
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-[#234E52] bg-white px-2 py-0.5 rounded-full border border-[#A8DBC8]">
+                        Within 24 Hours
                       </span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
+                      <div data-field-key="gcashAccountName">
                         <label className="block text-[11px] font-bold text-[#234E52] mb-1">
-                          Account Name *
+                          Account Name <span className="text-red-500 font-bold">*</span>
                         </label>
                         <input
                           type="text"
@@ -3460,9 +4127,9 @@ export default function App() {
                           </p>
                         )}
                       </div>
-                      <div>
+                      <div data-field-key="gcashAccountNumber">
                         <label className="block text-[11px] font-bold text-[#234E52] mb-1">
-                          Account Number *
+                          Account Number (GCash Mobile) <span className="text-red-500 font-bold">*</span>
                         </label>
                         <input
                           type="tel"
@@ -3483,7 +4150,7 @@ export default function App() {
                       </div>
                     </div>
                     <p className="text-[10px] text-[#234E52]">
-                      Your ₱{modalQuote.deposit.toLocaleString()} deposit is sent right here immediately after camera inspection!
+                      Your ₱1,000 security deposit will be fully refunded within 24 hours of the equipment being returned, provided it is in the same condition as when it was rented.
                     </p>
                   </div>
                 </div>
@@ -3591,6 +4258,17 @@ export default function App() {
                             <span>Base Rental Cost:</span>
                             <span className="font-black text-[#1A1A2E]">₱{modalQuote.rentalTotal.toLocaleString()}</span>
                           </div>
+                          {booking.handoverMode === 'meetup' ? (
+                            <div className="flex justify-between items-center text-[#1A1A2E] font-semibold">
+                              <span>Meetup Handling Fee ({booking.meetupLocation || 'SM East / Bridgetowne / Opus'}):</span>
+                              <span className="font-black text-[#1A1A2E]">₱{modalQuote.meetupFee.toLocaleString()}</span>
+                            </div>
+                          ) : (
+                            <div className="flex justify-between items-center text-[#6B6B8A]">
+                              <span>Delivery via Grab Express:</span>
+                              <span className="font-bold text-[#1A1A2E]">Renter shoulders fee to rider</span>
+                            </div>
+                          )}
                           <div className="flex justify-between items-center text-[#2F855A]">
                             <span className="flex items-center gap-1.5">
                               <span>Refundable Security Deposit:</span>
@@ -3638,7 +4316,9 @@ export default function App() {
                                 <span className="font-black text-xs text-[#1A1A2E] uppercase tracking-wide">Total Remaining Payment on Handover:</span>
                               </div>
                               <p className="text-[11px] text-[#6B6B8A] mt-0.5 pl-5.5">
-                                Remaining rental balance (<strong>₱{modalQuote.remainingRentalBalance.toLocaleString()}</strong>) + Refundable security deposit (<strong>₱{modalQuote.deposit.toLocaleString()}</strong>).
+                                Remaining rental balance (<strong>₱{modalQuote.remainingRentalBalance.toLocaleString()}</strong>)
+                                {modalQuote.meetupFee > 0 && <> + Meetup handling fee (<strong>₱{modalQuote.meetupFee.toLocaleString()}</strong>)</>}
+                                {' '}+ Refundable security deposit (<strong>₱{modalQuote.deposit.toLocaleString()}</strong>).
                               </p>
                             </div>
                             <div className="text-right pl-5.5 sm:pl-0 shrink-0">
@@ -3654,7 +4334,7 @@ export default function App() {
                                 <span className="font-black text-xs text-[#2F855A] uppercase tracking-wide">Security Deposit Refund After Return:</span>
                               </div>
                               <p className="text-[11px] text-[#234E52] mt-0.5 pl-5.5">
-                                Full security deposit sent back directly to your GCash within 24 Hours of return inspection.
+                                Full security deposit sent back directly to your GCash within 24 Hours of equipment return and inspection.
                               </p>
                             </div>
                             <div className="text-right pl-5.5 sm:pl-0 shrink-0">
@@ -3667,7 +4347,7 @@ export default function App() {
                         <div className="mt-2.5 p-2.5 rounded-xl bg-[#FFF9F2] border border-[#F5C6A8] text-[11px] text-[#7B341E] flex items-start gap-2">
                           <span className="shrink-0 text-sm">💡</span>
                           <span className="leading-snug">
-                            <strong>Payment Timing Clarity:</strong> The ₱300 downpayment is already deducted from your rental fee (leaving only <strong>₱{modalQuote.remainingRentalBalance.toLocaleString()}</strong> rental balance). The <strong>₱{modalQuote.deposit.toLocaleString()}</strong> security deposit is separate and 100% refundable upon safe return.
+                            <strong>Payment Timing Clarity:</strong> The ₱300 downpayment is already deducted from your rental fee (leaving only <strong>₱{modalQuote.remainingRentalBalance.toLocaleString()}</strong> rental balance). {modalQuote.meetupFee > 0 && <>A ₱200 handling fee applies for meetup transactions. </>}The <strong>₱{modalQuote.deposit.toLocaleString()}</strong> security deposit is separate and 100% refundable upon safe return.
                           </span>
                         </div>
                       </div>
@@ -3675,9 +4355,9 @@ export default function App() {
                   </div>
 
                   {/* Reference Number input */}
-                  <div>
+                  <div data-field-key="gcashRefNumber">
                     <label className="block text-xs font-bold text-[#1A1A2E] mb-1">
-                      GCash Reference Number (13 Digits) *
+                      GCash Reference Number (13 Digits) <span className="text-red-500 font-bold">*</span>
                     </label>
                     <input
                       type="text"
@@ -3701,7 +4381,7 @@ export default function App() {
                   </div>
 
                   {/* Required GCash Receipt Upload */}
-                  <div className={`p-3.5 rounded-xl border transition-all ${validationErrors.receiptFile
+                  <div data-field-key="receiptFile" className={`p-3.5 rounded-xl border transition-all ${validationErrors.receiptFile
                     ? 'bg-[#FFF5F5] border-red-300 ring-2 ring-red-100'
                     : booking.receiptFile
                       ? 'bg-[#E8F7F1]/50 border-[#A8DBC8]'
@@ -3727,7 +4407,9 @@ export default function App() {
 
                       <label className={`cursor-pointer px-3.5 py-2 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 transition-all shrink-0 justify-center ${booking.receiptFile
                         ? 'bg-white border border-[#A8DBC8] text-[#2F855A] hover:bg-[#E8F7F1]'
-                        : 'bg-[#1A1A2E] text-white hover:bg-[#6B46C1] shadow-sm'
+                        : validationErrors.receiptFile
+                          ? 'bg-red-50 border-2 border-red-400 text-red-600 hover:bg-red-100'
+                          : 'bg-[#1A1A2E] text-white hover:bg-[#6B46C1] shadow-sm'
                         }`}>
                         <Upload className="w-3.5 h-3.5" />
                         <span>{booking.receiptFile ? 'Change Receipt' : 'Attach GCash Receipt *'}</span>
@@ -3746,6 +4428,53 @@ export default function App() {
                     {validationErrors.receiptFile && (
                       <p className="mt-2 text-xs text-red-600 font-bold flex items-center gap-1">
                         <span>⚠️</span> {validationErrors.receiptFile}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Active Terms & Conditions Agreement */}
+                  <div data-field-key="termsAccepted" className={`p-4 rounded-2xl border-2 transition-all ${validationErrors.termsAccepted
+                    ? 'bg-[#FFF5F5] border-red-300 ring-2 ring-red-100'
+                    : booking.termsAccepted
+                      ? 'bg-[#E8F7F1]/60 border-[#38A169]/40'
+                      : 'bg-white border-[#E8E4F0]'
+                    }`}>
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        id="modalTermsCheckbox"
+                        checked={booking.termsAccepted}
+                        onChange={(e) => {
+                          setBooking(b => ({
+                            ...b,
+                            termsAccepted: e.target.checked,
+                            termsAcceptedAt: e.target.checked ? new Date().toISOString() : undefined,
+                          }));
+                          clearFieldError('termsAccepted');
+                        }}
+                        className="mt-0.5 w-4 h-4 rounded text-[#6B46C1] focus:ring-[#6B46C1] border-gray-300 cursor-pointer"
+                      />
+                      <div className="flex-1 text-xs">
+                        <label htmlFor="modalTermsCheckbox" className="font-bold text-[#1A1A2E] cursor-pointer">
+                          I have read, understood, and agree to the{' '}
+                          <button
+                            type="button"
+                            onClick={() => setShowTermsModal(true)}
+                            className="text-[#6B46C1] underline font-black hover:text-[#553C9A] cursor-pointer inline-flex items-center gap-0.5"
+                          >
+                            <span>Terms and Conditions</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>{' '}
+                          of Pack and Film Camera Rental. <span className="text-red-500 font-bold">*</span>
+                        </label>
+                        <p className="text-[11px] text-[#6B6B8A] mt-1 leading-relaxed">
+                          Includes ₱300 reservation downpayment (credited to rental), ₱1,000 security deposit (refunded within 24h of return), 8:00 AM – 8:00 PM rental period, ₱200 meetup handling fee, and Grab Express delivery rules.
+                        </p>
+                      </div>
+                    </div>
+                    {validationErrors.termsAccepted && (
+                      <p className="mt-2 text-xs text-red-600 font-bold flex items-center gap-1 pl-7">
+                        <span>⚠️</span> {validationErrors.termsAccepted}
                       </p>
                     )}
                   </div>
@@ -3815,12 +4544,24 @@ export default function App() {
                     <div className="flex justify-between">
                       <span className="text-[#6B6B8A]">Handover Mode:</span>
                       <span className="font-bold text-[#1A1A2E]">
-                        {booking.handoverMode === 'meetup' ? booking.meetupLocation : 'Grab Express Delivery'}
+                        {booking.handoverMode === 'meetup'
+                          ? `${booking.meetupLocation || 'Pasig Meetup Hub'} (₱200 Meetup Fee)`
+                          : 'Grab Express Delivery (Renter shoulders fee)'}
                       </span>
+                    </div>
+                    {booking.handoverMode === 'meetup' && (
+                      <div className="flex justify-between">
+                        <span className="text-[#6B6B8A]">Meetup Handling Fee:</span>
+                        <span className="font-bold text-[#1A1A2E]">₱{modalQuote.meetupFee.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-[#6B6B8A]">Rental Window:</span>
+                      <span className="font-bold text-[#1A1A2E]">8:00 AM – 8:00 PM ONLY</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#6B6B8A]">Downpayment Paid:</span>
-                      <span className="font-bold text-[#007DFE]">₱{DOWNPAYMENT_FEE} (Ref: {booking.gcashRefNumber || 'Verified'} • Credited)</span>
+                      <span className="font-bold text-[#007DFE]">₱{DOWNPAYMENT_FEE} (Ref: {booking.gcashRefNumber || 'Verified'} • Credited to rental)</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#6B6B8A]">Remaining Rental Balance:</span>
@@ -3831,14 +4572,21 @@ export default function App() {
                       <span className="font-bold text-[#2F855A]">₱{modalQuote.deposit.toLocaleString()} (100% Refundable)</span>
                     </div>
                     <div className="flex justify-between pt-1.5 border-t border-[#E8E4F0]">
-                      <span className="font-black text-[#1A1A2E]">Total Payment Due on Handover:</span>
+                      <span className="font-black text-[#1A1A2E]">Total Due on Handover:</span>
                       <span className="font-black text-sm text-[#1A1A2E]">₱{modalQuote.paymentOnHandover.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-[11px] text-[#2F855A]">
-                      <span className="font-bold">Security Deposit Refund after Return:</span>
-                      <span className="font-black">₱{modalQuote.refundAfterReturn.toLocaleString()} (Via GCash)</span>
+                      <span className="font-bold">Security Deposit Refund:</span>
+                      <span className="font-black">₱{modalQuote.refundAfterReturn.toLocaleString()} (Within 24h of return via GCash)</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-[#E8E4F0]">
+                      <span className="text-[#6B6B8A]">Terms & Conditions:</span>
+                      <span className="font-bold text-[#38A169] flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Accepted ({booking.termsVersion || '2026 Edition'})</span>
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-[#6B6B8A]">KYC Status:</span>
                       <span className="font-extrabold text-[#553C9A] bg-[#EDE8FC] px-2 py-0.5 rounded-full">
                         Pending 15-Min Quick Review
@@ -4079,13 +4827,15 @@ export default function App() {
             {/* Calendar Availability Status Bar */}
             <div className="px-6 py-2.5 bg-white border-b border-[#E8E4F0] flex items-center justify-between text-xs">
               <div className="flex items-center gap-2 text-[#6B6B8A]">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className={`w-2 h-2 rounded-full ${isSyncingSheet ? 'bg-amber-400 animate-ping' : sheetSyncError ? 'bg-amber-500' : 'bg-emerald-500'}`} />
                 <span className="font-semibold text-[11px]">
-                  Live Reservation Tracker • Metro Manila
+                  {isSyncingSheet ? 'Syncing with Google Sheets...' : sheetSyncError ? 'Offline Calendar Backup' : 'Live Reservation Tracker • Metro Manila'}
                 </span>
               </div>
               <span className="text-[10px] text-[#8C7BAE] font-semibold">
-                Real-time Availability
+                {sheetLastSynced
+                  ? `Synced ${sheetLastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Real-time Availability'}
               </span>
             </div>
 
@@ -4238,6 +4988,129 @@ export default function App() {
               >
                 <Sparkles className="w-3.5 h-3.5 text-[#F5C6A8]" />
                 <span>Auto-Select Free Date Window</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          TERMS AND CONDITIONS FULL MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[90vh]">
+
+            {/* Header */}
+            <div className="px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-center justify-center text-[#553C9A]">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-[#1A1A2E]">
+                    Terms &amp; Conditions
+                  </h3>
+                  <p className="text-xs text-[#6B6B8A] font-medium">
+                    Guidelines for smooth rentals • Updated from Official Handouts
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#FEF0E7] flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 overflow-y-auto space-y-3.5 flex-1 text-xs">
+              <div className="p-3.5 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] text-[11px] text-[#7B341E] leading-relaxed">
+                <strong>Important Notice:</strong> By proceeding with the reservation payment, the renter acknowledges that they have read, understood, and agreed to all the Terms &amp; Conditions of Pack and Film Camera Rental.
+              </div>
+
+              <div className="space-y-3">
+                {TERMS_AND_CONDITIONS_DATA.map((clause, index) => {
+                  const isOpen = openTermsClause === index;
+                  return (
+                    <div
+                      key={clause.number}
+                      className={`rounded-2xl border-2 transition-all ${
+                        isOpen
+                          ? 'border-[#1A1A2E] bg-white shadow-[3px_3px_0px_#1A1A2E]'
+                          : 'border-[#E8E4F0] bg-white hover:border-[#C9B8F0]'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setOpenTermsClause(isOpen ? null : index)}
+                        className="w-full p-3.5 text-left flex items-center justify-between gap-3 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-6 h-6 rounded-lg bg-[#EDE8FC] text-[#553C9A] flex items-center justify-center font-black text-[11px]">
+                            {clause.number}
+                          </span>
+                          <span className="font-black text-xs text-[#1A1A2E]">
+                            {clause.title}
+                          </span>
+                        </div>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-transform ${
+                          isOpen ? 'rotate-180 bg-[#C9B8F0] text-[#1A1A2E]' : 'bg-[#FAFAF7] text-[#6B6B8A]'
+                        }`}>
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </div>
+                      </button>
+
+                      {isOpen && (
+                        <div className="px-4 pb-4 pt-1 border-t border-[#E8E4F0] text-xs text-[#4A4A68] space-y-2 leading-relaxed">
+                          {clause.content.map((point, pIdx) => (
+                            <p key={pIdx} className="flex items-start gap-2">
+                              <span className="text-[#6B46C1] font-bold mt-0.5">•</span>
+                              <span>{point}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] text-center text-[11px] text-[#553C9A] font-semibold">
+                {TERMS_ACKNOWLEDGEMENT_TEXT}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-white border-t border-[#E8E4F0] flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-[#E8E4F0] text-xs font-bold text-[#6B6B8A] hover:bg-[#FAFAF7] transition-all cursor-pointer"
+              >
+                Close
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBooking(b => ({
+                    ...b,
+                    termsAccepted: true,
+                    termsAcceptedAt: new Date().toISOString(),
+                  }));
+                  clearFieldError('termsAccepted');
+                  setShowTermsModal(false);
+                  showToast('Terms and Conditions accepted!', 'success');
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[#38A169] text-white text-xs font-bold hover:bg-[#2F855A] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>I Understand &amp; Agree to Terms</span>
               </button>
             </div>
 
