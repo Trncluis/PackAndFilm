@@ -18,6 +18,237 @@ const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 const KYC_ROOT_FOLDER_NAME = "PackAndFilm_KYC_Uploads";
 
 // ─────────────────────────────────────────────────────────────
+// 0. DATE, TIMEZONE, CONCURRENCY & AUDIT CORE UTILITIES
+// ─────────────────────────────────────────────────────────────
+
+const MIN_OPERATIONAL_YEAR = 2024;
+const MAX_OPERATIONAL_YEAR = 2099;
+
+/**
+ * Validates astronomical calendar date and enforces Asia/Manila noon anchoring.
+ * Returns Date object if valid, null if malformed, impossible, or out of business range.
+ */
+function parseManilaDateOnly(dateStr, enforceBusinessRange) {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  const trimmed = dateStr.trim();
+
+  // 1. Syntax check: strict YYYY-MM-DD pattern
+  const match = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.exec(trimmed);
+  if (!match) return null;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10) - 1; // 0-indexed (0 = Jan, 11 = Dec)
+  const day = parseInt(match[3], 10);
+
+  // 2. Optional Business Operational Range check
+  if (enforceBusinessRange !== false) {
+    if (year < MIN_OPERATIONAL_YEAR || year > MAX_OPERATIONAL_YEAR) {
+      return null;
+    }
+  }
+
+  // 3. Instantiate date at local Noon (12:00:00 PM) in Asia/Manila to eliminate midnight drift
+  const d = new Date(year, month, day, 12, 0, 0, 0);
+
+  // 4. Pure Calendar Validity (Rollover Detection):
+  // Verifying year, month, and day match input confirms strict calendar validity.
+  if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== day) {
+    return null;
+  }
+
+  return d;
+}
+
+/**
+ * Formats date object to Asia/Manila timezone string.
+ */
+function formatManilaDate(dateObj, pattern) {
+  if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
+  return Utilities.formatDate(dateObj, "Asia/Manila", pattern || "yyyy-MM-dd");
+}
+
+/**
+ * Universal safe concurrency wrapper for Apps Script operations.
+ * Guarantees releaseLock() in finally block.
+ */
+function withScriptLock(callback, timeoutMs) {
+  const lock = LockService.getScriptLock();
+  const waitMs = timeoutMs || 30000;
+  if (!lock.tryLock(waitMs)) {
+    throw new Error("Concurrency lock timeout: Another operation is currently in progress. Please retry shortly.");
+  }
+  try {
+    return callback();
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (lockErr) {
+      Logger.log("Safe lock release warning: " + lockErr.toString());
+    }
+  }
+}
+
+/**
+ * Computes deterministic SHA-256 fingerprint for archived booking rows.
+ * Detects any changes to references, status, financial amounts, or dates.
+ */
+function computeDeterministicArchiveFingerprint(rows) {
+  if (!rows || rows.length === 0) {
+    return "0000000000000000000000000000000000000000000000000000000000000000";
+  }
+
+  // Sort deterministically by Booking Ref (index 0)
+  const sorted = rows.slice().sort((a, b) => String(a[0] || "").localeCompare(String(b[0] || "")));
+
+  const serializedLines = sorted.map(r => [
+    String(r[0] || "").trim(),                   // Col 1: Booking Ref
+    String(r[17] || "").trim(),                  // Col 18: Status
+    Number(r[12] || 0).toFixed(2),               // Col 13: Rental Total
+    Number(r[13] || 0).toFixed(2),               // Col 14: Security Deposit
+    Number(r[14] || 0).toFixed(2),               // Col 15: Downpayment Paid
+    Number(r[15] || 0).toFixed(2),               // Col 16: Balance Due
+    String(r[6] || "").trim(),                   // Col 7: Start Date
+    String(r[7] || "").trim()                    // Col 8: End Date
+  ].join("|"));
+
+  const payload = serializedLines.join("\n");
+  const rawDigest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, payload, Utilities.Charset.UTF_8);
+
+  let hex = "";
+  for (let i = 0; i < rawDigest.length; i++) {
+    let b = rawDigest[i];
+    if (b < 0) b += 256;
+    let s = b.toString(16);
+    if (s.length === 1) s = "0" + s;
+    hex += s;
+  }
+  return hex;
+}
+
+/**
+ * Records a verified transaction in the "💸 Financial & Refund Audit" ledger.
+ * Preserves 27-column Bookings schema by isolating cash movements to the audit sheet.
+ */
+function recordFinancialAuditTransaction(entry) {
+  if (!entry || !entry.bookingRef) {
+    throw new Error("Invalid audit transaction: bookingRef is required.");
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let aSheet = ss.getSheetByName("💸 Financial & Refund Audit");
+  if (!aSheet) {
+    if (typeof formatAndBeautifyWorkbook === "function") {
+      formatAndBeautifyWorkbook();
+      aSheet = ss.getSheetByName("💸 Financial & Refund Audit");
+    }
+    if (!aSheet) {
+      aSheet = ss.insertSheet("💸 Financial & Refund Audit");
+    }
+  }
+
+  // Ensure minimum bounds
+  if (typeof ensureColumns === "function") ensureColumns(aSheet, 13);
+  if (typeof ensureRows === "function") ensureRows(aSheet, 50);
+
+  // Duplicate check: avoid adding identical category for same bookingRef if already logged
+  if (entry.preventDuplicateCategory) {
+    const data = aSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][1]).trim() === String(entry.bookingRef).trim() &&
+        String(data[i][3]).trim() === String(entry.category).trim()) {
+        return String(data[i][0]); // Return existing record ID
+      }
+    }
+  }
+
+  // Find the first empty data row (starting from Row 2) to prevent leaving blank rows if mock data was cleared
+  let targetRow = aSheet.getLastRow() + 1;
+  const colAValues = aSheet.getRange(1, 1, Math.max(1, aSheet.getLastRow()), 1).getValues();
+  for (let r = 2; r <= colAValues.length; r++) {
+    if (!colAValues[r - 1][0] || String(colAValues[r - 1][0]).trim() === "") {
+      targetRow = r;
+      break;
+    }
+  }
+
+  const recordId = entry.auditRecordId || ("AUD-" + Utilities.formatDate(new Date(), "Asia/Manila", "yyyy") + "-" + String(targetRow - 1).padStart(4, "0"));
+
+  const rowValues = [
+    recordId,
+    entry.bookingRef,
+    entry.customerName || "",
+    entry.category || "Downpayment Verification",
+    Number(entry.amount || 0),
+    entry.customerPaymentTimestamp || "",
+    entry.paymentVerificationTimestamp || Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm"),
+    entry.bookingConfirmationTimestamp || "",
+    entry.disbursementTimestamp || "",
+    entry.gcashRef || "",
+    entry.status || "Verified Received",
+    entry.auditingAdmin || "System Admin",
+    entry.notes || ""
+  ];
+
+  if (targetRow <= aSheet.getLastRow()) {
+    aSheet.getRange(targetRow, 1, 1, 13).setValues([rowValues]);
+  } else {
+    aSheet.appendRow(rowValues);
+    targetRow = aSheet.getLastRow();
+  }
+
+  // Format the written row
+  aSheet.getRange(targetRow, 1, 1, 13).setFontFamily("Inter").setFontSize(10).setVerticalAlignment("middle");
+  aSheet.getRange(targetRow, 1, 1, 2).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
+  aSheet.getRange(targetRow, 3).setHorizontalAlignment("left");
+  aSheet.getRange(targetRow, 4).setHorizontalAlignment("center");
+  aSheet.getRange(targetRow, 5).setNumberFormat('"₱"#,##0.00').setHorizontalAlignment("right");
+  aSheet.getRange(targetRow, 6, 1, 4).setHorizontalAlignment("center");
+  aSheet.getRange(targetRow, 10).setHorizontalAlignment("center");
+  aSheet.getRange(targetRow, 11).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center");
+  aSheet.getRange(targetRow, 12).setHorizontalAlignment("center");
+  aSheet.getRange(targetRow, 13).setFontSize(9).setHorizontalAlignment("left").setWrap(true);
+
+  // Guarantee that data validation rules cover rows 2 to maxRows
+  if (typeof fixFinancialAuditValidationAndFormatting === "function") {
+    fixFinancialAuditValidationAndFormatting();
+  } else {
+    const categories = [
+      "Downpayment Verification",
+      "Handover Balance Payment",
+      "Security Deposit Receipt",
+      "Security Deposit Refund",
+      "Damage Deduction",
+      "Deposit Forfeiture",
+      "Retained Reservation Fee",
+      "Assessed Cancellation Penalty",
+      "Late Penalty Settlement",
+      "Ledger Correction",
+      "Goodwill Waiver"
+    ];
+    const catRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(categories, true)
+      .setAllowInvalid(false)
+      .build();
+    aSheet.getRange(2, 4, Math.max(1, aSheet.getMaxRows() - 1), 1).setDataValidation(catRule);
+
+    const statuses = [
+      "Verified Received",
+      "Verified Disbursed",
+      "Pending Verification",
+      "Unverified Claim",
+      "Forfeited / Retained",
+      "Waived"
+    ];
+    const statRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(statuses, true)
+      .setAllowInvalid(false)
+      .build();
+    aSheet.getRange(2, 11, Math.max(1, aSheet.getMaxRows() - 1), 1).setDataValidation(statRule);
+  }
+
+  return recordId;
+}
+
+// ─────────────────────────────────────────────────────────────
 // 1. ADMIN CREDENTIALS & INITIALIZATION
 // ─────────────────────────────────────────────────────────────
 
@@ -314,7 +545,7 @@ function getHeaderIndexMap(sheet) {
   }
 
   return {
-    bookingRef: findCol(["booking ref"], 0),
+    bookingRef: findCol(["booking ref", "booking id"], 0),
     timestamp: findCol(["timestamp"], 1),
     customerName: findCol(["customer name"], 2),
     contactNumber: findCol(["contact number"], 3),
@@ -333,7 +564,7 @@ function getHeaderIndexMap(sheet) {
     gcashRefNumber: findCol(["gcash ref"], 16),
     status: findCol(["status", "booking status"], 17),
     notes: findCol(["notes & emergency contacts", "notes"], 18),
-    driveFolderUrl: findCol(["customer documents folder", "google drive folder"], 19),
+    driveFolderUrl: findCol(["customer documents folder", "google drive folder", "documents folder", "customer folder"], 19),
     id1Url: findCol(["primary id"], 20),
     id2Url: findCol(["secondary id", "student id"], 21),
     authSlipUrl: findCol(["auth slip", "handwritten"], 22),
@@ -378,38 +609,46 @@ function doGet(e) {
       }
 
       const colMap = getHeaderIndexMap(bookingsSheet);
-      const data = bookingsSheet.getDataRange().getValues();
+      const dataRange = bookingsSheet.getDataRange();
+      const data = dataRange.getValues();
+      const formulas = dataRange.getFormulas();
       const rows = data.slice(1);
 
-      const bookingsList = rows.map((r) => ({
-        bookingRef: r[colMap.bookingRef] || "",
-        timestamp: r[colMap.timestamp] ? Utilities.formatDate(new Date(r[colMap.timestamp]), "GMT+8", "yyyy-MM-dd HH:mm") : "",
-        customerName: r[colMap.customerName] || "",
-        contactNumber: r[colMap.contactNumber] || "",
-        socialMediaHandle: r[colMap.socialMediaHandle] || "",
-        cameraRented: r[colMap.cameraRented] || "",
-        startDate: r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "",
-        endDate: r[colMap.endDate] ? Utilities.formatDate(new Date(r[colMap.endDate]), "GMT+8", "yyyy-MM-dd") : "",
-        rentalDays: r[colMap.rentalDays] || 1,
-        handoverMethod: r[colMap.handoverMethod] || "",
-        address: r[colMap.address] || "",
-        shootType: r[colMap.shootType] || "",
-        rentalTotal: r[colMap.rentalTotal] || 0,
-        securityDeposit: r[colMap.securityDeposit] || 0,
-        downpaymentPaid: r[colMap.downpaymentPaid] || 0,
-        balanceDue: r[colMap.balanceDue] || 0,
-        gcashRefNumber: r[colMap.gcashRefNumber] || "",
-        status: r[colMap.status] || "Pending Verification",
-        notes: r[colMap.notes] || "",
-        driveFolderUrl: r[colMap.driveFolderUrl] || "",
-        id1Url: r[colMap.id1Url] || "",
-        id2Url: r[colMap.id2Url] || "",
-        authSlipUrl: r[colMap.authSlipUrl] || "",
-        billingUrl: r[colMap.billingUrl] || "",
-        selfieVideoUrl: r[colMap.selfieVideoUrl] || "",
-        receiptUrl: r[colMap.receiptUrl] || "",
-        guardianIdUrl: r[colMap.guardianIdUrl] || ""
-      }));
+      const bookingsList = rows.map((r, i) => {
+        const rawFolderVal = r[colMap.driveFolderUrl];
+        const rawFormula = (formulas[i + 1] && formulas[i + 1][colMap.driveFolderUrl]) || "";
+        const resolvedFolderUrl = (typeof extractDriveFolderUrl === "function" ? extractDriveFolderUrl(rawFolderVal, rawFormula) : "") || rawFolderVal || "";
+
+        return {
+          bookingRef: r[colMap.bookingRef] || "",
+          timestamp: r[colMap.timestamp] ? Utilities.formatDate(new Date(r[colMap.timestamp]), "GMT+8", "yyyy-MM-dd HH:mm") : "",
+          customerName: r[colMap.customerName] || "",
+          contactNumber: r[colMap.contactNumber] || "",
+          socialMediaHandle: r[colMap.socialMediaHandle] || "",
+          cameraRented: r[colMap.cameraRented] || "",
+          startDate: r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "",
+          endDate: r[colMap.endDate] ? Utilities.formatDate(new Date(r[colMap.endDate]), "GMT+8", "yyyy-MM-dd") : "",
+          rentalDays: r[colMap.rentalDays] || 1,
+          handoverMethod: r[colMap.handoverMethod] || "",
+          address: r[colMap.address] || "",
+          shootType: r[colMap.shootType] || "",
+          rentalTotal: r[colMap.rentalTotal] || 0,
+          securityDeposit: r[colMap.securityDeposit] || 0,
+          downpaymentPaid: r[colMap.downpaymentPaid] || 0,
+          balanceDue: r[colMap.balanceDue] || 0,
+          gcashRefNumber: r[colMap.gcashRefNumber] || "",
+          status: r[colMap.status] || "Pending Verification",
+          notes: r[colMap.notes] || "",
+          driveFolderUrl: resolvedFolderUrl,
+          id1Url: r[colMap.id1Url] || "",
+          id2Url: r[colMap.id2Url] || "",
+          authSlipUrl: r[colMap.authSlipUrl] || "",
+          billingUrl: r[colMap.billingUrl] || "",
+          selfieVideoUrl: r[colMap.selfieVideoUrl] || "",
+          receiptUrl: r[colMap.receiptUrl] || "",
+          guardianIdUrl: r[colMap.guardianIdUrl] || ""
+        };
+      });
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -530,38 +769,46 @@ function doPost(e) {
       }
 
       const colMap = getHeaderIndexMap(bookingsSheet);
-      const data = bookingsSheet.getDataRange().getValues();
+      const dataRange = bookingsSheet.getDataRange();
+      const data = dataRange.getValues();
+      const formulas = dataRange.getFormulas();
       const rows = data.slice(1);
 
-      const bookingsList = rows.map((r) => ({
-        bookingRef: r[colMap.bookingRef] || "",
-        timestamp: r[colMap.timestamp] ? Utilities.formatDate(new Date(r[colMap.timestamp]), "GMT+8", "yyyy-MM-dd HH:mm") : "",
-        customerName: r[colMap.customerName] || "",
-        contactNumber: r[colMap.contactNumber] || "",
-        socialMediaHandle: r[colMap.socialMediaHandle] || "",
-        cameraRented: r[colMap.cameraRented] || "",
-        startDate: r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "",
-        endDate: r[colMap.endDate] ? Utilities.formatDate(new Date(r[colMap.endDate]), "GMT+8", "yyyy-MM-dd") : "",
-        rentalDays: r[colMap.rentalDays] || 1,
-        handoverMethod: r[colMap.handoverMethod] || "",
-        address: r[colMap.address] || "",
-        shootType: r[colMap.shootType] || "",
-        rentalTotal: r[colMap.rentalTotal] || 0,
-        securityDeposit: r[colMap.securityDeposit] || 0,
-        downpaymentPaid: r[colMap.downpaymentPaid] || 0,
-        balanceDue: r[colMap.balanceDue] || 0,
-        gcashRefNumber: r[colMap.gcashRefNumber] || "",
-        status: r[colMap.status] || "Pending Verification",
-        notes: r[colMap.notes] || "",
-        driveFolderUrl: r[colMap.driveFolderUrl] || "",
-        id1Url: r[colMap.id1Url] || "",
-        id2Url: r[colMap.id2Url] || "",
-        authSlipUrl: r[colMap.authSlipUrl] || "",
-        billingUrl: r[colMap.billingUrl] || "",
-        selfieVideoUrl: r[colMap.selfieVideoUrl] || "",
-        receiptUrl: r[colMap.receiptUrl] || "",
-        guardianIdUrl: r[colMap.guardianIdUrl] || ""
-      }));
+      const bookingsList = rows.map((r, i) => {
+        const rawFolderVal = r[colMap.driveFolderUrl];
+        const rawFormula = (formulas[i + 1] && formulas[i + 1][colMap.driveFolderUrl]) || "";
+        const resolvedFolderUrl = (typeof extractDriveFolderUrl === "function" ? extractDriveFolderUrl(rawFolderVal, rawFormula) : "") || rawFolderVal || "";
+
+        return {
+          bookingRef: r[colMap.bookingRef] || "",
+          timestamp: r[colMap.timestamp] ? Utilities.formatDate(new Date(r[colMap.timestamp]), "GMT+8", "yyyy-MM-dd HH:mm") : "",
+          customerName: r[colMap.customerName] || "",
+          contactNumber: r[colMap.contactNumber] || "",
+          socialMediaHandle: r[colMap.socialMediaHandle] || "",
+          cameraRented: r[colMap.cameraRented] || "",
+          startDate: r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "",
+          endDate: r[colMap.endDate] ? Utilities.formatDate(new Date(r[colMap.endDate]), "GMT+8", "yyyy-MM-dd") : "",
+          rentalDays: r[colMap.rentalDays] || 1,
+          handoverMethod: r[colMap.handoverMethod] || "",
+          address: r[colMap.address] || "",
+          shootType: r[colMap.shootType] || "",
+          rentalTotal: r[colMap.rentalTotal] || 0,
+          securityDeposit: r[colMap.securityDeposit] || 0,
+          downpaymentPaid: r[colMap.downpaymentPaid] || 0,
+          balanceDue: r[colMap.balanceDue] || 0,
+          gcashRefNumber: r[colMap.gcashRefNumber] || "",
+          status: r[colMap.status] || "Pending Verification",
+          notes: r[colMap.notes] || "",
+          driveFolderUrl: resolvedFolderUrl,
+          id1Url: r[colMap.id1Url] || "",
+          id2Url: r[colMap.id2Url] || "",
+          authSlipUrl: r[colMap.authSlipUrl] || "",
+          billingUrl: r[colMap.billingUrl] || "",
+          selfieVideoUrl: r[colMap.selfieVideoUrl] || "",
+          receiptUrl: r[colMap.receiptUrl] || "",
+          guardianIdUrl: r[colMap.guardianIdUrl] || ""
+        };
+      });
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -758,18 +1005,68 @@ function doPost(e) {
       bSheet.getRange(targetRowIndex, statusCol1Indexed).setValue(newStatus);
       const currentNotes = String(currentRowData[colMap.notes] || "");
       const auditEntry = " [Status changed from \"" + currentRawStatus + "\" to \"" + newStatus + "\" by " + session.name + " on " + Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm") + "]";
-      bSheet.getRange(targetRowIndex, notesCol1Indexed).setValue(currentNotes + auditEntry);
+      const updatedNotes = typeof formatNotesText === "function" ? formatNotesText(currentNotes + auditEntry) : (currentNotes + auditEntry);
+      bSheet.getRange(targetRowIndex, notesCol1Indexed).setValue(updatedNotes);
+      const lineCount = updatedNotes.split("\n").length;
+      bSheet.setRowHeight(targetRowIndex, Math.max(32, Math.min(120, 24 + lineCount * 14)));
 
-      // Synchronize to Calendar Sync sheet (Column F / index 6)
+      // Synchronize to Calendar Sync sheet (Column F / index 6 and milestone columns 9-13)
       const cSheet = ss.getSheetByName("Calendar Sync");
       if (cSheet) {
         const cData = cSheet.getDataRange().getValues();
+        const nowIso = Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd'T'HH:mm:ssXXX");
         for (let j = 1; j < cData.length; j++) {
           if (String(cData[j][4]).trim() === targetRef) {
-            cSheet.getRange(j + 1, 6).setValue(newStatus);
+            const rowNum = j + 1;
+            cSheet.getRange(rowNum, 6).setValue(newStatus);
+
+            // Record initial milestone timestamps if currently empty
+            if (targetStage === "CONFIRMED" && !cData[j][8]) {
+              cSheet.getRange(rowNum, 9).setValue(nowIso); // Col 9: Confirmed At
+            } else if (targetStage === "PICKED_UP" && !cData[j][9]) {
+              cSheet.getRange(rowNum, 10).setValue(nowIso); // Col 10: Handover At
+            } else if (targetStage === "RETURNED" && !cData[j][10]) {
+              cSheet.getRange(rowNum, 11).setValue(nowIso); // Col 11: Completed At
+            } else if ((targetStage === "CANCELLED" || targetStage === "REJECTED") && !cData[j][11]) {
+              cSheet.getRange(rowNum, 12).setValue(nowIso); // Col 12: Cancelled At
+            }
+
+            // Append structured transition to Col 13
+            const prevTransitionLog = String(cData[j][12] || "");
+            const transitionEntry = "[Transition: \"" + currentRawStatus + "\" -> \"" + newStatus + "\" on " + Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm") + " by " + session.name + "]";
+            cSheet.getRange(rowNum, 13).setValue((prevTransitionLog ? prevTransitionLog + " | " : "") + transitionEntry);
             break;
           }
         }
+      }
+
+      // Ledger Recording: If KYC is confirmed and booking reaches Confirmed, record verified downpayment
+      if (targetStage === "CONFIRMED" && body.kycConfirmed === true) {
+        try {
+          recordFinancialAuditTransaction({
+            bookingRef: targetRef,
+            customerName: String(currentRowData[colMap.customerName] || ""),
+            category: "Downpayment Verification",
+            amount: Number(currentRowData[colMap.downpaymentPaid] || 300),
+            customerPaymentTimestamp: currentRowData[colMap.timestamp] ? Utilities.formatDate(new Date(currentRowData[colMap.timestamp]), "Asia/Manila", "yyyy-MM-dd HH:mm") : "",
+            paymentVerificationTimestamp: Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm"),
+            bookingConfirmationTimestamp: Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm"),
+            gcashRef: String(currentRowData[colMap.gcashRefNumber] || ""),
+            status: "Verified Received",
+            auditingAdmin: session.name,
+            notes: "Downpayment verified upon KYC inspection and approval.",
+            preventDuplicateCategory: true
+          });
+        } catch (auditErr) {
+          Logger.log("Audit ledger recording warning: " + auditErr.toString());
+        }
+      }
+
+      // Google Calendar synchronization (if configured)
+      try {
+        syncBookingToGoogleCalendar(targetRef, targetStage);
+      } catch (calErr) {
+        Logger.log("Calendar sync warning: " + calErr.toString());
       }
 
       return ContentService.createTextOutput(JSON.stringify({
@@ -905,34 +1202,27 @@ function doPost(e) {
       const rootFolder = getOrCreateRootFolder();
       const bookingFolder = getOrCreateBookingFolder(rootFolder, targetRef, customerName);
 
-      // Save any updated documents
+      // Save all requirements into customer Drive folder (sheet only retains the Customer Documents Folder link)
       if (body.id1File) {
-        const url = saveBase64ToDrive(bookingFolder, body.id1File, "01_Primary_Gov_ID");
-        bSheet.getRange(targetRow, colMap.id1Url + 1).setValue(url);
+        saveBase64ToDrive(bookingFolder, body.id1File, "01_Primary_Gov_ID");
       }
       if (body.id2File) {
-        const url = saveBase64ToDrive(bookingFolder, body.id2File, body.isStudentExemption ? "02_Student_ID_COR" : "02_Secondary_ID");
-        bSheet.getRange(targetRow, colMap.id2Url + 1).setValue(url);
+        saveBase64ToDrive(bookingFolder, body.id2File, body.isStudentExemption ? "02_Student_ID_COR" : "02_Secondary_ID");
       }
       if (body.authorizationSlipFile) {
-        const url = saveBase64ToDrive(bookingFolder, body.authorizationSlipFile, "03_Handwritten_Auth_Slip");
-        bSheet.getRange(targetRow, colMap.authSlipUrl + 1).setValue(url);
+        saveBase64ToDrive(bookingFolder, body.authorizationSlipFile, "03_Handwritten_Auth_Slip");
       }
       if (body.deliveryReceiptsFile) {
-        const url = saveBase64ToDrive(bookingFolder, body.deliveryReceiptsFile, "04_Proof_Of_Address");
-        bSheet.getRange(targetRow, colMap.billingUrl + 1).setValue(url);
+        saveBase64ToDrive(bookingFolder, body.deliveryReceiptsFile, "04_Proof_Of_Address");
       }
       if (body.selfieFile) {
-        const url = saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification");
-        bSheet.getRange(targetRow, colMap.selfieVideoUrl + 1).setValue(url);
+        saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification");
       }
       if (body.receiptFile) {
-        const url = saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
-        bSheet.getRange(targetRow, colMap.receiptUrl + 1).setValue(url);
+        saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
       }
       if (body.contact1IdFile) {
-        const url = saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Parent_Guardian_ID");
-        bSheet.getRange(targetRow, colMap.guardianIdUrl + 1).setValue(url);
+        saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Parent_Guardian_ID");
       }
 
       if (body.id1BackFile) {
@@ -951,8 +1241,10 @@ function doPost(e) {
         saveBase64ToDrive(bookingFolder, body.contact2IdFile, "08_Emergency_Contact2_ID");
       }
 
-      // Ensure Customer Documents Folder link is populated
-      bSheet.getRange(targetRow, colMap.driveFolderUrl + 1).setValue(bookingFolder.getUrl());
+      // Ensure Customer Documents Folder link is populated with actual folder name
+      const customerNameVal = bSheet.getRange(targetRow, colMap.customerName + 1).getValue();
+      const folderName = (bookingFolder && typeof bookingFolder.getName === "function" && bookingFolder.getName()) || (typeof getActualDriveFolderName === "function" ? getActualDriveFolderName(bookingFolder.getUrl(), customerNameVal) : customerNameVal) || "Customer Documents";
+      bSheet.getRange(targetRow, colMap.driveFolderUrl + 1).setFormula('=HYPERLINK("' + bookingFolder.getUrl() + '", "' + String(folderName).replace(/"/g, '""') + '")');
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -1126,18 +1418,19 @@ function doPost(e) {
         bookingsSheet.getRange(existingRowIndex, colMap.gcashRefNumber + 1).setValue(body.gcashRefNumber);
         bookingsSheet.getRange(existingRowIndex, colMap.status + 1).setValue("Deposit Paid");
         if (body.notes) {
-          bookingsSheet.getRange(existingRowIndex, colMap.notes + 1).setValue(body.notes);
+          const formattedNote = typeof formatNotesText === "function" ? formatNotesText(body.notes) : body.notes;
+          bookingsSheet.getRange(existingRowIndex, colMap.notes + 1).setValue(formattedNote);
+          const lineCount = formattedNote.split("\n").length;
+          bookingsSheet.setRowHeight(existingRowIndex, Math.max(32, Math.min(120, 24 + lineCount * 14)));
         }
-        bookingsSheet.getRange(existingRowIndex, colMap.driveFolderUrl + 1).setValue(driveFolderUrl);
-        if (id1Url) bookingsSheet.getRange(existingRowIndex, colMap.id1Url + 1).setValue(id1Url);
-        if (id2Url) bookingsSheet.getRange(existingRowIndex, colMap.id2Url + 1).setValue(id2Url);
-        if (authSlipUrl) bookingsSheet.getRange(existingRowIndex, colMap.authSlipUrl + 1).setValue(authSlipUrl);
-        if (billingUrl) bookingsSheet.getRange(existingRowIndex, colMap.billingUrl + 1).setValue(billingUrl);
-        if (selfieVideoUrl) bookingsSheet.getRange(existingRowIndex, colMap.selfieVideoUrl + 1).setValue(selfieVideoUrl);
-        if (receiptUrl) bookingsSheet.getRange(existingRowIndex, colMap.receiptUrl + 1).setValue(receiptUrl);
-        if (guardianIdUrl) bookingsSheet.getRange(existingRowIndex, colMap.guardianIdUrl + 1).setValue(guardianIdUrl);
+        const folderDisplayName = (typeof getActualDriveFolderName === "function" ? getActualDriveFolderName(driveFolderUrl, body.customerName) : body.customerName) || "Customer Documents";
+        bookingsSheet.getRange(existingRowIndex, colMap.driveFolderUrl + 1).setFormula('=HYPERLINK("' + driveFolderUrl + '", "' + String(folderDisplayName).replace(/"/g, '""') + '")');
       } else {
-        // Append New Row with 27 Columns: Column 20 is the dedicated Customer Documents Folder link!
+        const formattedNote = typeof formatNotesText === "function" ? formatNotesText(body.notes || "") : (body.notes || "");
+        const folderDisplayName = (typeof getActualDriveFolderName === "function" ? getActualDriveFolderName(driveFolderUrl, body.customerName) : body.customerName) || "Customer Documents";
+        const folderFormula = '=HYPERLINK("' + driveFolderUrl + '", "' + String(folderDisplayName).replace(/"/g, '""') + '")';
+
+        // Append New Row with 27 Columns: Column 20 is the ONLY Google Drive link (Customer Documents Folder)
         bookingsSheet.appendRow([
           body.bookingRef,
           new Date(),
@@ -1157,16 +1450,22 @@ function doPost(e) {
           body.balanceDue,
           body.gcashRefNumber,
           "Deposit Paid",
-          body.notes || "",
-          driveFolderUrl, // ⭐ Col 20: Dedicated Customer Documents Folder
-          id1Url,
-          id2Url,
-          authSlipUrl,
-          billingUrl,
-          selfieVideoUrl,
-          receiptUrl,
-          guardianIdUrl
+          formattedNote,
+          folderFormula, // ⭐ Col 20: Dedicated Customer Documents Folder Hyperlink (only Drive link)
+          "", // Col 21: Primary ID URL (accessible in Drive folder)
+          "", // Col 22: Secondary ID URL (accessible in Drive folder)
+          "", // Col 23: Handwritten Auth Slip URL (accessible in Drive folder)
+          "", // Col 24: Proof of Address URL (accessible in Drive folder)
+          "", // Col 25: Selfie Verification URL (accessible in Drive folder)
+          "", // Col 26: Payment Receipt URL (accessible in Drive folder)
+          ""  // Col 27: Guardian ID URL (accessible in Drive folder)
         ]);
+
+        const newRowIndex = bookingsSheet.getLastRow();
+        const lineCount = formattedNote.split("\n").length;
+        bookingsSheet.setRowHeight(newRowIndex, Math.max(32, Math.min(120, 24 + lineCount * 14)));
+        bookingsSheet.getRange(newRowIndex, 20).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+        bookingsSheet.getRange(newRowIndex, 21, 1, 7).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
       }
 
       // Append / Update Calendar Sync Sheet
@@ -1217,12 +1516,750 @@ function doPost(e) {
     } finally {
       try {
         lock.releaseLock();
-      } catch (lockReleaseErr) {}
+      } catch (lockReleaseErr) { }
     }
 
   } catch (err) {
     Logger.log("doPost Error: " + err.toString());
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 9. RESILIENT MONTHLY ARCHIVES & RECOVERY ENGINE (STAGE 3)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Calculates next sequential archive version with occupied tab name resolution.
+ */
+function calculateNextArchiveVersion(ss, yearMonth) {
+  const baseName = "Archive_" + yearMonth;
+  const regex = new RegExp("^" + baseName + "_v(\\d+)$");
+  let maxV = 0;
+
+  const sheets = ss.getSheets();
+  sheets.forEach(s => {
+    const m = regex.exec(s.getName());
+    if (m) {
+      const v = parseInt(m[1], 10);
+      if (v > maxV) maxV = v;
+    }
+  });
+
+  let vNext = maxV + 1;
+  while (ss.getSheetByName(baseName + "_v" + vNext)) {
+    vNext++;
+  }
+  return vNext;
+}
+
+/**
+ * Generates initial canonical monthly archive snapshot (v1) with staging tab and fingerprint.
+ */
+function generateMonthlyArchive(yearMonth, adminName) {
+  const cleanYM = String(yearMonth || "").trim();
+  if (!/^(\d{4})-(0[1-9]|1[0-2])$/.test(cleanYM)) {
+    throw new Error("Invalid yearMonth format. Expected YYYY-MM (e.g. 2026-10).");
+  }
+
+  return withScriptLock(function () {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const canonicalName = "Archive_" + cleanYM;
+    if (ss.getSheetByName(canonicalName)) {
+      throw new Error("Canonical archive " + canonicalName + " already exists. Use adminReviseMonthlyArchive to revise.");
+    }
+
+    const stagingName = canonicalName + "_staging";
+    let stagingSheet = ss.getSheetByName(stagingName);
+    if (stagingSheet) {
+      ss.deleteSheet(stagingSheet);
+    }
+    stagingSheet = ss.insertSheet(stagingName);
+
+    const bSheet = ss.getSheetByName("Bookings");
+    if (!bSheet) throw new Error("Bookings sheet not found.");
+
+    const bData = bSheet.getDataRange().getValues();
+    const headers = bData[0];
+    const dataRows = bData.slice(1);
+
+    const colMap = getHeaderIndexMap(bSheet);
+    const matchedRows = dataRows.filter(r => {
+      const startVal = r[colMap.startDate];
+      if (!startVal) return false;
+      const startStr = startVal instanceof Date ? Utilities.formatDate(startVal, "Asia/Manila", "yyyy-MM") : String(startVal).trim().substring(0, 7);
+      return startStr === cleanYM;
+    });
+
+    ensureColumns(stagingSheet, 27);
+    stagingSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    if (matchedRows.length > 0) {
+      ensureRows(stagingSheet, matchedRows.length + 1);
+      stagingSheet.getRange(2, 1, matchedRows.length, headers.length).setValues(matchedRows);
+      stagingSheet.getRange(2, 13, matchedRows.length, 4).setNumberFormat('"₱"#,##0').setHorizontalAlignment("right");
+    }
+
+    const fingerprint = computeDeterministicArchiveFingerprint(matchedRows);
+
+    stagingSheet.setName(canonicalName);
+    stagingSheet.setTabColor(INK);
+    stagingSheet.setFrozenRows(1);
+
+    stagingSheet.getRange(1, 1, 1, headers.length)
+      .setBackground(LAVENDER)
+      .setFontFamily("Poppins").setFontWeight("bold").setFontSize(10).setFontColor(INK)
+      .setVerticalAlignment("middle").setHorizontalAlignment("center");
+
+    logArchiveAuditEvent(ss, {
+      yearMonth: cleanYM,
+      action: "FINALIZED",
+      version: "v1",
+      bookingCount: matchedRows.length,
+      fingerprint: fingerprint,
+      admin: adminName || "Partner 1 (Lead Operations)",
+      notes: "Initial monthly archive finalized."
+    });
+
+    return {
+      status: "success",
+      canonicalTab: canonicalName,
+      version: "v1",
+      bookingCount: matchedRows.length,
+      fingerprint: fingerprint
+    };
+  });
+}
+
+/**
+ * Revises an existing canonical monthly archive by preserving prior snapshot as _v{N}.
+ */
+function adminReviseMonthlyArchive(yearMonth, revisionReason, adminName) {
+  const cleanYM = String(yearMonth || "").trim();
+  if (!/^(\d{4})-(0[1-9]|1[0-2])$/.test(cleanYM)) {
+    throw new Error("Invalid yearMonth format. Expected YYYY-MM.");
+  }
+  if (!revisionReason) {
+    throw new Error("A specific revisionReason is required to revise a finalized archive.");
+  }
+
+  return withScriptLock(function () {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const canonicalName = "Archive_" + cleanYM;
+    const canonicalSheet = ss.getSheetByName(canonicalName);
+    if (!canonicalSheet) {
+      return generateMonthlyArchive(cleanYM, adminName);
+    }
+
+    const vPrev = calculateNextArchiveVersion(ss, cleanYM);
+    const vNext = vPrev + 1;
+    const backupTabName = canonicalName + "_v" + vPrev;
+
+    if (ss.getSheetByName(backupTabName)) {
+      throw new Error("Snapshot tab " + backupTabName + " already exists. Halting to prevent overwrite.");
+    }
+
+    canonicalSheet.setName(backupTabName);
+    canonicalSheet.setTabColor(MUTED);
+
+    const stagingName = canonicalName + "_staging";
+    let stagingSheet = ss.getSheetByName(stagingName);
+    if (stagingSheet) ss.deleteSheet(stagingSheet);
+    stagingSheet = ss.insertSheet(stagingName);
+
+    const bSheet = ss.getSheetByName("Bookings");
+    if (!bSheet) throw new Error("Bookings sheet not found.");
+    const bData = bSheet.getDataRange().getValues();
+    const headers = bData[0];
+    const dataRows = bData.slice(1);
+
+    const colMap = getHeaderIndexMap(bSheet);
+    const matchedRows = dataRows.filter(r => {
+      const startVal = r[colMap.startDate];
+      if (!startVal) return false;
+      const startStr = startVal instanceof Date ? Utilities.formatDate(startVal, "Asia/Manila", "yyyy-MM") : String(startVal).trim().substring(0, 7);
+      return startStr === cleanYM;
+    });
+
+    ensureColumns(stagingSheet, 27);
+    stagingSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    if (matchedRows.length > 0) {
+      ensureRows(stagingSheet, matchedRows.length + 1);
+      stagingSheet.getRange(2, 1, matchedRows.length, headers.length).setValues(matchedRows);
+      stagingSheet.getRange(2, 13, matchedRows.length, 4).setNumberFormat('"₱"#,##0').setHorizontalAlignment("right");
+    }
+
+    const fingerprint = computeDeterministicArchiveFingerprint(matchedRows);
+
+    stagingSheet.setName(canonicalName);
+    stagingSheet.setTabColor(INK);
+    stagingSheet.setFrozenRows(1);
+    stagingSheet.getRange(1, 1, 1, headers.length)
+      .setBackground(LAVENDER)
+      .setFontFamily("Poppins").setFontWeight("bold").setFontSize(10).setFontColor(INK)
+      .setVerticalAlignment("middle").setHorizontalAlignment("center");
+
+    logArchiveAuditEvent(ss, {
+      yearMonth: cleanYM,
+      action: "REVISED",
+      version: "v" + vNext,
+      priorSnapshot: backupTabName,
+      bookingCount: matchedRows.length,
+      fingerprint: fingerprint,
+      admin: adminName || "Partner 1 (Lead Operations)",
+      notes: revisionReason
+    });
+
+    return {
+      status: "success",
+      canonicalTab: canonicalName,
+      version: "v" + vNext,
+      preservedSnapshot: backupTabName,
+      bookingCount: matchedRows.length,
+      fingerprint: fingerprint
+    };
+  });
+}
+
+/**
+ * Evidence-based recovery engine for monthly archives.
+ * Validates staging, restores from verified historical snapshot, and supports zero-booking months.
+ */
+function recoverMonthlyArchive(yearMonth) {
+  const cleanYM = String(yearMonth || "").trim();
+  if (!/^(\d{4})-(0[1-9]|1[0-2])$/.test(cleanYM)) {
+    throw new Error("Invalid yearMonth format.");
+  }
+
+  return withScriptLock(function () {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const canonicalName = "Archive_" + cleanYM;
+    const stagingName = canonicalName + "_staging";
+    const stagingSheet = ss.getSheetByName(stagingName);
+    let canonicalSheet = ss.getSheetByName(canonicalName);
+
+    if (stagingSheet) {
+      const rows = stagingSheet.getLastRow();
+      if (rows >= 1 && stagingSheet.getLastColumn() >= 27) {
+        if (!canonicalSheet) {
+          stagingSheet.setName(canonicalName);
+          stagingSheet.setTabColor(INK);
+          logArchiveAuditEvent(ss, {
+            yearMonth: cleanYM,
+            action: "RECOVERED_FROM_STAGING",
+            version: "recovered",
+            bookingCount: Math.max(0, rows - 1),
+            notes: "Promoted orphan staging sheet to canonical."
+          });
+          return { status: "success", recoveredFrom: "staging", canonicalTab: canonicalName };
+        } else {
+          if (canonicalSheet.getLastRow() >= 1 && canonicalSheet.getLastColumn() >= 27) {
+            ss.deleteSheet(stagingSheet);
+            return { status: "success", message: "Redundant staging tab removed; canonical archive is intact." };
+          }
+        }
+      }
+    }
+
+    if (canonicalSheet && canonicalSheet.getLastRow() >= 1 && canonicalSheet.getLastColumn() >= 27) {
+      return { status: "success", message: "Canonical archive is already healthy." };
+    }
+
+    const regex = new RegExp("^" + canonicalName + "_v(\\d+)$");
+    let bestSnapshot = null;
+    let maxV = -1;
+
+    ss.getSheets().forEach(s => {
+      const m = regex.exec(s.getName());
+      if (m) {
+        const v = parseInt(m[1], 10);
+        if (v > maxV && s.getLastRow() >= 1 && s.getLastColumn() >= 27) {
+          maxV = v;
+          bestSnapshot = s;
+        }
+      }
+    });
+
+    if (bestSnapshot) {
+      if (canonicalSheet) ss.deleteSheet(canonicalSheet);
+      const restored = bestSnapshot.copyTo(ss);
+      restored.setName(canonicalName);
+      restored.setTabColor(INK);
+      logArchiveAuditEvent(ss, {
+        yearMonth: cleanYM,
+        action: "RECOVERED_FROM_SNAPSHOT",
+        version: "v" + maxV,
+        notes: "Restored from verified snapshot " + bestSnapshot.getName()
+      });
+      return { status: "success", recoveredFrom: bestSnapshot.getName(), canonicalTab: canonicalName };
+    }
+
+    logArchiveAuditEvent(ss, {
+      yearMonth: cleanYM,
+      action: "RECOVERY_HALTED",
+      version: "none",
+      notes: "No valid staging or historical snapshot found. Flagged NEEDS_ADMIN_REVIEW."
+    });
+    return { status: "error", code: "NEEDS_ADMIN_REVIEW", message: "Could not safely recover archive. Requires manual admin inspection." };
+  });
+}
+
+function logArchiveAuditEvent(ss, entry) {
+  let logSheet = ss.getSheetByName("Archive_Audit_Log");
+  if (!logSheet) {
+    logSheet = ss.insertSheet("Archive_Audit_Log");
+    logSheet.appendRow(["Timestamp", "Year-Month", "Action", "Version", "Preserved Tab", "Booking Count", "Fingerprint", "Admin", "Notes"]);
+    ensureColumns(logSheet, 9);
+    logSheet.setTabColor(MUTED);
+  }
+  logSheet.appendRow([
+    Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm:ss"),
+    entry.yearMonth || "",
+    entry.action || "",
+    entry.version || "",
+    entry.priorSnapshot || "",
+    entry.bookingCount || 0,
+    entry.fingerprint || "",
+    entry.admin || "Admin",
+    entry.notes || ""
+  ]);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 10. GOOGLE CALENDAR TWO-WAY INTEGRATION (STAGE 4)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Synchronizes booking milestones to secondary Google Calendar ("PackAndFilm Rentals").
+ * Implements non-destructive Tier 1 cancellation and strict privacy minimization.
+ */
+function syncBookingToGoogleCalendar(bookingRef, targetStage) {
+  const props = PropertiesService.getScriptProperties();
+  const calendarId = props.getProperty("PACKANDFILM_CALENDAR_ID");
+  if (!calendarId) {
+    Logger.log("Google Calendar sync skipped: PACKANDFILM_CALENDAR_ID not configured.");
+    return { status: "skipped", reason: "CALENDAR_NOT_CONFIGURED" };
+  }
+
+  const cal = CalendarApp.getCalendarById(calendarId);
+  if (!cal) {
+    Logger.log("Google Calendar sync error: Calendar ID not accessible: " + calendarId);
+    return { status: "error", message: "Calendar not found or inaccessible" };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const bSheet = ss.getSheetByName("Bookings");
+  const cSheet = ss.getSheetByName("Calendar Sync");
+  if (!bSheet || !cSheet) return { status: "error", message: "Required sheets missing" };
+
+  const colMap = getHeaderIndexMap(bSheet);
+  const bData = bSheet.getDataRange().getValues();
+  let bookingRow = null;
+  for (let i = 1; i < bData.length; i++) {
+    if (String(bData[i][colMap.bookingRef]).trim() === bookingRef) {
+      bookingRow = bData[i];
+      break;
+    }
+  }
+  if (!bookingRow) return { status: "error", message: "Booking not found" };
+
+  const cData = cSheet.getDataRange().getValues();
+  let cRowIdx = -1;
+  let pickupEventId = "";
+  let returnEventId = "";
+  for (let j = 1; j < cData.length; j++) {
+    if (String(cData[j][4]).trim() === bookingRef) {
+      cRowIdx = j + 1;
+      pickupEventId = String(cData[j][6] || "").trim(); // Col 7
+      returnEventId = String(cData[j][7] || "").trim(); // Col 8
+      break;
+    }
+  }
+
+  const startStr = bookingRow[colMap.startDate] instanceof Date
+    ? Utilities.formatDate(bookingRow[colMap.startDate], "Asia/Manila", "yyyy-MM-dd")
+    : String(bookingRow[colMap.startDate] || "").trim();
+  const endStr = bookingRow[colMap.endDate] instanceof Date
+    ? Utilities.formatDate(bookingRow[colMap.endDate], "Asia/Manila", "yyyy-MM-dd")
+    : String(bookingRow[colMap.endDate] || "").trim();
+
+  const startDateObj = parseManilaDateOnly(startStr);
+  const endDateObj = parseManilaDateOnly(endStr);
+  if (!startDateObj || !endDateObj) {
+    return { status: "error", message: "Invalid rental dates" };
+  }
+
+  const cameraRented = String(bookingRow[colMap.cameraRented] || "DJI Osmo Pocket 3");
+  const handoverMethod = String(bookingRow[colMap.handoverMethod] || "Meetup / Pasig Hub");
+
+  function buildDescription(type) {
+    return [
+      "PackAndFilm Equipment Reservation",
+      "Booking Ref: " + bookingRef,
+      "Camera: " + cameraRented,
+      "Handover Method: " + handoverMethod,
+      "Operating Hours: 8:00 AM – 8:00 PM",
+      "Standard Inspection: Check lens, gimbal alignment, battery health, and SD storage.",
+      "",
+      "[SYSTEM:PackAndFilm | REF:" + bookingRef + " | TYPE:" + type + "]"
+    ].join("\n");
+  }
+
+  // ── CONFIRMED: Create or update all-day events ──
+  if (targetStage === "CONFIRMED") {
+    let pEvent = null;
+    let rEvent = null;
+
+    if (pickupEventId) {
+      try { pEvent = cal.getEventById(pickupEventId); } catch (e) { }
+    }
+    if (!pEvent) {
+      pEvent = cal.createAllDayEvent("Rental Start | " + bookingRef, startDateObj);
+      pEvent.setTag("system", "PackAndFilm");
+      pEvent.setTag("bookingRef", bookingRef);
+      pEvent.setTag("eventType", "pickup");
+      pEvent.setTag("schemaVersion", "1.0");
+      pEvent.setDescription(buildDescription("pickup"));
+      pEvent.addPopupReminder(1440);
+      pEvent.addEmailReminder(1440);
+      if (cRowIdx !== -1) {
+        cSheet.getRange(cRowIdx, 7).setValue(pEvent.getId());
+      }
+    } else {
+      pEvent.setTitle("Rental Start | " + bookingRef);
+      pEvent.setDescription(buildDescription("pickup"));
+    }
+
+    if (returnEventId) {
+      try { rEvent = cal.getEventById(returnEventId); } catch (e) { }
+    }
+    if (!rEvent) {
+      rEvent = cal.createAllDayEvent("Camera Return | " + bookingRef, endDateObj);
+      rEvent.setTag("system", "PackAndFilm");
+      rEvent.setTag("bookingRef", bookingRef);
+      rEvent.setTag("eventType", "return");
+      rEvent.setTag("schemaVersion", "1.0");
+      rEvent.setDescription(buildDescription("return"));
+      rEvent.addPopupReminder(1440);
+      rEvent.addEmailReminder(1440);
+      if (cRowIdx !== -1) {
+        cSheet.getRange(cRowIdx, 8).setValue(rEvent.getId());
+      }
+    } else {
+      rEvent.setTitle("Camera Return | " + bookingRef);
+      rEvent.setDescription(buildDescription("return"));
+    }
+
+    return { status: "success", action: "EVENTS_CREATED_OR_UPDATED" };
+  }
+
+  // ── CANCELLED / REJECTED: Tier 1 Routine Cancellation (Non-Destructive) ──
+  if (targetStage === "CANCELLED" || targetStage === "REJECTED") {
+    let cancelledCount = 0;
+    [pickupEventId, returnEventId].forEach(evtId => {
+      if (!evtId) return;
+      try {
+        const evt = cal.getEventById(evtId);
+        if (evt) {
+          const sysTag = evt.getTag("system");
+          const refTag = evt.getTag("bookingRef");
+          if (sysTag === "PackAndFilm" && refTag === bookingRef) {
+            const currentTitle = evt.getTitle();
+            if (!currentTitle.startsWith("[CANCELLED]")) {
+              evt.setTitle("[CANCELLED] " + currentTitle);
+            }
+            evt.removeAllReminders();
+            cancelledCount++;
+          } else {
+            logCalendarReconciliation(ss, {
+              bookingRef: bookingRef,
+              eventId: evtId,
+              issue: "Mismatched ownership tags during routine cancellation. Event left untouched."
+            });
+          }
+        }
+      } catch (err) {
+        Logger.log("Calendar cancellation warning: " + err.toString());
+      }
+    });
+
+    return { status: "success", action: "ROUTINE_CANCELLATION_APPLIED", eventsCancelled: cancelledCount };
+  }
+
+  return { status: "noop" };
+}
+
+/**
+ * Tier 3: Explicit Administrative Purge of Cancelled Calendar Events.
+ * Requires ALL 6 criteria to pass before deleting.
+ */
+function adminPurgeCancelledCalendarEvent(bookingRef) {
+  const props = PropertiesService.getScriptProperties();
+  const calendarId = props.getProperty("PACKANDFILM_CALENDAR_ID");
+  if (!calendarId) throw new Error("PACKANDFILM_CALENDAR_ID not configured.");
+
+  const cal = CalendarApp.getCalendarById(calendarId);
+  if (!cal) throw new Error("Calendar not accessible.");
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const bSheet = ss.getSheetByName("Bookings");
+  const cSheet = ss.getSheetByName("Calendar Sync");
+  if (!bSheet || !cSheet) throw new Error("Sheets missing.");
+
+  const colMap = getHeaderIndexMap(bSheet);
+  const bData = bSheet.getDataRange().getValues();
+  let bookingStatus = "";
+  for (let i = 1; i < bData.length; i++) {
+    if (String(bData[i][colMap.bookingRef]).trim() === bookingRef) {
+      bookingStatus = String(bData[i][colMap.status] || "").trim().toLowerCase();
+      break;
+    }
+  }
+
+  if (!bookingStatus.includes("cancel") && !bookingStatus.includes("reject")) {
+    throw new Error("Cannot purge: Booking " + bookingRef + " is not Cancelled or Rejected (Current: " + bookingStatus + ").");
+  }
+
+  const cData = cSheet.getDataRange().getValues();
+  let pickupEventId = "";
+  let returnEventId = "";
+  let cRowIdx = -1;
+  for (let j = 1; j < cData.length; j++) {
+    if (String(cData[j][4]).trim() === bookingRef) {
+      cRowIdx = j + 1;
+      pickupEventId = String(cData[j][6] || "").trim();
+      returnEventId = String(cData[j][7] || "").trim();
+      break;
+    }
+  }
+
+  let purgedCount = 0;
+  [pickupEventId, returnEventId].forEach(evtId => {
+    if (!evtId) return;
+    try {
+      const evt = cal.getEventById(evtId);
+      if (evt) {
+        const sysTag = evt.getTag("system");
+        const refTag = evt.getTag("bookingRef");
+        const desc = evt.getDescription() || "";
+        const descRegex = new RegExp("\\[SYSTEM:PackAndFilm \\| REF:" + bookingRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\| TYPE:(pickup|return)\\]");
+
+        if (sysTag === "PackAndFilm" && refTag === bookingRef && descRegex.test(desc)) {
+          evt.deleteEvent();
+          purgedCount++;
+        } else {
+          logCalendarReconciliation(ss, {
+            bookingRef: bookingRef,
+            eventId: evtId,
+            issue: "Purge aborted: Criteria failed (tags or description markers did not match)."
+          });
+        }
+      }
+    } catch (err) {
+      Logger.log("Purge error: " + err.toString());
+    }
+  });
+
+  if (cRowIdx !== -1) {
+    cSheet.getRange(cRowIdx, 7).setValue("");
+    cSheet.getRange(cRowIdx, 8).setValue("");
+  }
+
+  return { status: "success", purgedEvents: purgedCount };
+}
+
+function logCalendarReconciliation(ss, entry) {
+  let logSheet = ss.getSheetByName("Calendar_Reconciliation_Log");
+  if (!logSheet) {
+    logSheet = ss.insertSheet("Calendar_Reconciliation_Log");
+    logSheet.appendRow(["Timestamp", "Booking Ref", "Event ID", "Issue Description"]);
+    ensureColumns(logSheet, 4);
+    logSheet.setTabColor(MUTED);
+  }
+  logSheet.appendRow([
+    Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm:ss"),
+    entry.bookingRef || "",
+    entry.eventId || "",
+    entry.issue || ""
+  ]);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 11. DAILY OPERATIONAL DIGEST & RECONCILIATION (STAGE 5)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Daily operational digest running targeting ~7:30 AM Asia/Manila.
+ * Thread-aware reconciliation prevents duplicate email sends.
+ */
+function dailyRentalNotificationDigest() {
+  const todayStr = Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd");
+  const digestId = "PNF-DIGEST-" + todayStr;
+  const props = PropertiesService.getScriptProperties();
+
+  const sentKey = "DIGEST_SENT_" + todayStr;
+  const pendingKey = "DIGEST_PENDING_" + todayStr;
+  const ambiguousKey = "DIGEST_AMBIGUOUS_" + todayStr;
+
+  if (props.getProperty(sentKey)) {
+    Logger.log("Daily digest already sent for today: " + todayStr);
+    return { status: "skipped", reason: "ALREADY_SENT" };
+  }
+
+  const pendingVal = props.getProperty(pendingKey);
+  if (pendingVal) {
+    const elapsedMinutes = (new Date().getTime() - Number(pendingVal)) / 60000;
+    if (elapsedMinutes < 30) {
+      Logger.log("Daily digest send currently in flight (" + Math.round(elapsedMinutes) + " mins ago).");
+      return { status: "skipped", reason: "SEND_IN_PROGRESS" };
+    }
+
+    Logger.log("Pending lock expired or state ambiguous. Inspecting Gmail Sent box...");
+    try {
+      const threads = GmailApp.search('subject:"[' + digestId + ']" in:sent');
+      let matchingSent = false;
+      for (let t = 0; t < threads.length; t++) {
+        const msgs = threads[t].getMessages();
+        for (let m = 0; m < msgs.length; m++) {
+          const s = msgs[m].getSubject();
+          if (s.includes(digestId)) {
+            matchingSent = true;
+            break;
+          }
+        }
+        if (matchingSent) break;
+      }
+
+      if (matchingSent) {
+        props.setProperty(sentKey, String(new Date().getTime()));
+        props.deleteProperty(pendingKey);
+        props.deleteProperty(ambiguousKey);
+        logDigestExecution("RECONCILED_FROM_GMAIL", "Confirmed existing sent digest via thread inspection; duplicate skipped.");
+        return { status: "reconciled", message: "Existing sent digest verified; duplicate suppressed." };
+      } else {
+        props.setProperty(ambiguousKey, String(new Date().getTime()));
+        logDigestExecution("DELIVERY_STATE_AMBIGUOUS_RECONCILIATION_REQUIRED", "Gmail search returned 0 threads for expired lock; resending halted to prevent duplicate.");
+        return { status: "ambiguous", message: "Delivery state ambiguous. Requires admin confirmation before resend." };
+      }
+    } catch (searchErr) {
+      props.setProperty(ambiguousKey, String(new Date().getTime()));
+      logDigestExecution("DELIVERY_STATE_AMBIGUOUS_RECONCILIATION_REQUIRED", "Gmail search API error: " + searchErr.toString());
+      return { status: "ambiguous", message: "Search API error; resend halted." };
+    }
+  }
+
+  props.setProperty(pendingKey, String(new Date().getTime()));
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const bSheet = ss.getSheetByName("Bookings");
+    if (!bSheet) throw new Error("Bookings sheet not found");
+
+    const colMap = getHeaderIndexMap(bSheet);
+    const bData = bSheet.getDataRange().getValues().slice(1);
+
+    const pickupsToday = [];
+    const returnsToday = [];
+    const overdueRentals = [];
+
+    bData.forEach(r => {
+      const ref = String(r[colMap.bookingRef] || "");
+      const customer = String(r[colMap.customerName] || "");
+      const cam = String(r[colMap.cameraRented] || "");
+      const status = String(r[colMap.status] || "");
+      const sDate = r[colMap.startDate] instanceof Date ? Utilities.formatDate(r[colMap.startDate], "Asia/Manila", "yyyy-MM-dd") : String(r[colMap.startDate] || "").trim();
+      const eDate = r[colMap.endDate] instanceof Date ? Utilities.formatDate(r[colMap.endDate], "Asia/Manila", "yyyy-MM-dd") : String(r[colMap.endDate] || "").trim();
+
+      if (status === "Confirmed" && sDate === todayStr) {
+        pickupsToday.push({ ref: ref, customer: customer, camera: cam });
+      }
+      if (status === "Active Rental" && eDate === todayStr) {
+        returnsToday.push({ ref: ref, customer: customer, camera: cam });
+      }
+      if (status === "Active Rental" && eDate < todayStr && eDate !== "") {
+        overdueRentals.push({ ref: ref, customer: customer, camera: cam, returnDate: eDate });
+      }
+    });
+
+    const recipient = props.getProperty("NOTIFICATION_EMAIL") || Session.getActiveUser().getEmail() || "packandfilm.ops@gmail.com";
+    const subject = "PackAndFilm Daily Operational Digest [" + digestId + "]";
+
+    const bodyLines = [
+      "PackAndFilm Daily Operational Digest",
+      "Date: " + todayStr + " (Asia/Manila)",
+      "========================================",
+      "",
+      "📸 EQUIPMENT PICKUPS SCHEDULED TODAY (" + pickupsToday.length + "):",
+      pickupsToday.length === 0 ? "  • None scheduled today" : pickupsToday.map(p => "  • " + p.ref + " - " + p.customer + " (" + p.camera + ")").join("\n"),
+      "",
+      "🔄 EQUIPMENT RETURNS DUE TODAY (" + returnsToday.length + "):",
+      returnsToday.length === 0 ? "  • None due today" : returnsToday.map(r => "  • " + r.ref + " - " + r.customer + " (" + r.camera + ") - Deadline 8:00 PM").join("\n"),
+      "",
+      "⚠️ OVERDUE RENTALS REQUIRING ATTENTION (" + overdueRentals.length + "):",
+      overdueRentals.length === 0 ? "  • All active rentals are on schedule" : overdueRentals.map(o => "  • " + o.ref + " - " + o.customer + " (" + o.camera + ") - Due: " + o.returnDate).join("\n"),
+      "",
+      "========================================",
+      "PackAndFilm Automated Operations System",
+      "<!-- DIGEST_ID: " + digestId + " -->"
+    ];
+
+    MailApp.sendEmail({
+      to: recipient,
+      subject: subject,
+      body: bodyLines.join("\n")
+    });
+
+    props.setProperty(sentKey, String(new Date().getTime()));
+    props.deleteProperty(pendingKey);
+    props.deleteProperty(ambiguousKey);
+
+    logDigestExecution("SENT", "Digest successfully emailed to " + recipient);
+    return { status: "success", digestId: digestId, pickups: pickupsToday.length, returns: returnsToday.length, overdue: overdueRentals.length };
+
+  } catch (sendErr) {
+    props.setProperty("DIGEST_FAILED_" + todayStr, sendErr.toString());
+    logDigestExecution("FAILED", sendErr.toString());
+    throw sendErr;
+  }
+}
+
+function adminSetDigestSent(dateStr) {
+  const cleanDate = dateStr || Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd");
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty("DIGEST_SENT_" + cleanDate, String(new Date().getTime()));
+  props.deleteProperty("DIGEST_PENDING_" + cleanDate);
+  props.deleteProperty("DIGEST_AMBIGUOUS_" + cleanDate);
+  logDigestExecution("MANUAL_OVERRIDE_SENT", "Admin manually marked digest as SENT for " + cleanDate);
+  return { status: "success", message: "Digest marked as sent for " + cleanDate };
+}
+
+function adminForceResendDigest(dateStr) {
+  const cleanDate = dateStr || Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd");
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty("DIGEST_SENT_" + cleanDate);
+  props.deleteProperty("DIGEST_PENDING_" + cleanDate);
+  props.deleteProperty("DIGEST_AMBIGUOUS_" + cleanDate);
+  logDigestExecution("MANUAL_RESEND_TRIGGERED", "Admin reset digest state for " + cleanDate);
+  return dailyRentalNotificationDigest();
+}
+
+function logDigestExecution(status, notes) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let logSheet = ss.getSheetByName("Digest_Execution_Log");
+    if (!logSheet) {
+      logSheet = ss.insertSheet("Digest_Execution_Log");
+      logSheet.appendRow(["Timestamp", "Date (Manila)", "Status", "Notes"]);
+      ensureColumns(logSheet, 4);
+      logSheet.setTabColor(MUTED);
+    }
+    logSheet.appendRow([
+      Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm:ss"),
+      Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd"),
+      status,
+      notes || ""
+    ]);
+  } catch (e) {
+    Logger.log("Digest log error: " + e.toString());
   }
 }

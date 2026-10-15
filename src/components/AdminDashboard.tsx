@@ -1723,7 +1723,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {/* Emergency Contacts & Additional Notes */}
                 <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2">
                   <span className="font-bold text-[11px] text-[#6B6B8A] uppercase">Emergency Contacts & Notes</span>
-                  <p className="font-medium text-[#1A1A2E]">
+                  <p className="font-medium text-[#1A1A2E] whitespace-pre-line leading-relaxed">
                     {selectedBooking.notes || 'None provided.'}
                   </p>
                 </div>

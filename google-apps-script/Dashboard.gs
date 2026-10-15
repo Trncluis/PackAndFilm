@@ -76,13 +76,125 @@ const BOOKING_WIDTHS = [
   160, // 18: Booking Status
   240, // 19: Notes & Emergency Contacts
   230, // 20: Customer Documents Folder ⭐ HIGHLIGHTED DEDICATED LINK
-  150, // 21: Primary ID URL
-  150, // 22: Secondary ID / COR URL
-  150, // 23: Handwritten Auth Slip URL
-  150, // 24: Proof of Address URL
-  150, // 25: Selfie Verification URL
-  150, // 26: Payment Receipt URL
-  150  // 27: Guardian ID URL
+  140, // 21: Primary ID URL
+  140, // 22: Secondary ID / COR URL
+  140, // 23: Handwritten Auth Slip URL
+  140, // 24: Proof of Address URL
+  140, // 25: Selfie Verification URL
+  140, // 26: Payment Receipt URL
+  140  // 27: Guardian ID URL
+];
+
+// Standard 13-Column Definition for Calendar Sync Sheet (Cols 1-6 integration-locked)
+const CALENDAR_SYNC_HEADERS = [
+  "Camera ID",                      // Col 1  (A)
+  "Start Date",                     // Col 2  (B)
+  "End Date",                       // Col 3  (C)
+  "Customer Tag",                   // Col 4  (D)
+  "Booking Ref",                    // Col 5  (E)
+  "Status",                         // Col 6  (F)
+  "Pickup Event ID",                // Col 7  (G)
+  "Return Event ID",                // Col 8  (H)
+  "Confirmed At",                   // Col 9  (I)
+  "Handover At",                    // Col 10 (J)
+  "Completed At",                   // Col 11 (K)
+  "Cancelled At",                   // Col 12 (L)
+  "Calendar Sync Status & Audit Log"// Col 13 (M)
+];
+
+const CALENDAR_SYNC_WIDTHS = [
+  150, // 1: Camera ID
+  120, // 2: Start Date
+  120, // 3: End Date
+  170, // 4: Customer Tag
+  150, // 5: Booking Ref
+  150, // 6: Status
+  180, // 7: Pickup Event ID
+  180, // 8: Return Event ID
+  160, // 9: Confirmed At
+  160, // 10: Handover At
+  160, // 11: Completed At
+  160, // 12: Cancelled At
+  280  // 13: Calendar Sync Status & Audit Log
+];
+
+// Standard 13-Column Definition for Financial & Refund Audit Sheet
+const AUDIT_COLUMNS = [
+  "Audit Record ID",                // Col 1  (A)
+  "Booking Ref",                    // Col 2  (B)
+  "Customer Name",                  // Col 3  (C)
+  "Transaction Category",           // Col 4  (D)
+  "Amount",                         // Col 5  (E)
+  "Customer Payment Timestamp",     // Col 6  (F)
+  "Payment Verification Timestamp", // Col 7  (G)
+  "Booking Confirmation Timestamp", // Col 8  (H)
+  "Disbursement Timestamp",         // Col 9  (I)
+  "GCash / Channel Reference",      // Col 10 (J)
+  "Verification Status",            // Col 11 (K)
+  "Auditing Admin",                 // Col 12 (L)
+  "Audit Notes & Receipt URL"       // Col 13 (M)
+];
+
+const AUDIT_WIDTHS = [
+  140, // 1: Audit Record ID
+  140, // 2: Booking Ref
+  160, // 3: Customer Name
+  210, // 4: Transaction Category
+  130, // 5: Amount
+  180, // 6: Customer Payment Timestamp
+  190, // 7: Payment Verification Timestamp
+  190, // 8: Booking Confirmation Timestamp
+  180, // 9: Disbursement Timestamp
+  170, // 10: GCash / Channel Reference
+  170, // 11: Verification Status
+  170, // 12: Auditing Admin
+  260  // 13: Audit Notes & Receipt URL
+];
+
+// Standard 10-Column Definition for Fleet Inventory Sheet
+const FLEET_COLUMNS = [
+  "Unit ID", "Camera Model", "Serial Number", "Status",
+  "Daily Rate", "2-Day Rate", "3-Day Rate", "Security Deposit",
+  "Included Accessories", "Last Inspection"
+];
+
+const FLEET_WIDTHS = [120, 240, 160, 120, 130, 130, 160, 160, 320, 180];
+
+// Allowed Booking Statuses (Validated in Bookings Col 18 & Calendar Sync Col 6)
+const ALLOWED_BOOKING_STATUSES = [
+  "Deposit Paid",
+  "Pending Verification",
+  "Confirmed",
+  "Active Rental",
+  "Dispatched",
+  "Completed",
+  "Rejected",
+  "Cancelled"
+];
+
+// All 11 Valid Transaction Categories (Validated in Audit Col 4)
+const TRANSACTION_CATEGORIES = [
+  "Downpayment Verification",
+  "Handover Balance Payment",
+  "Security Deposit Receipt",
+  "Security Deposit Refund",
+  "Damage Deduction",
+  "Deposit Forfeiture",
+  "Retained Reservation Fee",
+  "Assessed Cancellation Penalty",
+  "Late Penalty Settlement",
+  "Ledger Correction",
+  "Goodwill Waiver"
+];
+
+// All 6 Valid Verification Statuses (Validated in Audit Col 11)
+const AUDIT_VERIFICATION_STATUSES = [
+  "Verified Received",
+  "Verified Disbursed",
+  "Pending Verification",
+  "Unverified Claim",
+  "Forfeited / Retained",
+  "Waived"
 ];
 
 /**
@@ -164,12 +276,12 @@ function formatAndBeautifyWorkbook() {
     .setVerticalAlignment("top");
 
   // KPI Metric Cards Builder
-  // Updated Active Deposits Held formula to accurately count Confirmed, Active Rental, and legacy Dispatched bookings!
+  // Realization-Segregated: Uses verified audit ledger for cash received and custodial liabilities
   const kpis = [
     { labelCell: "B5", valCell: "B6", range: "B5:C6", label: "TOTAL ACTIVE BOOKINGS", formula: '=COUNTA(Bookings!A2:A)' },
-    { labelCell: "E5", valCell: "E6", range: "E5:F6", label: "GROSS RENTAL REVENUE", formula: '="₱" & TEXT(SUM(Bookings!M2:M), "#,##0")' },
-    { labelCell: "H5", valCell: "H6", range: "H5:I6", label: "DOWNPAYMENTS IN GCASH", formula: '="₱" & TEXT(SUM(Bookings!O2:O), "#,##0")' },
-    { labelCell: "B8", valCell: "B9", range: "B8:C9", label: "ACTIVE DEPOSITS HELD", formula: '="₱" & TEXT(SUMIFS(Bookings!N2:N, Bookings!R2:R, "Confirmed") + SUMIFS(Bookings!N2:N, Bookings!R2:R, "Active Rental") + SUMIFS(Bookings!N2:N, Bookings!R2:R, "Dispatched"), "#,##0")' },
+    { labelCell: "E5", valCell: "E6", range: "E5:F6", label: "GROSS CONTRACTED TURNOVER", formula: '="₱" & TEXT(SUM(Bookings!M2:M), "#,##0")' },
+    { labelCell: "H5", valCell: "H6", range: "H5:I6", label: "VERIFIED DOWNPAYMENTS (CASH)", formula: '="₱" & TEXT(IFERROR(SUMIFS(\'💸 Financial & Refund Audit\'!E2:E, \'💸 Financial & Refund Audit\'!D2:D, "Downpayment Verification", \'💸 Financial & Refund Audit\'!K2:K, "Verified Received"), 0), "#,##0")' },
+    { labelCell: "B8", valCell: "B9", range: "B8:C9", label: "ACTIVE DEPOSITS IN CUSTODY", formula: '="₱" & TEXT(IFERROR(SUMIFS(\'💸 Financial & Refund Audit\'!E2:E, \'💸 Financial & Refund Audit\'!D2:D, "Security Deposit Receipt", \'💸 Financial & Refund Audit\'!K2:K, "Verified Received") - SUMIFS(\'💸 Financial & Refund Audit\'!E2:E, \'💸 Financial & Refund Audit\'!D2:D, "Security Deposit Refund", \'💸 Financial & Refund Audit\'!K2:K, "Verified Disbursed") - SUMIFS(\'💸 Financial & Refund Audit\'!E2:E, \'💸 Financial & Refund Audit\'!D2:D, "Damage Deduction", \'💸 Financial & Refund Audit\'!K2:K, "Forfeited / Retained"), 0), "#,##0")' },
     { labelCell: "E8", valCell: "E9", range: "E8:F9", label: "DAYS RENTED (UTILIZATION)", formula: '=SUM(Bookings!I2:I) & " Days"' },
     { labelCell: "H8", valCell: "H9", range: "H8:I9", label: "ACTIVE CAMERA FLEET", formula: '=COUNTA(\'Fleet Inventory\'!A2:A) & " Units"' }
   ];
@@ -227,7 +339,7 @@ function formatAndBeautifyWorkbook() {
   bSheet.setFrozenRows(1);
   bSheet.setFrozenColumns(3);
 
-  bSheet.setRowHeight(1, 38);
+  bSheet.setRowHeight(1, 36);
   const currentMaxRows = bSheet.getMaxRows();
   bSheet.setRowHeights(2, Math.max(1, currentMaxRows - 1), 32);
 
@@ -251,120 +363,109 @@ function formatAndBeautifyWorkbook() {
     .setFontColor(INK)
     .setVerticalAlignment("middle")
     .setHorizontalAlignment("center");
+  bHeader.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+  bHeader.setBorder(null, null, true, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
-  // Highlight the dedicated Customer Documents Folder header
-  bSheet.getRange(1, 20).setBackground("#B794F4").setFontColor(INK);
+  // Distinct refined styling for Col 20 header (Customer Documents Folder)
+  bSheet.getRange(1, 20).setBackground(LAVENDER).setFontColor(PURPLE_ACCENT);
 
-  // Populate Seed Data if sheet only contains header row
-  if (bSheet.getLastRow() <= 1) {
-    bSheet.appendRow([
-      "#PNF-2026-001", new Date("2026-10-06T14:20:00"), "Mikey Mendez", "0917 888 2341", "@mikey.creates",
-      "DJI Osmo Pocket 3 Standard Kit", "2026-10-14", "2026-10-17", 3, "Courier (Lalamove)", "NAIA T3 Flight Dispatch",
-      "Travel / Siargao", 1350, 2500, 300, 3550, "1029384756123", "Confirmed",
-      "Verified written note + emergency contacts",
-      "https://drive.google.com/drive/folders/sample_folder_mikey_001",
-      "https://drive.google.com/file/d/sample_id1", "https://drive.google.com/file/d/sample_id2",
-      "https://drive.google.com/file/d/sample_slip", "https://drive.google.com/file/d/sample_bill",
-      "https://drive.google.com/file/d/sample_selfie", "https://drive.google.com/file/d/sample_receipt",
-      ""
-    ]);
-    bSheet.appendRow([
-      "#PNF-2026-002", new Date("2026-10-06T18:45:00"), "Jillian Santos", "0922 555 1928", "@jillian_vlogs",
-      "DJI Osmo Pocket 3 Standard Kit", "2026-10-21", "2026-10-23", 2, "Free Meetup", "Ortigas MRT / Megamall Hub",
-      "Concert (Olivia Rodrigo)", 1000, 1000, 300, 1700, "9876543210123", "Active Rental",
-      "Student ID + Guardian verified. Handed over at Mega B.",
-      "https://drive.google.com/drive/folders/sample_folder_jillian_002",
-      "https://drive.google.com/file/d/sample_id1_2", "https://drive.google.com/file/d/sample_cor_2",
-      "https://drive.google.com/file/d/sample_slip_2", "https://drive.google.com/file/d/sample_bill_2",
-      "https://drive.google.com/file/d/sample_selfie_2", "https://drive.google.com/file/d/sample_receipt_2",
-      "https://drive.google.com/file/d/sample_guardian_2"
-    ]);
-    bSheet.appendRow([
-      "#PNF-2026-003", new Date("2026-10-07T09:15:00"), "Sofia Alcantara", "0918 333 7744", "@sofia_films",
-      "DJI Osmo Pocket 3 Standard Kit", "2026-10-24", "2026-10-26", 2, "Free Meetup", "Estancia Mall Pasig Hub",
-      "Vlog / Halloween Market", 1000, 1000, 300, 1700, "5544332211009", "Deposit Paid",
-      "Awaiting proof of billing upload inspection",
-      "https://drive.google.com/drive/folders/sample_folder_sofia_003",
-      "https://drive.google.com/file/d/sample_id1_3", "", "https://drive.google.com/file/d/sample_slip_3",
-      "", "https://drive.google.com/file/d/sample_selfie_3", "https://drive.google.com/file/d/sample_receipt_3",
-      ""
-    ]);
-  }
+  // Apply baseline data styling across all available data rows
+  const maxBRows = Math.max(1, bSheet.getMaxRows() - 1);
+  const bDataRange = bSheet.getRange(2, 1, maxBRows, BOOKING_WIDTHS.length);
+  bDataRange.setFontFamily("Inter").setFontSize(10).setFontColor(INK).setVerticalAlignment("middle");
+  bDataRange.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
 
-  const effectiveRows = Math.max(bSheet.getLastRow() - 1, 1);
-  const dataRange = bSheet.getRange(2, 1, effectiveRows, BOOKING_WIDTHS.length);
-  dataRange.setFontFamily("Inter").setFontSize(10).setFontColor(INK).setVerticalAlignment("middle");
+  // Column-specific alignments and number formats across full data range
+  bSheet.getRange(2, 1, maxBRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center"); // Col 1: Booking Ref
+  bSheet.getRange(2, 2, maxBRows, 1).setHorizontalAlignment("center").setNumberFormat("yyyy-mm-dd hh:mm"); // Col 2: Timestamp
+  bSheet.getRange(2, 3, maxBRows, 1).setHorizontalAlignment("left"); // Col 3: Customer Name
+  bSheet.getRange(2, 4, maxBRows, 1).setHorizontalAlignment("center"); // Col 4: Contact Number
+  bSheet.getRange(2, 5, maxBRows, 1).setHorizontalAlignment("center"); // Col 5: Social Media Handle
+  bSheet.getRange(2, 6, maxBRows, 1).setHorizontalAlignment("left"); // Col 6: Camera Rented
+  bSheet.getRange(2, 7, maxBRows, 2).setHorizontalAlignment("center").setNumberFormat("yyyy-mm-dd"); // Cols 7-8: Start & End Dates
+  bSheet.getRange(2, 9, maxBRows, 1).setHorizontalAlignment("center").setNumberFormat("0"); // Col 9: Rental Days
+  bSheet.getRange(2, 10, maxBRows, 1).setHorizontalAlignment("center"); // Col 10: Handover Method
+  bSheet.getRange(2, 11, maxBRows, 1).setHorizontalAlignment("left"); // Col 11: Address / Hub
+  bSheet.getRange(2, 12, maxBRows, 1).setHorizontalAlignment("center"); // Col 12: Shoot Type
+  bSheet.getRange(2, 13, maxBRows, 4).setNumberFormat('"₱"#,##0').setHorizontalAlignment("right"); // Cols 13-16: Financials
+  bSheet.getRange(2, 17, maxBRows, 1).setHorizontalAlignment("center"); // Col 17: GCash Ref
+  bSheet.getRange(2, 18, maxBRows, 1).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center"); // Col 18: Status
+  bSheet.getRange(2, 19, maxBRows, 1).setFontSize(9).setHorizontalAlignment("left").setWrap(true).setVerticalAlignment("top"); // Col 19: Notes & Emergency Contacts
+  bSheet.getRange(2, 20, maxBRows, 1).setFontFamily("Inter").setFontColor(PURPLE_ACCENT).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle").setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP); // Col 20: Documents Folder
+  bSheet.getRange(2, 21, maxBRows, 7).setFontSize(9).setFontColor(MUTED).setHorizontalAlignment("center").setVerticalAlignment("middle").setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP); // Cols 21-27: KYC URLs
 
-  // Format Specific Column Ranges
-  bSheet.getRange(2, 1, effectiveRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
-  bSheet.getRange(2, 7, effectiveRows, 3).setHorizontalAlignment("center"); // Dates and Days
-  bSheet.getRange(2, 13, effectiveRows, 4).setNumberFormat('"₱"#,##0').setHorizontalAlignment("right"); // Financials
-  bSheet.getRange(2, 17, effectiveRows, 1).setHorizontalAlignment("center"); // GCash Ref
-
-  // Format Dedicated Customer Documents Folder Column (Col 20 / T)
-  const folderColRange = bSheet.getRange(2, 20, effectiveRows, 1);
-  folderColRange.setHorizontalAlignment("center")
-    .setFontFamily("Inter")
-    .setFontColor(PURPLE_ACCENT)
-    .setFontWeight("bold");
-
-  // Status Dropdown validation — Bound strictly to available sheet rows
-  const statusRowCount = Math.max(1, bSheet.getMaxRows() - 1);
-  const statusCol = bSheet.getRange(2, 18, statusRowCount, 1);
-  const allowedStatuses = [
-    "Deposit Paid",
-    "Pending Verification",
-    "Confirmed",
-    "Active Rental",
-    "Dispatched",
-    "Completed",
-    "Rejected",
-    "Cancelled"
-  ];
-  const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(allowedStatuses, true)
+  // Status Dropdown validation rule applied to all data rows
+  const statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(ALLOWED_BOOKING_STATUSES, true)
     .setAllowInvalid(false)
     .build();
-  statusCol.setDataValidation(rule);
-  statusCol.setHorizontalAlignment("center").setFontFamily("Poppins").setFontWeight("bold").setFontSize(9);
+  bSheet.getRange(2, 18, maxBRows, 1).setDataValidation(statusRule);
+
+  // Repair notes formatting, customer folder hyperlink labels, and clip adjacent columns
+  repairAndFormatBookingsSheet(bSheet);
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // 3. CALENDAR SYNC TAB
+  // 3. CALENDAR SYNC TAB (Columns 1-6 Fixed, 7-13 Extended)
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   let cSheet = ss.getSheetByName("Calendar Sync");
   if (!cSheet) {
     cSheet = ss.insertSheet("Calendar Sync");
   }
 
-  ensureColumns(cSheet, 6);
-  ensureRows(cSheet, 30);
+  // Non-breaking extension: 13 columns total (Cols 1-6 100% backward-compatible)
+  ensureColumns(cSheet, CALENDAR_SYNC_WIDTHS.length);
+  ensureRows(cSheet, 50);
 
   cSheet.setTabColor(LAVENDER);
   cSheet.setFrozenRows(1);
+  cSheet.setFrozenColumns(1); // Anchor Camera ID during horizontal scroll
   cSheet.setRowHeight(1, 36);
-  cSheet.setRowHeights(2, Math.max(1, cSheet.getMaxRows() - 1), 30);
+  cSheet.setRowHeights(2, Math.max(1, cSheet.getMaxRows() - 1), 32);
 
-  const cWidths = [150, 120, 120, 180, 150, 140];
-  cWidths.forEach((w, idx) => cSheet.setColumnWidth(idx + 1, w));
+  CALENDAR_SYNC_WIDTHS.forEach((w, idx) => cSheet.setColumnWidth(idx + 1, w));
 
-  cSheet.getRange(1, 1, 1, cWidths.length)
-    .setBackground(LAVENDER_TINT)
+  // Initialize or update header row
+  if (cSheet.getLastRow() === 0 || String(cSheet.getRange(1, 1).getValue()).trim() === "") {
+    cSheet.getRange(1, 1, 1, CALENDAR_SYNC_HEADERS.length).setValues([CALENDAR_SYNC_HEADERS]);
+  } else {
+    // Non-destructively set headers for extended columns 7-13 if missing
+    cSheet.getRange(1, 7, 1, 7).setValues([["Pickup Event ID", "Return Event ID", "Confirmed At", "Handover At", "Completed At", "Cancelled At", "Calendar Sync Status & Audit Log"]]);
+  }
+
+  // Header styling consistent with Bookings & Audit
+  const cHeader = cSheet.getRange(1, 1, 1, CALENDAR_SYNC_WIDTHS.length);
+  cHeader.setBackground(LAVENDER)
     .setFontFamily("Poppins")
     .setFontSize(10)
     .setFontWeight("bold")
     .setFontColor(INK)
     .setVerticalAlignment("middle")
     .setHorizontalAlignment("center");
+  cHeader.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+  cHeader.setBorder(null, null, true, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 
-  if (cSheet.getLastRow() <= 1) {
-    cSheet.getRange(1, 1, 1, 6).setValues([["Camera ID", "Start Date", "End Date", "Customer Tag", "Booking Ref", "Status"]]);
-    cSheet.appendRow(["dji-pocket-3", "2026-10-14", "2026-10-17", "@mikey.creates", "#PNF-2026-001", "Confirmed"]);
-    cSheet.appendRow(["dji-pocket-3", "2026-10-21", "2026-10-23", "@jillian_vlogs", "#PNF-2026-002", "Active Rental"]);
-    cSheet.appendRow(["dji-pocket-3", "2026-10-24", "2026-10-26", "@sofia_films", "#PNF-2026-003", "Deposit Paid"]);
-  }
+  // Apply baseline data styling across all data rows
+  const maxCRows = Math.max(1, cSheet.getMaxRows() - 1);
+  const cDataRange = cSheet.getRange(2, 1, maxCRows, CALENDAR_SYNC_WIDTHS.length);
+  cDataRange.setFontFamily("Inter").setFontSize(10).setFontColor(INK).setVerticalAlignment("middle");
+  cDataRange.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
 
-  cSheet.getRange(2, 1, Math.max(1, cSheet.getLastRow() - 1), cWidths.length)
-    .setFontFamily("Inter").setFontSize(10).setVerticalAlignment("middle").setHorizontalAlignment("center");
+  // Column-specific alignments matching the brand design system
+  cSheet.getRange(2, 1, maxCRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center"); // Col 1: Camera ID
+  cSheet.getRange(2, 2, maxCRows, 2).setHorizontalAlignment("center").setNumberFormat("yyyy-mm-dd"); // Cols 2-3: Start & End Date
+  cSheet.getRange(2, 4, maxCRows, 1).setHorizontalAlignment("center"); // Col 4: Customer Tag
+  cSheet.getRange(2, 5, maxCRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center"); // Col 5: Booking Ref
+  cSheet.getRange(2, 6, maxCRows, 1).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center"); // Col 6: Status
+  cSheet.getRange(2, 7, maxCRows, 2).setFontSize(9).setFontColor(MUTED).setHorizontalAlignment("center").setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP); // Cols 7-8: Event IDs
+  cSheet.getRange(2, 9, maxCRows, 4).setHorizontalAlignment("center"); // Cols 9-12: Timestamps
+  cSheet.getRange(2, 13, maxCRows, 1).setFontSize(9).setHorizontalAlignment("left").setWrap(true); // Col 13: Audit Log
+
+  // Status dropdown validation on Col 6
+  const calStatusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(ALLOWED_BOOKING_STATUSES, true)
+    .setAllowInvalid(false)
+    .build();
+  cSheet.getRange(2, 6, maxCRows, 1).setDataValidation(calStatusRule);
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // 4. FLEET INVENTORY TAB
@@ -374,32 +475,18 @@ function formatAndBeautifyWorkbook() {
     fSheet = ss.insertSheet("Fleet Inventory");
   }
 
-  ensureColumns(fSheet, 10);
+  ensureColumns(fSheet, FLEET_WIDTHS.length);
   ensureRows(fSheet, 20);
 
   fSheet.setTabColor(INK);
   fSheet.setFrozenRows(1);
   fSheet.setRowHeight(1, 36);
-  fSheet.setRowHeights(2, Math.max(1, fSheet.getMaxRows() - 1), 34);
+  fSheet.setRowHeights(2, Math.max(1, fSheet.getMaxRows() - 1), 32);
 
-  const fWidths = [120, 240, 160, 120, 130, 130, 160, 160, 320, 180];
-  fWidths.forEach((w, idx) => fSheet.setColumnWidth(idx + 1, w));
+  FLEET_WIDTHS.forEach((w, idx) => fSheet.setColumnWidth(idx + 1, w));
 
-  fSheet.getRange(1, 1, 1, fWidths.length)
-    .setBackground(LAVENDER_TINT)
-    .setFontFamily("Poppins")
-    .setFontSize(10)
-    .setFontWeight("bold")
-    .setFontColor(INK)
-    .setVerticalAlignment("middle")
-    .setHorizontalAlignment("center");
-
-  if (fSheet.getLastRow() <= 1) {
-    fSheet.getRange(1, 1, 1, 10).setValues([[
-      "Unit ID", "Camera Model", "Serial Number", "Status",
-      "Daily Rate", "2-Day Rate", "3-Day Rate", "Security Deposit",
-      "Included Accessories", "Last Inspection"
-    ]]);
+  if (fSheet.getLastRow() === 0 || String(fSheet.getRange(1, 1).getValue()).trim() === "") {
+    fSheet.getRange(1, 1, 1, FLEET_COLUMNS.length).setValues([FLEET_COLUMNS]);
     fSheet.appendRow([
       "PNF-P3-01", "DJI Osmo Pocket 3 Standard Kit", "6X89K20391", "Available",
       500, 1000, 1350, 2500,
@@ -408,11 +495,98 @@ function formatAndBeautifyWorkbook() {
     ]);
   }
 
-  const fData = fSheet.getRange(2, 1, Math.max(1, fSheet.getLastRow() - 1), fWidths.length);
-  fData.setFontFamily("Inter").setFontSize(10).setVerticalAlignment("middle");
-  fSheet.getRange("E2:H10").setNumberFormat('"₱"#,##0').setHorizontalAlignment("right");
-  fSheet.getRange("A2:A10").setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
-  fSheet.getRange("D2:D10").setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
+  const fHeader = fSheet.getRange(1, 1, 1, FLEET_WIDTHS.length);
+  fHeader.setBackground(LAVENDER)
+    .setFontFamily("Poppins")
+    .setFontSize(10)
+    .setFontWeight("bold")
+    .setFontColor(INK)
+    .setVerticalAlignment("middle")
+    .setHorizontalAlignment("center");
+  fHeader.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+  fHeader.setBorder(null, null, true, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  const maxFRows = Math.max(1, fSheet.getMaxRows() - 1);
+  const fData = fSheet.getRange(2, 1, maxFRows, FLEET_WIDTHS.length);
+  fData.setFontFamily("Inter").setFontSize(10).setFontColor(INK).setVerticalAlignment("middle");
+  fData.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+
+  fSheet.getRange(2, 1, maxFRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
+  fSheet.getRange(2, 2, maxFRows, 1).setHorizontalAlignment("left");
+  fSheet.getRange(2, 3, maxFRows, 1).setHorizontalAlignment("center");
+  fSheet.getRange(2, 4, maxFRows, 1).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center");
+  fSheet.getRange(2, 5, maxFRows, 4).setNumberFormat('"₱"#,##0').setHorizontalAlignment("right");
+  fSheet.getRange(2, 9, maxFRows, 1).setFontSize(9).setHorizontalAlignment("left").setWrap(true);
+  fSheet.getRange(2, 10, maxFRows, 1).setHorizontalAlignment("center").setNumberFormat("yyyy-mm-dd");
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // 5. FINANCIAL & REFUND AUDIT TAB ("💸 Financial & Refund Audit")
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  let aSheet = ss.getSheetByName("💸 Financial & Refund Audit");
+  if (!aSheet) {
+    aSheet = ss.insertSheet("💸 Financial & Refund Audit");
+  }
+
+  ensureColumns(aSheet, AUDIT_WIDTHS.length);
+  ensureRows(aSheet, 50);
+
+  aSheet.setTabColor(SUCCESS_TINT);
+  aSheet.setFrozenRows(1);
+  aSheet.setFrozenColumns(2);
+  aSheet.setRowHeight(1, 36);
+  aSheet.setRowHeights(2, Math.max(1, aSheet.getMaxRows() - 1), 32);
+
+  AUDIT_WIDTHS.forEach((w, idx) => aSheet.setColumnWidth(idx + 1, w));
+
+  // Initialize header row if missing
+  if (aSheet.getLastRow() === 0 || String(aSheet.getRange(1, 1).getValue()).trim() === "") {
+    aSheet.getRange(1, 1, 1, AUDIT_COLUMNS.length).setValues([AUDIT_COLUMNS]);
+  }
+
+  // Header styling consistent with Bookings & Calendar Sync
+  const aHeader = aSheet.getRange(1, 1, 1, AUDIT_WIDTHS.length);
+  aHeader.setBackground(LAVENDER)
+    .setFontFamily("Poppins")
+    .setFontSize(10)
+    .setFontWeight("bold")
+    .setFontColor(INK)
+    .setVerticalAlignment("middle")
+    .setHorizontalAlignment("center");
+  aHeader.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+  aHeader.setBorder(null, null, true, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  // DO NOT inject mock data! Preserve existing financial entries intact.
+
+  // Apply baseline data styling across all available data rows
+  const maxARows = Math.max(1, aSheet.getMaxRows() - 1);
+  const aData = aSheet.getRange(2, 1, maxARows, AUDIT_WIDTHS.length);
+  aData.setFontFamily("Inter").setFontSize(10).setFontColor(INK).setVerticalAlignment("middle");
+  aData.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+
+  // Specific column formatting
+  aSheet.getRange(2, 1, maxARows, 2).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center"); // Record ID & Booking Ref
+  aSheet.getRange(2, 3, maxARows, 1).setHorizontalAlignment("left"); // Customer Name
+  aSheet.getRange(2, 4, maxARows, 1).setHorizontalAlignment("center"); // Transaction Category
+  aSheet.getRange(2, 5, maxARows, 1).setNumberFormat('"₱"#,##0.00').setHorizontalAlignment("right"); // Amount
+  aSheet.getRange(2, 6, maxARows, 4).setHorizontalAlignment("center"); // Timestamps
+  aSheet.getRange(2, 10, maxARows, 1).setHorizontalAlignment("center"); // GCash Ref
+  aSheet.getRange(2, 11, maxARows, 1).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center"); // Verification Status
+  aSheet.getRange(2, 12, maxARows, 1).setHorizontalAlignment("center"); // Auditing Admin
+  aSheet.getRange(2, 13, maxARows, 1).setFontSize(9).setHorizontalAlignment("left").setWrap(true); // Notes & Receipt URL
+
+  // Category validation dropdown rule applied to ALL data rows (Rows 2 to maxRows)
+  const categoryRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(TRANSACTION_CATEGORIES, true)
+    .setAllowInvalid(false)
+    .build();
+  aSheet.getRange(2, 4, maxARows, 1).setDataValidation(categoryRule);
+
+  // Status validation dropdown rule applied to ALL data rows (Rows 2 to maxRows)
+  const auditStatusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(AUDIT_VERIFICATION_STATUSES, true)
+    .setAllowInvalid(false)
+    .build();
+  aSheet.getRange(2, 11, maxARows, 1).setDataValidation(auditStatusRule);
 
   SpreadsheetApp.getActiveSpreadsheet().toast("Workbook successfully beautified & aligned!", "PackAndFilm System", 4);
 }
@@ -479,4 +653,460 @@ function migrateAndAlignBookingsSheet() {
   }
 
   formatAndBeautifyWorkbook();
+}
+
+/**
+ * Dedicated Validator & Formatter for the Financial & Refund Audit Tab:
+ * Applies the 11 Transaction Category dropdown options and 6 Status options
+ * to ALL data rows (starting at Row 2), ensures correct alignment, currency
+ * formatting, and crisp borders, without altering existing ledger entries or re-introducing mock data.
+ */
+function fixFinancialAuditValidationAndFormatting() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let aSheet = ss.getSheetByName("💸 Financial & Refund Audit");
+  if (!aSheet) {
+    aSheet = ss.insertSheet("💸 Financial & Refund Audit");
+  }
+
+  ensureColumns(aSheet, AUDIT_WIDTHS.length);
+  ensureRows(aSheet, 50);
+
+  aSheet.setTabColor(SUCCESS_TINT);
+  aSheet.setFrozenRows(1);
+  aSheet.setFrozenColumns(2);
+  aSheet.setRowHeight(1, 36);
+  aSheet.setRowHeights(2, Math.max(1, aSheet.getMaxRows() - 1), 32);
+
+  AUDIT_WIDTHS.forEach((w, idx) => aSheet.setColumnWidth(idx + 1, w));
+
+  // Ensure Header Row
+  if (aSheet.getLastRow() === 0 || String(aSheet.getRange(1, 1).getValue()).trim() === "") {
+    aSheet.getRange(1, 1, 1, AUDIT_COLUMNS.length).setValues([AUDIT_COLUMNS]);
+  }
+
+  const aHeader = aSheet.getRange(1, 1, 1, AUDIT_WIDTHS.length);
+  aHeader.setBackground(LAVENDER)
+    .setFontFamily("Poppins")
+    .setFontSize(10)
+    .setFontWeight("bold")
+    .setFontColor(INK)
+    .setVerticalAlignment("middle")
+    .setHorizontalAlignment("center");
+  aHeader.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+  aHeader.setBorder(null, null, true, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  const maxRows = Math.max(1, aSheet.getMaxRows() - 1);
+
+  // Apply baseline data styling to all data rows
+  const allData = aSheet.getRange(2, 1, maxRows, AUDIT_WIDTHS.length);
+  allData.setFontFamily("Inter").setFontSize(10).setFontColor(INK).setVerticalAlignment("middle");
+  allData.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+
+  // Specific column formatting
+  aSheet.getRange(2, 1, maxRows, 2).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center"); // Record ID & Booking Ref
+  aSheet.getRange(2, 3, maxRows, 1).setHorizontalAlignment("left"); // Customer Name
+  aSheet.getRange(2, 4, maxRows, 1).setHorizontalAlignment("center"); // Transaction Category
+  aSheet.getRange(2, 5, maxRows, 1).setNumberFormat('"₱"#,##0.00').setHorizontalAlignment("right"); // Amount
+  aSheet.getRange(2, 6, maxRows, 4).setHorizontalAlignment("center"); // Timestamps
+  aSheet.getRange(2, 10, maxRows, 1).setHorizontalAlignment("center"); // GCash Ref
+  aSheet.getRange(2, 11, maxRows, 1).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center"); // Verification Status
+  aSheet.getRange(2, 12, maxRows, 1).setHorizontalAlignment("center"); // Auditing Admin
+  aSheet.getRange(2, 13, maxRows, 1).setFontSize(9).setHorizontalAlignment("left").setWrap(true); // Notes & Receipt URL
+
+  // Category validation dropdown rule applied to all data rows
+  const categoryRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(TRANSACTION_CATEGORIES, true)
+    .setAllowInvalid(false)
+    .build();
+  aSheet.getRange(2, 4, maxRows, 1).setDataValidation(categoryRule);
+
+  // Status validation dropdown rule applied to all data rows
+  const auditStatusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(AUDIT_VERIFICATION_STATUSES, true)
+    .setAllowInvalid(false)
+    .build();
+  aSheet.getRange(2, 11, maxRows, 1).setDataValidation(auditStatusRule);
+
+  SpreadsheetApp.getActiveSpreadsheet().toast("Financial & Refund Audit validation and styling updated!", "PackAndFilm System", 4);
+}
+
+// ─────────────────────────────────────────────────────────────
+// BOOKINGS DISPLAY & FORMATTING HELPERS
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Extracts Google Drive folder ID from a Drive URL or raw ID string.
+ */
+function extractFolderIdFromUrl(folderUrlOrId) {
+  if (!folderUrlOrId || typeof folderUrlOrId !== "string") return "";
+  const trimmed = folderUrlOrId.trim();
+  if (/^[a-zA-Z0-9_-]{25,}$/.test(trimmed)) {
+    return trimmed;
+  }
+  const folderMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (folderMatch && folderMatch[1]) {
+    return folderMatch[1];
+  }
+  const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch && idMatch[1]) {
+    return idMatch[1];
+  }
+  return "";
+}
+
+/**
+ * Retrieves the actual folder name from Google Drive using DriveApp.
+ * Falls back to fallbackName or "Customer Documents" if DriveApp cannot resolve it.
+ */
+function getActualDriveFolderName(folderUrlOrId, fallbackName) {
+  const folderId = extractFolderIdFromUrl(folderUrlOrId);
+  if (folderId) {
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      if (folder) {
+        const actualName = folder.getName();
+        if (actualName && actualName.trim() !== "") {
+          return actualName.trim();
+        }
+      }
+    } catch (err) {
+      Logger.log("DriveApp.getFolderById warning: " + err.toString());
+    }
+  }
+  return (fallbackName && String(fallbackName).trim()) || "Customer Documents";
+}
+
+/**
+ * Extracts the underlying URL whether stored as =HYPERLINK("url", "label"),
+ * RichText link, or plain text URL.
+ */
+function extractDriveFolderUrl(cellVal, cellFormula, richTextVal) {
+  if (cellFormula && typeof cellFormula === "string" && cellFormula.toUpperCase().startsWith("=HYPERLINK")) {
+    const match = cellFormula.match(/=HYPERLINK\(\s*["']([^"']+)["']/i);
+    if (match && match[1]) return match[1].trim();
+  }
+  if (richTextVal && typeof richTextVal.getLinkUrl === "function") {
+    const link = richTextVal.getLinkUrl();
+    if (link) return link.trim();
+  }
+  const strVal = String(cellVal || "").trim();
+  if (strVal.startsWith("http://") || strVal.startsWith("https://")) {
+    return strVal;
+  }
+  const driveMatch = strVal.match(/https?:\/\/[^\s"']+/);
+  if (driveMatch) return driveMatch[0];
+
+  return "";
+}
+
+/**
+ * Formats notes text into clear, readable, structured sections with line breaks:
+ * - General note remarks (if any)
+ * - Emergency Contacts (bulleted per contact, preserving social information)
+ * - Status History (bulleted per transition log)
+ * Fully idempotent and preserves 100% of the content.
+ */
+function formatNotesText(rawNotes) {
+  if (!rawNotes || typeof rawNotes !== "string") return "";
+  let text = rawNotes.trim();
+  if (!text) return "";
+
+  // 1. Extract all status change and transition entries
+  const statusRegex = /\[(?:Status changed from|Transition:)[^\]]+\]/g;
+  const statusMatches = text.match(statusRegex) || [];
+
+  // Remove status change entries from main text
+  let nonStatusText = text.replace(statusRegex, "").trim();
+  // Remove "Status History:" label if already present
+  nonStatusText = nonStatusText.replace(/Status History:[\s\S]*$/i, "").trim();
+
+  const sections = [];
+
+  // 2. Parse Emergency Contacts if present
+  const ecMatch = nonStatusText.match(/Emergency Contacts:\s*([\s\S]*)/i);
+  let mainNote = "";
+  let emergencyContacts = [];
+
+  if (ecMatch) {
+    mainNote = nonStatusText.substring(0, ecMatch.index).trim();
+    const ecBody = ecMatch[1].trim();
+    // Split contacts by semicolons or existing newlines/bullets
+    const rawList = ecBody.split(/;|\n|•/).map(s => s.trim()).filter(Boolean);
+    emergencyContacts = rawList;
+  } else {
+    mainNote = nonStatusText;
+  }
+
+  if (mainNote) {
+    sections.push(mainNote);
+  }
+
+  if (emergencyContacts.length > 0) {
+    const formattedContacts = emergencyContacts.map(c => c.startsWith("•") ? c : "• " + c).join("\n");
+    sections.push("Emergency Contacts:\n" + formattedContacts);
+  }
+
+  if (statusMatches.length > 0) {
+    const formattedStatus = statusMatches.map(s => "• " + s).join("\n");
+    sections.push("Status History:\n" + formattedStatus);
+  }
+
+  return sections.join("\n\n");
+}
+
+/**
+ * Repairs and formats all booking rows in the Bookings sheet:
+ * 1. Formats Notes with line breaks, bullet points, and dynamic row heights.
+ * 2. Displays Customer Documents Folder as =HYPERLINK(url, folderName) using the actual Drive folder name.
+ * 3. Enforces WrapStrategy.CLIP on Col 20 and Cols 21-27, and removes any misplaced folder URLs from Cols 21-27.
+ * 4. Preserves all data, schema, column order, and integrations.
+ */
+function repairAndFormatBookingsSheet(bSheet) {
+  if (!bSheet) return;
+  const lastRow = bSheet.getLastRow();
+  if (lastRow <= 1) return;
+
+  const lastCol = Math.max(bSheet.getLastColumn(), 27);
+  const headers = bSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  let notesIdx = 18;       // Default Column 19 (0-indexed 18)
+  let folderIdx = 19;      // Default Column 20 (0-indexed 19)
+  let customerNameIdx = 2; // Default Column 3 (0-indexed 2)
+
+  // Dynamically resolve header indices
+  headers.forEach((h, idx) => {
+    const clean = String(h || "").trim().toLowerCase();
+    if (clean.includes("note")) notesIdx = idx;
+    if (clean.includes("folder") || clean.includes("customer documents")) folderIdx = idx;
+    if (clean.includes("customer name")) customerNameIdx = idx;
+  });
+
+  const numRows = lastRow - 1;
+  const dataRange = bSheet.getRange(2, 1, numRows, lastCol);
+  const values = dataRange.getValues();
+  const formulas = dataRange.getFormulas();
+
+  for (let i = 0; i < numRows; i++) {
+    const rowNum = i + 2;
+    const customerName = String(values[i][customerNameIdx] || "").trim();
+
+    // ── 1. Format Notes Column ──
+    const currentNotes = String(values[i][notesIdx] || "").trim();
+    if (currentNotes) {
+      const formattedNotes = formatNotesText(currentNotes);
+      if (formattedNotes !== currentNotes) {
+        bSheet.getRange(rowNum, notesIdx + 1).setValue(formattedNotes);
+      }
+      // Set dynamic row height based on line count
+      const lineCount = formattedNotes.split("\n").length;
+      const targetHeight = Math.max(32, Math.min(120, 24 + lineCount * 14));
+      bSheet.setRowHeight(rowNum, targetHeight);
+    } else {
+      bSheet.setRowHeight(rowNum, 32);
+    }
+
+    // ── 2. Format Customer Documents Folder Column ──
+    const rawVal = values[i][folderIdx];
+    const rawFormula = (formulas[i] && formulas[i][folderIdx]) || "";
+    const folderUrl = extractDriveFolderUrl(rawVal, rawFormula);
+
+    if (folderUrl) {
+      const actualFolderName = getActualDriveFolderName(folderUrl, customerName);
+      const hyperlinkFormula = '=HYPERLINK("' + folderUrl + '", "' + actualFolderName.replace(/"/g, '""') + '")';
+      bSheet.getRange(rowNum, folderIdx + 1).setFormula(hyperlinkFormula);
+    }
+
+    // ── 3. Remove all other Google Drive links, retaining ONLY Customer Documents Folder ──
+    for (let c = 0; c < lastCol; c++) {
+      if (c === folderIdx) continue; // Strictly retain the Customer Documents Folder
+      const cellVal = String(values[i][c] || "").trim();
+      const cellForm = (formulas[i] && formulas[i][c]) || "";
+      if (cellVal.includes("drive.google.com") || cellForm.includes("drive.google.com")) {
+        bSheet.getRange(rowNum, c + 1).clearContent();
+      }
+    }
+  }
+
+  // ── 4. Apply Wrap Strategies and Alignments ──
+  // Notes: Wrap text and align top
+  bSheet.getRange(2, notesIdx + 1, numRows, 1)
+    .setWrap(true)
+    .setVerticalAlignment("top")
+    .setFontSize(9)
+    .setHorizontalAlignment("left");
+
+  // Customer Documents Folder: Clip text to avoid any potential overflow
+  bSheet.getRange(2, folderIdx + 1, numRows, 1)
+    .setFontFamily("Inter")
+    .setFontColor(PURPLE_ACCENT)
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+
+  // KYC Columns: Clip text to avoid overflow across columns
+  const kycStartCol = folderIdx + 2;
+  const kycColCount = Math.min(7, lastCol - folderIdx);
+  if (kycColCount > 0) {
+    bSheet.getRange(2, kycStartCol, numRows, kycColCount)
+      .setFontSize(9)
+      .setFontColor(MUTED)
+      .setHorizontalAlignment("center")
+      .setVerticalAlignment("middle")
+      .setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  }
+}
+
+/**
+ * Top-Level Standalone Function:
+ * Can be executed directly from the Apps Script toolbar to repair and format the Bookings tab.
+ */
+function fixAndFormatBookingsDisplay() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const bSheet = ss.getSheetByName("Bookings");
+  if (!bSheet) {
+    SpreadsheetApp.getActiveSpreadsheet().toast("Bookings sheet not found!", "PackAndFilm System", 4);
+    return;
+  }
+  repairAndFormatBookingsSheet(bSheet);
+  formatBookingsSheet();
+  SpreadsheetApp.getActiveSpreadsheet().toast("Bookings sheet formatting, notes, and folder links repaired!", "PackAndFilm System", 4);
+}
+
+/**
+ * Dedicated Formatter for the Bookings Tab:
+ * Applies consistent styling, alignments, borders, and dropdowns across all 27 columns
+ * without touching existing data or modifying the schema.
+ */
+function formatBookingsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let bSheet = ss.getSheetByName("Bookings");
+  if (!bSheet) return;
+
+  ensureColumns(bSheet, BOOKING_WIDTHS.length);
+  ensureRows(bSheet, 50);
+
+  bSheet.setTabColor(PEACH);
+  bSheet.setFrozenRows(1);
+  bSheet.setFrozenColumns(3);
+
+  bSheet.setRowHeight(1, 36);
+  const currentMaxRows = bSheet.getMaxRows();
+  bSheet.setRowHeights(2, Math.max(1, currentMaxRows - 1), 32);
+
+  BOOKING_WIDTHS.forEach((w, idx) => bSheet.setColumnWidth(idx + 1, w));
+
+  if (bSheet.getLastRow() === 0 || String(bSheet.getRange(1, 1).getValue()).trim() === "") {
+    bSheet.getRange(1, 1, 1, BOOKING_COLUMNS.length).setValues([BOOKING_COLUMNS]);
+  } else {
+    bSheet.getRange(1, 20).setValue("Customer Documents Folder");
+  }
+
+  const bHeader = bSheet.getRange(1, 1, 1, BOOKING_WIDTHS.length);
+  bHeader.setBackground(LAVENDER);
+  bHeader.setFontFamily("Poppins");
+  bHeader.setFontSize(10);
+  bHeader.setFontWeight("bold");
+  bHeader.setFontColor(INK);
+  bHeader.setVerticalAlignment("middle");
+  bHeader.setHorizontalAlignment("center");
+  bHeader.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+  bHeader.setBorder(null, null, true, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  bSheet.getRange(1, 20).setBackground(LAVENDER).setFontColor(PURPLE_ACCENT);
+
+  const maxBRows = Math.max(1, bSheet.getMaxRows() - 1);
+  const bDataRange = bSheet.getRange(2, 1, maxBRows, BOOKING_WIDTHS.length);
+  bDataRange.setFontFamily("Inter").setFontSize(10).setFontColor(INK).setVerticalAlignment("middle");
+  bDataRange.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+
+  bSheet.getRange(2, 1, maxBRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
+  bSheet.getRange(2, 2, maxBRows, 1).setHorizontalAlignment("center").setNumberFormat("yyyy-mm-dd hh:mm");
+  bSheet.getRange(2, 3, maxBRows, 1).setHorizontalAlignment("left");
+  bSheet.getRange(2, 4, maxBRows, 1).setHorizontalAlignment("center");
+  bSheet.getRange(2, 5, maxBRows, 1).setHorizontalAlignment("center");
+  bSheet.getRange(2, 6, maxBRows, 1).setHorizontalAlignment("left");
+  bSheet.getRange(2, 7, maxBRows, 2).setHorizontalAlignment("center").setNumberFormat("yyyy-mm-dd");
+  bSheet.getRange(2, 9, maxBRows, 1).setHorizontalAlignment("center").setNumberFormat("0");
+  bSheet.getRange(2, 10, maxBRows, 1).setHorizontalAlignment("center");
+  bSheet.getRange(2, 11, maxBRows, 1).setHorizontalAlignment("left");
+  bSheet.getRange(2, 12, maxBRows, 1).setHorizontalAlignment("center");
+  bSheet.getRange(2, 13, maxBRows, 4).setNumberFormat('"₱"#,##0').setHorizontalAlignment("right");
+  bSheet.getRange(2, 17, maxBRows, 1).setHorizontalAlignment("center");
+  bSheet.getRange(2, 18, maxBRows, 1).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center");
+  bSheet.getRange(2, 19, maxBRows, 1).setFontSize(9).setHorizontalAlignment("left").setWrap(true).setVerticalAlignment("top");
+  bSheet.getRange(2, 20, maxBRows, 1).setFontFamily("Inter").setFontColor(PURPLE_ACCENT).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle").setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  bSheet.getRange(2, 21, maxBRows, 7).setFontSize(9).setFontColor(MUTED).setHorizontalAlignment("center").setVerticalAlignment("middle").setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+
+  const statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(ALLOWED_BOOKING_STATUSES, true)
+    .setAllowInvalid(false)
+    .build();
+  bSheet.getRange(2, 18, maxBRows, 1).setDataValidation(statusRule);
+
+  // Repair notes formatting, customer folder hyperlink labels, dynamic row heights, and clip adjacent columns
+  repairAndFormatBookingsSheet(bSheet);
+
+  SpreadsheetApp.getActiveSpreadsheet().toast("Bookings tab design successfully refreshed!", "PackAndFilm System", 4);
+}
+
+/**
+ * Dedicated Formatter for the Calendar Sync Tab:
+ * Matches fonts, row heights, headers, borders, and status dropdowns with the workbook style,
+ * while preserving all synchronization data and keeping columns A–F 100% compatible.
+ */
+function formatCalendarSyncSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let cSheet = ss.getSheetByName("Calendar Sync");
+  if (!cSheet) return;
+
+  ensureColumns(cSheet, CALENDAR_SYNC_WIDTHS.length);
+  ensureRows(cSheet, 50);
+
+  cSheet.setTabColor(LAVENDER);
+  cSheet.setFrozenRows(1);
+  cSheet.setFrozenColumns(1);
+  cSheet.setRowHeight(1, 36);
+  cSheet.setRowHeights(2, Math.max(1, cSheet.getMaxRows() - 1), 32);
+
+  CALENDAR_SYNC_WIDTHS.forEach((w, idx) => cSheet.setColumnWidth(idx + 1, w));
+
+  if (cSheet.getLastRow() === 0 || String(cSheet.getRange(1, 1).getValue()).trim() === "") {
+    cSheet.getRange(1, 1, 1, CALENDAR_SYNC_HEADERS.length).setValues([CALENDAR_SYNC_HEADERS]);
+  } else {
+    cSheet.getRange(1, 7, 1, 7).setValues([["Pickup Event ID", "Return Event ID", "Confirmed At", "Handover At", "Completed At", "Cancelled At", "Calendar Sync Status & Audit Log"]]);
+  }
+
+  const cHeader = cSheet.getRange(1, 1, 1, CALENDAR_SYNC_WIDTHS.length);
+  cHeader.setBackground(LAVENDER);
+  cHeader.setFontFamily("Poppins");
+  cHeader.setFontSize(10);
+  cHeader.setFontWeight("bold");
+  cHeader.setFontColor(INK);
+  cHeader.setVerticalAlignment("middle");
+  cHeader.setHorizontalAlignment("center");
+  cHeader.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+  cHeader.setBorder(null, null, true, null, null, null, INK, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+
+  const maxCRows = Math.max(1, cSheet.getMaxRows() - 1);
+  const cDataRange = cSheet.getRange(2, 1, maxCRows, CALENDAR_SYNC_WIDTHS.length);
+  cDataRange.setFontFamily("Inter").setFontSize(10).setFontColor(INK).setVerticalAlignment("middle");
+  cDataRange.setBorder(true, true, true, true, true, true, BORDER_COLOR, SpreadsheetApp.BorderStyle.SOLID);
+
+  cSheet.getRange(2, 1, maxCRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
+  cSheet.getRange(2, 2, maxCRows, 2).setHorizontalAlignment("center").setNumberFormat("yyyy-mm-dd");
+  cSheet.getRange(2, 4, maxCRows, 1).setHorizontalAlignment("center");
+  cSheet.getRange(2, 5, maxCRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
+  cSheet.getRange(2, 6, maxCRows, 1).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center");
+  cSheet.getRange(2, 7, maxCRows, 2).setFontSize(9).setFontColor(MUTED).setHorizontalAlignment("center").setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  cSheet.getRange(2, 9, maxCRows, 4).setHorizontalAlignment("center");
+  cSheet.getRange(2, 13, maxCRows, 1).setFontSize(9).setHorizontalAlignment("left").setWrap(true);
+
+  const calStatusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(ALLOWED_BOOKING_STATUSES, true)
+    .setAllowInvalid(false)
+    .build();
+  cSheet.getRange(2, 6, maxCRows, 1).setDataValidation(calStatusRule);
+
+  SpreadsheetApp.getActiveSpreadsheet().toast("Calendar Sync tab design successfully refreshed!", "PackAndFilm System", 4);
 }
