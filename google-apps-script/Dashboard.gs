@@ -805,6 +805,60 @@ function extractDriveFolderUrl(cellVal, cellFormula, richTextVal) {
 }
 
 /**
+ * Extracts a Google Drive Folder or File ID from a variety of URL shapes.
+ */
+function extractDriveIdFromUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  const match = url.match(/[-\w]{25,}/);
+  return match ? match[0] : "";
+}
+
+/**
+ * Scans a customer's dedicated Google Drive folder and maps all uploaded KYC files.
+ */
+function extractKycUrlsFromFolder(folder) {
+  const docMap = {
+    id1: "",
+    id2: "",
+    authSlip: "",
+    billing: "",
+    selfie: "",
+    receipt: "",
+    guardian: ""
+  };
+  if (!folder) return docMap;
+
+  try {
+    const files = folder.getFiles();
+    while (files.hasNext()) {
+      const file = files.next();
+      const name = file.getName().toLowerCase();
+      const url = file.getUrl();
+
+      if (name.startsWith("01_") || (name.includes("primary") && !name.includes("back"))) {
+        if (!docMap.id1) docMap.id1 = url;
+      } else if (name.startsWith("02_") || name.includes("secondary") || name.includes("student")) {
+        if (!docMap.id2) docMap.id2 = url;
+      } else if (name.startsWith("03_") || (name.includes("auth") && !name.includes("selfie"))) {
+        if (!docMap.authSlip) docMap.authSlip = url;
+      } else if (name.startsWith("04_") || name.includes("proof") || name.includes("address") || name.includes("billing") || name.includes("delivery")) {
+        if (!docMap.billing) docMap.billing = url;
+      } else if (name.startsWith("05_") || (name.includes("selfie") && !name.includes("slip") && !name.includes("ids"))) {
+        if (!docMap.selfie) docMap.selfie = url;
+      } else if (name.startsWith("06_") || name.includes("receipt") || name.includes("payment") || name.includes("gcash")) {
+        if (!docMap.receipt) docMap.receipt = url;
+      } else if (name.startsWith("07_") || name.includes("guardian") || name.includes("parent") || name.includes("contact1")) {
+        if (!docMap.guardian) docMap.guardian = url;
+      }
+    }
+  } catch (err) {
+    Logger.log("Error extracting files from folder: " + err.toString());
+  }
+
+  return docMap;
+}
+
+/**
  * Formats notes text into clear, readable, structured sections with line breaks:
  * - General note remarks (if any)
  * - Emergency Contacts (bulleted per contact, preserving social information)
@@ -932,7 +986,44 @@ function repairAndFormatBookingsSheet(bSheet) {
           bSheet.getRange(rowNum, c + 1).clearContent();
         }
       }
+
+      // ── 3b. Auto-Recover and Populate Missing KYC Links from Customer's Drive Folder ──
+      try {
+        const folderId = extractDriveIdFromUrl(folderUrl);
+        if (folderId) {
+          const folder = DriveApp.getFolderById(folderId);
+          if (folder) {
+            const docMap = extractKycUrlsFromFolder(folder);
+            const mapping = [
+              { col: 21, key: "id1" },
+              { col: 22, key: "id2" },
+              { col: 23, key: "authSlip" },
+              { col: 24, key: "billing" },
+              { col: 25, key: "selfie" },
+              { col: 26, key: "receipt" },
+              { col: 27, key: "guardian" }
+            ];
+            mapping.forEach(m => {
+              const currentVal = String(values[i][m.col - 1] || "").trim();
+              if (!currentVal && docMap[m.key]) {
+                bSheet.getRange(rowNum, m.col).setValue(docMap[m.key]);
+              }
+            });
+          }
+        }
+      } catch (fErr) {
+        Logger.log("Error recovering files from folder for row " + rowNum + ": " + fErr.toString());
+      }
     }
+  }
+
+  // ── 3c. Ensure Standard Headers for Columns 21-27 ──
+  const standardKycHeaders = [
+    "Primary ID URL", "Secondary ID / COR URL", "Handwritten Auth Slip URL",
+    "Proof of Address URL", "Selfie Verification URL", "Payment Receipt URL", "Guardian ID URL"
+  ];
+  if (bSheet.getMaxColumns() >= 27) {
+    bSheet.getRange(1, 21, 1, 7).setValues([standardKycHeaders]);
   }
 
   // ── 4. Apply Wrap Strategies and Alignments ──

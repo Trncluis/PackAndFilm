@@ -508,6 +508,60 @@ function saveBase64ToDrive(parentFolder, base64Data, filenameBase, defaultExt) {
   }
 }
 
+/**
+ * Extracts a Google Drive Folder or File ID from a URL.
+ */
+function extractDriveIdFromUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  const match = url.match(/[-\w]{25,}/);
+  return match ? match[0] : "";
+}
+
+/**
+ * Scans a customer's dedicated Google Drive folder and maps all uploaded KYC files.
+ */
+function extractKycUrlsFromFolder(folder) {
+  const docMap = {
+    id1: "",
+    id2: "",
+    authSlip: "",
+    billing: "",
+    selfie: "",
+    receipt: "",
+    guardian: ""
+  };
+  if (!folder) return docMap;
+
+  try {
+    const files = folder.getFiles();
+    while (files.hasNext()) {
+      const file = files.next();
+      const name = file.getName().toLowerCase();
+      const url = file.getUrl();
+
+      if (name.startsWith("01_") || (name.includes("primary") && !name.includes("back"))) {
+        if (!docMap.id1) docMap.id1 = url;
+      } else if (name.startsWith("02_") || name.includes("secondary") || name.includes("student")) {
+        if (!docMap.id2) docMap.id2 = url;
+      } else if (name.startsWith("03_") || (name.includes("auth") && !name.includes("selfie"))) {
+        if (!docMap.authSlip) docMap.authSlip = url;
+      } else if (name.startsWith("04_") || name.includes("proof") || name.includes("address") || name.includes("billing") || name.includes("delivery")) {
+        if (!docMap.billing) docMap.billing = url;
+      } else if (name.startsWith("05_") || (name.includes("selfie") && !name.includes("slip") && !name.includes("ids"))) {
+        if (!docMap.selfie) docMap.selfie = url;
+      } else if (name.startsWith("06_") || name.includes("receipt") || name.includes("payment") || name.includes("gcash")) {
+        if (!docMap.receipt) docMap.receipt = url;
+      } else if (name.startsWith("07_") || name.includes("guardian") || name.includes("parent") || name.includes("contact1")) {
+        if (!docMap.guardian) docMap.guardian = url;
+      }
+    }
+  } catch (err) {
+    Logger.log("Error extracting files from folder: " + err.toString());
+  }
+
+  return docMap;
+}
+
 // ─────────────────────────────────────────────────────────────
 // 4. DYNAMIC HEADER RESOLUTION & COLUMN MAPPING
 // ─────────────────────────────────────────────────────────────
@@ -580,6 +634,100 @@ function getHeaderIndexMap(sheet) {
 // ─────────────────────────────────────────────────────────────
 
 /**
+ * Maps a sheet row into a structured booking record with self-healing KYC recovery.
+ * If individual KYC document links are missing from the sheet row, automatically scans
+ * the customer's Google Drive folder to recover the file URLs and writes them back to the sheet!
+ */
+function mapBookingRecord(r, i, colMap, formulas, bookingsSheet) {
+  const rawFolderVal = r[colMap.driveFolderUrl];
+  const rawFormula = (formulas[i + 1] && formulas[i + 1][colMap.driveFolderUrl]) || "";
+  const resolvedFolderUrl = (typeof extractDriveFolderUrl === "function" ? extractDriveFolderUrl(rawFolderVal, rawFormula) : "") || rawFolderVal || "";
+
+  let id1 = r[colMap.id1Url] || "";
+  let id2 = r[colMap.id2Url] || "";
+  let authSlip = r[colMap.authSlipUrl] || "";
+  let billing = r[colMap.billingUrl] || "";
+  let selfie = r[colMap.selfieVideoUrl] || "";
+  let receipt = r[colMap.receiptUrl] || "";
+  let guardian = r[colMap.guardianIdUrl] || "";
+
+  // Self-Healing: If individual KYC links are missing from the sheet row,
+  // scan customer's Google Drive folder to recover the file URLs and auto-update the sheet!
+  if ((!id1 || !id2 || !authSlip || !billing || !selfie || !receipt) && resolvedFolderUrl) {
+    try {
+      const folderId = extractDriveIdFromUrl(resolvedFolderUrl);
+      if (folderId) {
+        const folder = DriveApp.getFolderById(folderId);
+        if (folder) {
+          const docMap = extractKycUrlsFromFolder(folder);
+          const rowNum = i + 2;
+          if (!id1 && docMap.id1) {
+            id1 = docMap.id1;
+            bookingsSheet.getRange(rowNum, colMap.id1Url + 1).setValue(id1);
+          }
+          if (!id2 && docMap.id2) {
+            id2 = docMap.id2;
+            bookingsSheet.getRange(rowNum, colMap.id2Url + 1).setValue(id2);
+          }
+          if (!authSlip && docMap.authSlip) {
+            authSlip = docMap.authSlip;
+            bookingsSheet.getRange(rowNum, colMap.authSlipUrl + 1).setValue(authSlip);
+          }
+          if (!billing && docMap.billing) {
+            billing = docMap.billing;
+            bookingsSheet.getRange(rowNum, colMap.billingUrl + 1).setValue(billing);
+          }
+          if (!selfie && docMap.selfie) {
+            selfie = docMap.selfie;
+            bookingsSheet.getRange(rowNum, colMap.selfieVideoUrl + 1).setValue(selfie);
+          }
+          if (!receipt && docMap.receipt) {
+            receipt = docMap.receipt;
+            bookingsSheet.getRange(rowNum, colMap.receiptUrl + 1).setValue(receipt);
+          }
+          if (!guardian && docMap.guardian) {
+            guardian = docMap.guardian;
+            bookingsSheet.getRange(rowNum, colMap.guardianIdUrl + 1).setValue(guardian);
+          }
+        }
+      }
+    } catch (healErr) {
+      Logger.log("Auto-heal folder error: " + healErr.toString());
+    }
+  }
+
+  return {
+    bookingRef: r[colMap.bookingRef] || "",
+    timestamp: r[colMap.timestamp] ? Utilities.formatDate(new Date(r[colMap.timestamp]), "GMT+8", "yyyy-MM-dd HH:mm") : "",
+    customerName: r[colMap.customerName] || "",
+    contactNumber: r[colMap.contactNumber] || "",
+    socialMediaHandle: r[colMap.socialMediaHandle] || "",
+    cameraRented: r[colMap.cameraRented] || "",
+    startDate: r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "",
+    endDate: r[colMap.endDate] ? Utilities.formatDate(new Date(r[colMap.endDate]), "GMT+8", "yyyy-MM-dd") : "",
+    rentalDays: r[colMap.rentalDays] || 1,
+    handoverMethod: r[colMap.handoverMethod] || "",
+    address: r[colMap.address] || "",
+    shootType: r[colMap.shootType] || "",
+    rentalTotal: r[colMap.rentalTotal] || 0,
+    securityDeposit: r[colMap.securityDeposit] || 0,
+    downpaymentPaid: r[colMap.downpaymentPaid] || 0,
+    balanceDue: r[colMap.balanceDue] || 0,
+    gcashRefNumber: r[colMap.gcashRefNumber] || "",
+    status: r[colMap.status] || "Pending Verification",
+    notes: r[colMap.notes] || "",
+    driveFolderUrl: resolvedFolderUrl,
+    id1Url: id1,
+    id2Url: id2,
+    authSlipUrl: authSlip,
+    billingUrl: billing,
+    selfieVideoUrl: selfie,
+    receiptUrl: receipt,
+    guardianIdUrl: guardian
+  };
+}
+
+/**
  * 1. GET Request:
  * - Public: Fetches calendar bookings for conflict checking (no private customer details)
  * - Protected: Rejects unauthorized requests for admin booking records
@@ -614,41 +762,7 @@ function doGet(e) {
       const formulas = dataRange.getFormulas();
       const rows = data.slice(1);
 
-      const bookingsList = rows.map((r, i) => {
-        const rawFolderVal = r[colMap.driveFolderUrl];
-        const rawFormula = (formulas[i + 1] && formulas[i + 1][colMap.driveFolderUrl]) || "";
-        const resolvedFolderUrl = (typeof extractDriveFolderUrl === "function" ? extractDriveFolderUrl(rawFolderVal, rawFormula) : "") || rawFolderVal || "";
-
-        return {
-          bookingRef: r[colMap.bookingRef] || "",
-          timestamp: r[colMap.timestamp] ? Utilities.formatDate(new Date(r[colMap.timestamp]), "GMT+8", "yyyy-MM-dd HH:mm") : "",
-          customerName: r[colMap.customerName] || "",
-          contactNumber: r[colMap.contactNumber] || "",
-          socialMediaHandle: r[colMap.socialMediaHandle] || "",
-          cameraRented: r[colMap.cameraRented] || "",
-          startDate: r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "",
-          endDate: r[colMap.endDate] ? Utilities.formatDate(new Date(r[colMap.endDate]), "GMT+8", "yyyy-MM-dd") : "",
-          rentalDays: r[colMap.rentalDays] || 1,
-          handoverMethod: r[colMap.handoverMethod] || "",
-          address: r[colMap.address] || "",
-          shootType: r[colMap.shootType] || "",
-          rentalTotal: r[colMap.rentalTotal] || 0,
-          securityDeposit: r[colMap.securityDeposit] || 0,
-          downpaymentPaid: r[colMap.downpaymentPaid] || 0,
-          balanceDue: r[colMap.balanceDue] || 0,
-          gcashRefNumber: r[colMap.gcashRefNumber] || "",
-          status: r[colMap.status] || "Pending Verification",
-          notes: r[colMap.notes] || "",
-          driveFolderUrl: resolvedFolderUrl,
-          id1Url: r[colMap.id1Url] || "",
-          id2Url: r[colMap.id2Url] || "",
-          authSlipUrl: r[colMap.authSlipUrl] || "",
-          billingUrl: r[colMap.billingUrl] || "",
-          selfieVideoUrl: r[colMap.selfieVideoUrl] || "",
-          receiptUrl: r[colMap.receiptUrl] || "",
-          guardianIdUrl: r[colMap.guardianIdUrl] || ""
-        };
-      });
+      const bookingsList = rows.map((r, i) => mapBookingRecord(r, i, colMap, formulas, bookingsSheet));
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -774,41 +888,7 @@ function doPost(e) {
       const formulas = dataRange.getFormulas();
       const rows = data.slice(1);
 
-      const bookingsList = rows.map((r, i) => {
-        const rawFolderVal = r[colMap.driveFolderUrl];
-        const rawFormula = (formulas[i + 1] && formulas[i + 1][colMap.driveFolderUrl]) || "";
-        const resolvedFolderUrl = (typeof extractDriveFolderUrl === "function" ? extractDriveFolderUrl(rawFolderVal, rawFormula) : "") || rawFolderVal || "";
-
-        return {
-          bookingRef: r[colMap.bookingRef] || "",
-          timestamp: r[colMap.timestamp] ? Utilities.formatDate(new Date(r[colMap.timestamp]), "GMT+8", "yyyy-MM-dd HH:mm") : "",
-          customerName: r[colMap.customerName] || "",
-          contactNumber: r[colMap.contactNumber] || "",
-          socialMediaHandle: r[colMap.socialMediaHandle] || "",
-          cameraRented: r[colMap.cameraRented] || "",
-          startDate: r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "",
-          endDate: r[colMap.endDate] ? Utilities.formatDate(new Date(r[colMap.endDate]), "GMT+8", "yyyy-MM-dd") : "",
-          rentalDays: r[colMap.rentalDays] || 1,
-          handoverMethod: r[colMap.handoverMethod] || "",
-          address: r[colMap.address] || "",
-          shootType: r[colMap.shootType] || "",
-          rentalTotal: r[colMap.rentalTotal] || 0,
-          securityDeposit: r[colMap.securityDeposit] || 0,
-          downpaymentPaid: r[colMap.downpaymentPaid] || 0,
-          balanceDue: r[colMap.balanceDue] || 0,
-          gcashRefNumber: r[colMap.gcashRefNumber] || "",
-          status: r[colMap.status] || "Pending Verification",
-          notes: r[colMap.notes] || "",
-          driveFolderUrl: resolvedFolderUrl,
-          id1Url: r[colMap.id1Url] || "",
-          id2Url: r[colMap.id2Url] || "",
-          authSlipUrl: r[colMap.authSlipUrl] || "",
-          billingUrl: r[colMap.billingUrl] || "",
-          selfieVideoUrl: r[colMap.selfieVideoUrl] || "",
-          receiptUrl: r[colMap.receiptUrl] || "",
-          guardianIdUrl: r[colMap.guardianIdUrl] || ""
-        };
-      });
+      const bookingsList = rows.map((r, i) => mapBookingRecord(r, i, colMap, formulas, bookingsSheet));
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
