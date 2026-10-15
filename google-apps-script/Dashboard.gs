@@ -404,6 +404,11 @@ function formatAndBeautifyWorkbook() {
   // Repair notes formatting, customer folder hyperlink labels, and clip adjacent columns
   repairAndFormatBookingsSheet(bSheet);
 
+  // Guarantee Columns 21-27 are hidden so the sheet visually ends at Column 20 (Customer Documents Folder)
+  if (bSheet.getMaxColumns() >= 21) {
+    bSheet.hideColumns(21, Math.min(7, bSheet.getMaxColumns() - 20));
+  }
+
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // 3. CALENDAR SYNC TAB (Columns 1-6 Fixed, 7-13 Extended)
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -916,13 +921,16 @@ function repairAndFormatBookingsSheet(bSheet) {
       bSheet.getRange(rowNum, folderIdx + 1).setFormula(hyperlinkFormula);
     }
 
-    // ── 3. Remove all other Google Drive links, retaining ONLY Customer Documents Folder ──
-    for (let c = 0; c < lastCol; c++) {
-      if (c === folderIdx) continue; // Strictly retain the Customer Documents Folder
-      const cellVal = String(values[i][c] || "").trim();
-      const cellForm = (formulas[i] && formulas[i][c]) || "";
-      if (cellVal.includes("drive.google.com") || cellForm.includes("drive.google.com")) {
-        bSheet.getRange(rowNum, c + 1).clearContent();
+    // ── 3. Clean any misplaced duplicate folder URLs that spilled into other cells ──
+    // Retains valid KYC file links in columns 21-27, only cleaning duplicate copies of the folder link
+    if (folderUrl) {
+      for (let c = 0; c < lastCol; c++) {
+        if (c === folderIdx) continue;
+        const cellVal = String(values[i][c] || "").trim();
+        const cellForm = (formulas[i] && formulas[i][c]) || "";
+        if (cellVal === folderUrl || cellForm.includes(folderUrl)) {
+          bSheet.getRange(rowNum, c + 1).clearContent();
+        }
       }
     }
   }
@@ -944,9 +952,9 @@ function repairAndFormatBookingsSheet(bSheet) {
     .setVerticalAlignment("middle")
     .setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
 
-  // KYC Columns: Clip text to avoid overflow across columns
+  // KYC Columns (Cols 21-27): Set clip wrap strategy and muted styling
   const kycStartCol = folderIdx + 2;
-  const kycColCount = Math.min(7, lastCol - folderIdx);
+  const kycColCount = Math.min(7, Math.max(0, bSheet.getMaxColumns() - (folderIdx + 1)));
   if (kycColCount > 0) {
     bSheet.getRange(2, kycStartCol, numRows, kycColCount)
       .setFontSize(9)
@@ -954,6 +962,11 @@ function repairAndFormatBookingsSheet(bSheet) {
       .setHorizontalAlignment("center")
       .setVerticalAlignment("middle")
       .setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+
+    // ── 5. Make KYC Document Link Columns Completely Invisible in Google Sheets ──
+    // Hides columns 21-27 from view in Sheets so it looks completely clean up to Column 20,
+    // while remaining fully readable by the Admin Dashboard and backend integrations.
+    bSheet.hideColumns(kycStartCol, kycColCount);
   }
 }
 
@@ -1046,6 +1059,11 @@ function formatBookingsSheet() {
 
   // Repair notes formatting, customer folder hyperlink labels, dynamic row heights, and clip adjacent columns
   repairAndFormatBookingsSheet(bSheet);
+
+  // Guarantee Columns 21-27 are hidden so the sheet visually ends at Column 20 (Customer Documents Folder)
+  if (bSheet.getMaxColumns() >= 21) {
+    bSheet.hideColumns(21, Math.min(7, bSheet.getMaxColumns() - 20));
+  }
 
   SpreadsheetApp.getActiveSpreadsheet().toast("Bookings tab design successfully refreshed!", "PackAndFilm System", 4);
 }

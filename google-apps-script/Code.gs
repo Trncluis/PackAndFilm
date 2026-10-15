@@ -1202,27 +1202,48 @@ function doPost(e) {
       const rootFolder = getOrCreateRootFolder();
       const bookingFolder = getOrCreateBookingFolder(rootFolder, targetRef, customerName);
 
-      // Save all requirements into customer Drive folder (sheet only retains the Customer Documents Folder link)
+      // Save all requirements into customer Drive folder and store URLs in hidden columns 21-27
       if (body.id1File) {
-        saveBase64ToDrive(bookingFolder, body.id1File, "01_Primary_Gov_ID");
+        const url = saveBase64ToDrive(bookingFolder, body.id1File, "01_Primary_Gov_ID");
+        if (colMap.id1Url !== undefined && colMap.id1Url >= 0) {
+          bSheet.getRange(targetRow, colMap.id1Url + 1).setValue(url);
+        }
       }
       if (body.id2File) {
-        saveBase64ToDrive(bookingFolder, body.id2File, body.isStudentExemption ? "02_Student_ID_COR" : "02_Secondary_ID");
+        const url = saveBase64ToDrive(bookingFolder, body.id2File, body.isStudentExemption ? "02_Student_ID_COR" : "02_Secondary_ID");
+        if (colMap.id2Url !== undefined && colMap.id2Url >= 0) {
+          bSheet.getRange(targetRow, colMap.id2Url + 1).setValue(url);
+        }
       }
       if (body.authorizationSlipFile) {
-        saveBase64ToDrive(bookingFolder, body.authorizationSlipFile, "03_Handwritten_Auth_Slip");
+        const url = saveBase64ToDrive(bookingFolder, body.authorizationSlipFile, "03_Handwritten_Auth_Slip");
+        if (colMap.authSlipUrl !== undefined && colMap.authSlipUrl >= 0) {
+          bSheet.getRange(targetRow, colMap.authSlipUrl + 1).setValue(url);
+        }
       }
       if (body.deliveryReceiptsFile) {
-        saveBase64ToDrive(bookingFolder, body.deliveryReceiptsFile, "04_Proof_Of_Address");
+        const url = saveBase64ToDrive(bookingFolder, body.deliveryReceiptsFile, "04_Proof_Of_Address");
+        if (colMap.billingUrl !== undefined && colMap.billingUrl >= 0) {
+          bSheet.getRange(targetRow, colMap.billingUrl + 1).setValue(url);
+        }
       }
       if (body.selfieFile) {
-        saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification");
+        const url = saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification");
+        if (colMap.selfieVideoUrl !== undefined && colMap.selfieVideoUrl >= 0) {
+          bSheet.getRange(targetRow, colMap.selfieVideoUrl + 1).setValue(url);
+        }
       }
       if (body.receiptFile) {
-        saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
+        const url = saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
+        if (colMap.receiptUrl !== undefined && colMap.receiptUrl >= 0) {
+          bSheet.getRange(targetRow, colMap.receiptUrl + 1).setValue(url);
+        }
       }
       if (body.contact1IdFile) {
-        saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Parent_Guardian_ID");
+        const url = saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Parent_Guardian_ID");
+        if (colMap.guardianIdUrl !== undefined && colMap.guardianIdUrl >= 0) {
+          bSheet.getRange(targetRow, colMap.guardianIdUrl + 1).setValue(url);
+        }
       }
 
       if (body.id1BackFile) {
@@ -1245,6 +1266,11 @@ function doPost(e) {
       const customerNameVal = bSheet.getRange(targetRow, colMap.customerName + 1).getValue();
       const folderName = (bookingFolder && typeof bookingFolder.getName === "function" && bookingFolder.getName()) || (typeof getActualDriveFolderName === "function" ? getActualDriveFolderName(bookingFolder.getUrl(), customerNameVal) : customerNameVal) || "Customer Documents";
       bSheet.getRange(targetRow, colMap.driveFolderUrl + 1).setFormula('=HYPERLINK("' + bookingFolder.getUrl() + '", "' + String(folderName).replace(/"/g, '""') + '")');
+
+      // Guarantee columns 21-27 remain hidden so the sheet is visually clean up to Column 20
+      if (bSheet.getMaxColumns() >= 21) {
+        bSheet.hideColumns(21, Math.min(7, bSheet.getMaxColumns() - 20));
+      }
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -1425,12 +1451,19 @@ function doPost(e) {
         }
         const folderDisplayName = (typeof getActualDriveFolderName === "function" ? getActualDriveFolderName(driveFolderUrl, body.customerName) : body.customerName) || "Customer Documents";
         bookingsSheet.getRange(existingRowIndex, colMap.driveFolderUrl + 1).setFormula('=HYPERLINK("' + driveFolderUrl + '", "' + String(folderDisplayName).replace(/"/g, '""') + '")');
+        if (id1Url && colMap.id1Url !== undefined && colMap.id1Url >= 0) bookingsSheet.getRange(existingRowIndex, colMap.id1Url + 1).setValue(id1Url);
+        if (id2Url && colMap.id2Url !== undefined && colMap.id2Url >= 0) bookingsSheet.getRange(existingRowIndex, colMap.id2Url + 1).setValue(id2Url);
+        if (authSlipUrl && colMap.authSlipUrl !== undefined && colMap.authSlipUrl >= 0) bookingsSheet.getRange(existingRowIndex, colMap.authSlipUrl + 1).setValue(authSlipUrl);
+        if (billingUrl && colMap.billingUrl !== undefined && colMap.billingUrl >= 0) bookingsSheet.getRange(existingRowIndex, colMap.billingUrl + 1).setValue(billingUrl);
+        if (selfieVideoUrl && colMap.selfieVideoUrl !== undefined && colMap.selfieVideoUrl >= 0) bookingsSheet.getRange(existingRowIndex, colMap.selfieVideoUrl + 1).setValue(selfieVideoUrl);
+        if (receiptUrl && colMap.receiptUrl !== undefined && colMap.receiptUrl >= 0) bookingsSheet.getRange(existingRowIndex, colMap.receiptUrl + 1).setValue(receiptUrl);
+        if (guardianIdUrl && colMap.guardianIdUrl !== undefined && colMap.guardianIdUrl >= 0) bookingsSheet.getRange(existingRowIndex, colMap.guardianIdUrl + 1).setValue(guardianIdUrl);
       } else {
         const formattedNote = typeof formatNotesText === "function" ? formatNotesText(body.notes || "") : (body.notes || "");
         const folderDisplayName = (typeof getActualDriveFolderName === "function" ? getActualDriveFolderName(driveFolderUrl, body.customerName) : body.customerName) || "Customer Documents";
         const folderFormula = '=HYPERLINK("' + driveFolderUrl + '", "' + String(folderDisplayName).replace(/"/g, '""') + '")';
 
-        // Append New Row with 27 Columns: Column 20 is the ONLY Google Drive link (Customer Documents Folder)
+        // Append New Row with 27 Columns: Column 20 is Customer Documents Folder, Columns 21-27 are KYC file URLs (hidden)
         bookingsSheet.appendRow([
           body.bookingRef,
           new Date(),
@@ -1451,14 +1484,14 @@ function doPost(e) {
           body.gcashRefNumber,
           "Deposit Paid",
           formattedNote,
-          folderFormula, // ⭐ Col 20: Dedicated Customer Documents Folder Hyperlink (only Drive link)
-          "", // Col 21: Primary ID URL (accessible in Drive folder)
-          "", // Col 22: Secondary ID URL (accessible in Drive folder)
-          "", // Col 23: Handwritten Auth Slip URL (accessible in Drive folder)
-          "", // Col 24: Proof of Address URL (accessible in Drive folder)
-          "", // Col 25: Selfie Verification URL (accessible in Drive folder)
-          "", // Col 26: Payment Receipt URL (accessible in Drive folder)
-          ""  // Col 27: Guardian ID URL (accessible in Drive folder)
+          folderFormula, // Col 20: Dedicated Customer Documents Folder Hyperlink
+          id1Url || "",        // Col 21: Primary ID URL (hidden column)
+          id2Url || "",        // Col 22: Secondary ID URL (hidden column)
+          authSlipUrl || "",   // Col 23: Handwritten Auth Slip URL (hidden column)
+          billingUrl || "",    // Col 24: Proof of Address URL (hidden column)
+          selfieVideoUrl || "",// Col 25: Selfie Verification URL (hidden column)
+          receiptUrl || "",    // Col 26: Payment Receipt URL (hidden column)
+          guardianIdUrl || ""  // Col 27: Guardian ID URL (hidden column)
         ]);
 
         const newRowIndex = bookingsSheet.getLastRow();
@@ -1466,6 +1499,11 @@ function doPost(e) {
         bookingsSheet.setRowHeight(newRowIndex, Math.max(32, Math.min(120, 24 + lineCount * 14)));
         bookingsSheet.getRange(newRowIndex, 20).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
         bookingsSheet.getRange(newRowIndex, 21, 1, 7).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+      }
+
+      // Guarantee columns 21-27 remain hidden so the sheet is visually clean up to Column 20
+      if (bookingsSheet.getMaxColumns() >= 21) {
+        bookingsSheet.hideColumns(21, Math.min(7, bookingsSheet.getMaxColumns() - 20));
       }
 
       // Append / Update Calendar Sync Sheet
