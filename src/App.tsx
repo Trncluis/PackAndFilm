@@ -443,6 +443,94 @@ export default function App() {
     }
   }, [bookings]);
 
+  // ── Hero Carousel Live Availability & Smart Priority Logic ──
+  const heroCameraAvailability = useMemo(() => {
+    const checkStatus = (camId: string) => {
+      const conflict = checkCameraDateConflict(camId, todayStr, todayStr, bookings);
+      if (!conflict.hasConflict) {
+        return { isAvailableToday: true, label: 'Available Today', nextFree: null };
+      }
+      const nextWindow = findNextFreeWindowForCamera(camId, todayStr, 1, bookings);
+      let formattedNext = nextWindow.start;
+      try {
+        const [y, m, d] = nextWindow.start.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        formattedNext = `${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+      } catch {
+        // fallback
+      }
+      return {
+        isAvailableToday: false,
+        label: 'Booked Today',
+        nextFree: formattedNext,
+      };
+    };
+
+    return {
+      'dji-pocket-3': checkStatus('dji-pocket-3'),
+      'canon-g7x-mark-iii': checkStatus('canon-g7x-mark-iii'),
+    };
+  }, [todayStr, bookings]);
+
+  // Priority initial slide: if DJI is booked today and Canon is free today, default to Canon!
+  const [heroSlideId, setHeroSlideId] = useState<'dji-pocket-3' | 'canon-g7x-mark-iii'>(() => {
+    const djiConflict = checkCameraDateConflict('dji-pocket-3', todayStr, todayStr, bookings);
+    const canonConflict = checkCameraDateConflict('canon-g7x-mark-iii', todayStr, todayStr, bookings);
+    if (djiConflict.hasConflict && !canonConflict.hasConflict) {
+      return 'canon-g7x-mark-iii';
+    }
+    return 'dji-pocket-3';
+  });
+
+  const [isHeroHovered, setIsHeroHovered] = useState(false);
+
+  // Auto-rotate hero slide every 5.5s unless hovered
+  useEffect(() => {
+    if (isHeroHovered) return;
+    const interval = setInterval(() => {
+      setHeroSlideId(prev => (prev === 'dji-pocket-3' ? 'canon-g7x-mark-iii' : 'dji-pocket-3'));
+    }, 5500);
+    return () => clearInterval(interval);
+  }, [isHeroHovered]);
+
+  const HERO_SLIDES_CONFIG = {
+    'dji-pocket-3': {
+      id: 'dji-pocket-3',
+      name: 'DJI Osmo Pocket 3',
+      shortName: 'DJI Pocket 3',
+      bundleTag: 'CREATOR COMBO',
+      rate: 450,
+      bulkRateText: 'As low as ₱350/d on 6+ days',
+      image: '/dji-pocket-3-hero.png',
+      alt: 'DJI Osmo Pocket 3 Standard Kit',
+      hasLed: true,
+      chips: [
+        { text: '4K 60fps / 120fps', position: '-top-4 -left-4', bg: 'bg-[#F5C6A8]', rotate: 'rotate-[-5deg]', anim: 'animate-float-subtle' },
+        { text: '128GB MicroSD Included', position: 'top-1/2 -right-4', bg: 'bg-[#A8DBC8]', rotate: 'rotate-[6deg]', anim: 'animate-float-gentle' },
+        { text: 'Ultra Compact Gimbal', position: '-bottom-4 left-6', bg: 'bg-[#C9B8F0]', rotate: 'rotate-[-3deg]', anim: '' },
+      ],
+    },
+    'canon-g7x-mark-iii': {
+      id: 'canon-g7x-mark-iii',
+      name: 'Canon PowerShot G7 X Mark III',
+      shortName: 'Canon G7 X',
+      bundleTag: 'VLOGGER BUNDLE',
+      rate: 500,
+      bulkRateText: 'As low as ₱400/d on 6+ days',
+      image: '/canon-g7x-hero.png',
+      alt: 'Canon PowerShot G7 X Mark III Creator Kit',
+      hasLed: false,
+      chips: [
+        { text: '20.1MP 1.0" Sensor', position: '-top-4 -left-4', bg: 'bg-[#F5C6A8]', rotate: 'rotate-[-5deg]', anim: 'animate-float-subtle' },
+        { text: '180° Flip Screen', position: 'top-1/2 -right-4', bg: 'bg-[#FFE8A3]', rotate: 'rotate-[6deg]', anim: 'animate-float-gentle' },
+        { text: '4.2x Optical Zoom', position: '-bottom-4 left-6', bg: 'bg-[#C9B8F0]', rotate: 'rotate-[-3deg]', anim: '' },
+      ],
+    },
+  };
+  const activeHeroSlide = HERO_SLIDES_CONFIG[heroSlideId];
+  const activeHeroAvailability = heroCameraAvailability[heroSlideId];
+
   // Live Calendar Sync from Google Sheets Webhook
   const fetchLiveCalendarFromSheet = async (isManualRefresh: boolean = false) => {
     const targetUrl = (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_DEPLOYED_WEB_APP_URL_HERE')
@@ -1415,64 +1503,126 @@ export default function App() {
 
           </div>
 
-          {/* Right Column: Hero Interactive Product Visual Card */}
-          <div className="lg:col-span-5 relative flex justify-center">
+          {/* Right Column: Hero Interactive Product Visual Card (Smart Priority Carousel) */}
+          <div
+            className="lg:col-span-5 relative flex justify-center"
+            onMouseEnter={() => setIsHeroHovered(true)}
+            onMouseLeave={() => setIsHeroHovered(false)}
+          >
 
-            {/* Ambient Sticker Chips Floating */}
-            <div className="absolute -top-4 -left-4 z-20 bg-[#F5C6A8] text-[#1A1A2E] font-black text-xs px-3.5 py-1.5 rounded-full border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rotate-[-5deg] animate-float-subtle">
-              4K 60fps / 120fps
-            </div>
-
-            <div className="absolute top-1/2 -right-4 z-20 bg-[#A8DBC8] text-[#1A1A2E] font-black text-xs px-3.5 py-1.5 rounded-full border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rotate-[6deg] animate-float-gentle">
-              128GB MicroSD Included
-            </div>
-
-            <div className="absolute -bottom-4 left-6 z-20 bg-[#C9B8F0] text-[#1A1A2E] font-black text-xs px-3.5 py-1.5 rounded-full border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rotate-[-3deg]">
-              Ultra Compact Gimbal
-            </div>
+            {/* Ambient Sticker Chips Floating — Synced with Active Slide */}
+            {activeHeroSlide.chips.map((chip, idx) => (
+              <div
+                key={`${activeHeroSlide.id}-chip-${idx}`}
+                className={`absolute ${chip.position} z-20 ${chip.bg} text-[#1A1A2E] font-black text-xs px-3.5 py-1.5 rounded-full border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] ${chip.rotate} ${chip.anim} transition-all duration-300 pointer-events-none select-none`}
+              >
+                {chip.text}
+              </div>
+            ))}
 
             {/* Main Product Showcase Box */}
-            <div className="w-full max-w-sm rounded-[32px] bg-white border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] p-6 relative overflow-hidden transition-transform hover:-translate-y-1">
+            <div className="w-full max-w-sm rounded-[32px] bg-white border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] p-6 relative overflow-hidden transition-all duration-300 hover:-translate-y-1">
 
-              {/* Header inside card */}
-              <div className="flex items-center justify-between pb-4 border-b border-[#E8E4F0]">
-                <div className="flex items-center gap-2">
+              {/* Header inside card: Mac window dots + Camera Switcher Tabs */}
+              <div className="flex items-center justify-between pb-3.5 border-b border-[#E8E4F0] gap-2">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                   <div className="w-3 h-3 rounded-full bg-[#E53E3E]" />
                   <div className="w-3 h-3 rounded-full bg-[#D69E2E]" />
                   <div className="w-3 h-3 rounded-full bg-[#38A169]" />
                 </div>
-                <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#6B6B8A]">
-                  CREATOR BUNDLE
-                </span>
-                <span className="px-2 py-0.5 rounded-md bg-[#EDE8FC] text-[#553C9A] text-[10px] font-bold">
-                  Available Today
-                </span>
+
+                {/* Interactive Carousel Toggle Tabs */}
+                <div className="flex items-center bg-[#F4F2F8] p-1 rounded-xl border border-[#E8E4F0] gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setHeroSlideId('dji-pocket-3')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                      heroSlideId === 'dji-pocket-3'
+                        ? 'bg-white text-[#1A1A2E] shadow-xs border border-[#E8E4F0]'
+                        : 'text-[#6B6B8A] hover:text-[#1A1A2E]'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        heroCameraAvailability['dji-pocket-3'].isAvailableToday
+                          ? 'bg-emerald-500 shadow-[0_0_4px_#10B981]'
+                          : 'bg-amber-500'
+                      }`}
+                    />
+                    DJI Pocket 3
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHeroSlideId('canon-g7x-mark-iii')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                      heroSlideId === 'canon-g7x-mark-iii'
+                        ? 'bg-white text-[#1A1A2E] shadow-xs border border-[#E8E4F0]'
+                        : 'text-[#6B6B8A] hover:text-[#1A1A2E]'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        heroCameraAvailability['canon-g7x-mark-iii'].isAvailableToday
+                          ? 'bg-emerald-500 shadow-[0_0_4px_#10B981]'
+                          : 'bg-amber-500'
+                      }`}
+                    />
+                    Canon G7 X
+                  </button>
+                </div>
               </div>
 
-              {/* Authentic DJI Osmo Pocket 3 Product Showcase */}
-              <div className="py-5 flex flex-col items-center justify-center relative select-none">
-                {/* Subtle Ambient Radial Glow behind the Camera */}
+              {/* Sub-header: Bundle Tag & Live Status Badge */}
+              <div className="flex items-center justify-between pt-3 pb-1">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6B6B8A]">
+                  {activeHeroSlide.bundleTag}
+                </span>
+
+                {/* Smart Live Availability Badge */}
+                {activeHeroAvailability.isAvailableToday ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black shadow-xs animate-pulse-soft">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Available Today
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-black shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Booked Today • Free {activeHeroAvailability.nextFree}
+                  </span>
+                )}
+              </div>
+
+              {/* Camera Showcase Area with Levitation & Click to Book */}
+              <div
+                onClick={() => handleOpenBookingModal(activeHeroSlide.id)}
+                className="py-4 flex flex-col items-center justify-center relative select-none cursor-pointer group"
+                title={`Click to rent ${activeHeroSlide.name}`}
+              >
+                {/* Ambient Radial Glow */}
                 <div className="absolute w-52 h-52 rounded-full bg-gradient-to-tr from-[#C9B8F0]/30 via-[#EDE8FC]/40 to-[#A8DBC8]/30 blur-2xl -z-0 pointer-events-none" />
 
-                {/* Floating Animated Camera Presentation */}
-                <div className="relative z-10 flex flex-col items-center group cursor-pointer">
+                <div className="relative z-10 flex flex-col items-center">
                   <div className="relative animate-camera-levitate transform-gpu will-change-transform transition-transform duration-500 group-hover:scale-105">
                     <img
-                      src="/dji-pocket-3-hero.png"
-                      alt="DJI Osmo Pocket 3 Standard Kit"
-                      className="w-auto h-56 sm:h-64 object-contain drop-shadow-[0_16px_28px_rgba(26,26,46,0.18)] transition-all duration-300"
+                      key={activeHeroSlide.id}
+                      src={activeHeroSlide.image}
+                      alt={activeHeroSlide.alt}
+                      className="w-auto h-56 sm:h-64 object-contain drop-shadow-[0_16px_28px_rgba(26,26,46,0.18)] transition-all duration-500"
                       loading="eager"
                       fetchPriority="high"
                     />
 
-                    {/* Micro Active Status LED on the Gimbal */}
-                    <span
-                      className="absolute top-[48.2%] left-[34.2%] w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34D399] animate-pulse pointer-events-none"
-                      title="Ready for Rental"
-                    />
+                    {/* Micro Active Status LED for DJI Pocket 3 */}
+                    {activeHeroSlide.hasLed && (
+                      <span
+                        className="absolute top-[48.2%] left-[34.2%] w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34D399] animate-pulse pointer-events-none"
+                        title="Ready for Rental"
+                      />
+                    )}
                   </div>
 
-                  {/* Dynamic Floor Shadow synchronized with levitation */}
+                  {/* Dynamic Floor Shadow */}
                   <div
                     className="w-28 h-2.5 rounded-[100%] bg-[#1A1A2E] blur-xs mt-1 animate-camera-shadow pointer-events-none transform-gpu"
                     aria-hidden="true"
@@ -1480,22 +1630,50 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Carousel Slide Indicator Dots */}
+              <div className="flex items-center justify-center gap-1.5 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setHeroSlideId('dji-pocket-3')}
+                  aria-label="View DJI Osmo Pocket 3"
+                  className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                    heroSlideId === 'dji-pocket-3'
+                      ? 'w-6 bg-[#1A1A2E]'
+                      : 'w-2 bg-[#E8E4F0] hover:bg-[#6B6B8A]'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setHeroSlideId('canon-g7x-mark-iii')}
+                  aria-label="View Canon PowerShot G7 X Mark III"
+                  className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                    heroSlideId === 'canon-g7x-mark-iii'
+                      ? 'w-6 bg-[#1A1A2E]'
+                      : 'w-2 bg-[#E8E4F0] hover:bg-[#6B6B8A]'
+                  }`}
+                />
+              </div>
+
               {/* Card Footer Breakdown */}
               <div className="bg-[#FAFAF7] rounded-2xl p-3.5 border border-[#E8E4F0] flex items-center justify-between">
                 <div>
-                  <div className="text-[11px] font-bold text-[#6B6B8A]">Daily Rental</div>
+                  <div className="text-[11px] font-bold text-[#6B6B8A]">
+                    {activeHeroSlide.shortName} Daily
+                  </div>
                   <div className="text-xl font-black text-[#1A1A2E]">
-                    ₱450 <span className="text-xs font-normal text-[#6B6B8A]">/ day</span>
+                    ₱{activeHeroSlide.rate} <span className="text-xs font-normal text-[#6B6B8A]">/ day</span>
                   </div>
                   <div className="text-[10px] text-[#553C9A] font-bold">
-                    As low as ₱350/d on 6+ days
+                    {activeHeroSlide.bulkRateText}
                   </div>
                 </div>
                 <button
-                  onClick={() => handleOpenBookingModal()}
-                  className="px-4 py-2 rounded-xl bg-[#1A1A2E] text-white font-bold text-xs hover:bg-[#6B46C1] transition-colors cursor-pointer shadow-sm hover:shadow"
+                  type="button"
+                  onClick={() => handleOpenBookingModal(activeHeroSlide.id)}
+                  className="px-4 py-2 rounded-xl bg-[#1A1A2E] text-white font-bold text-xs hover:bg-[#6B46C1] transition-colors cursor-pointer shadow-sm hover:shadow flex items-center gap-1 group"
                 >
-                  Rent Kit
+                  <span>Rent Kit</span>
+                  <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </button>
               </div>
 
