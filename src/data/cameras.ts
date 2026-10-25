@@ -52,8 +52,8 @@ export const CAMERAS: CameraItem[] = [
     meetupDeposit: 1000,
     courierDeposit: 1000,
     pricingTiers: [
-      { minDays: 1, maxDays: 2, rate: 450, label: '1–2 Days', sublabel: 'Standard (₱450/d)' },
-      { minDays: 3, maxDays: 3, rate: 420, label: '3 Days', sublabel: 'Long Weekend (₱420/d)' },
+      { minDays: 1, maxDays: 1, rate: 450, label: '1 Day', sublabel: 'Standard (₱450/d)' },
+      { minDays: 2, maxDays: 3, rate: 420, label: '2–3 Days', sublabel: 'Weekend Tier (₱420/d)' },
       { minDays: 4, maxDays: 5, rate: 380, label: '4–5 Days', sublabel: 'Extended Trip (₱380/d)' },
       { minDays: 6, maxDays: 999, rate: 350, label: '6+ Days', sublabel: 'Long-Term Value (₱350/d)' },
     ],

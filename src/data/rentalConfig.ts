@@ -23,8 +23,8 @@ export const RENTAL_CONFIG = {
 
   // Pricing & Duration Tiers (DJI Osmo Pocket 3)
   pricingTiers: [
-    { minDays: 1, maxDays: 2, rate: 450, label: '1–2 Days (₱450/day)' },
-    { minDays: 3, maxDays: 3, rate: 420, label: '3 Days Tier (₱420/day)' },
+    { minDays: 1, maxDays: 1, rate: 450, label: '1 Day (₱450/day)' },
+    { minDays: 2, maxDays: 3, rate: 420, label: '2–3 Days Tier (₱420/day)' },
     { minDays: 4, maxDays: 5, rate: 380, label: '4–5 Days Tier (₱380/day)' },
     { minDays: 6, maxDays: 999, rate: 350, label: '6+ Days Long Term (₱350/day)' }
   ],

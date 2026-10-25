@@ -2040,7 +2040,7 @@ export default function App() {
                       <div>
                         <span className="text-2xl font-black text-[#1A1A2E]">₱{cam.standardRate}</span>
                         <span className="text-xs font-semibold text-[#6B6B8A]">
-                          {cam.id === 'canon-g7x-mark-iii' ? ' / day (1d)' : isAvailable ? ' / day (1–2d)' : ' / day (Target)'}
+                          {isAvailable ? ' / day (1d)' : ' / day (Target)'}
                         </span>
                       </div>
                       <div className="text-right">
