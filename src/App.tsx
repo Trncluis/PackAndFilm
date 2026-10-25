@@ -261,24 +261,17 @@ export default function App() {
 
   // Calculate Duration and Price Helper dynamically reading from target camera & duration tiers
   const calculateQuote = useCallback((start: string, end: string, mode: 'meetup' | 'courier', camera: CameraItem = selectedCamera) => {
-    const isPocket3 = camera.id === 'dji-pocket-3';
-
-    // Helper to get daily rate and tier label based on duration from handout
+    // Helper to get daily rate and tier label based on duration from the camera's own configuration
     const getDailyRateInfo = (d: number) => {
-      if (isPocket3) {
-        if (d <= 2) {
-          return { rate: 450, isBulk: false, tierLabel: '1–2 Days (₱450/day)' };
+      if (camera.pricingTiers && camera.pricingTiers.length > 0) {
+        const matched = camera.pricingTiers.find(t => d >= t.minDays && d <= t.maxDays);
+        if (matched) {
+          const isBulk = matched.rate < camera.standardRate;
+          return { rate: matched.rate, isBulk, tierLabel: `${matched.label} (${matched.sublabel || `₱${matched.rate}/day`})` };
         }
-        if (d === 3) {
-          return { rate: 420, isBulk: true, tierLabel: '3 Days Tier (₱420/day)' };
-        }
-        if (d <= 5) {
-          return { rate: 380, isBulk: true, tierLabel: '4–5 Days Tier (₱380/day)' };
-        }
-        return { rate: 350, isBulk: true, tierLabel: '6+ Days Long Term (₱350/day)' };
       }
 
-      // Fallback for future cameras
+      // Fallback for future cameras without specific tiers
       const isBulk = d >= 3;
       const rate = isBulk ? camera.bulkRate : camera.standardRate;
       return { rate, isBulk, tierLabel: isBulk ? 'Bulk Rate' : 'Standard Rate' };
@@ -295,8 +288,9 @@ export default function App() {
 
     const rateInfo = getDailyRateInfo(days);
     const rentalTotal = days * rateInfo.rate;
-    // Security deposit is strictly ₱1,000 for DJI Pocket 3
-    const deposit = isPocket3 ? RENTAL_CONFIG.securityDeposit : (mode === 'courier' ? camera.courierDeposit : camera.meetupDeposit);
+    // Uniform, per-camera configured deposit (strictly ₱1,000 for active units)
+    const deposit = camera.depositAmount || camera.meetupDeposit || RENTAL_CONFIG.securityDeposit;
+
     // Meetup handling fee: ₱200 for meet-up transactions; ₱0 for Grab Express (renter pays rider directly)
     const meetupHandlingFee = mode === 'meetup' ? RENTAL_CONFIG.meetupHandlingFee : 0;
     const downpayment = DOWNPAYMENT_FEE; // ₱300 non-refundable reservation fee credited to rental
@@ -313,6 +307,8 @@ export default function App() {
       rentalTotal,
       baseRental: rentalTotal,
       deposit,
+      isDepositConfirmed: true,
+      depositNote: null,
       meetupFee: meetupHandlingFee,
       meetupHandlingFee,
       total: totalPackageValue,
@@ -387,8 +383,8 @@ export default function App() {
     ).trim().toLowerCase();
 
     let matchedCameraId = 'dji-pocket-3';
-    if (camRaw.includes('x4') || camRaw.includes('insta360')) {
-      matchedCameraId = 'insta360-x4';
+    if (camRaw.includes('canon') || camRaw.includes('g7x') || camRaw.includes('g7 x') || camRaw.includes('powershot')) {
+      matchedCameraId = 'canon-g7x-mark-iii';
     } else if (camRaw.includes('fuji') || camRaw.includes('x100')) {
       matchedCameraId = 'fujifilm-x100vi';
     } else if (camRaw.includes('pocket') || camRaw.includes('dji')) {
@@ -626,7 +622,7 @@ export default function App() {
     if (stepNumber === 1) {
       const chosenCam = CAMERAS.find(c => c.id === booking.cameraId);
       if (!chosenCam || !chosenCam.isAvailable) {
-        errors.cameraId = 'The selected camera is coming soon and cannot be booked yet. Please select the DJI Osmo Pocket 3.';
+        errors.cameraId = 'The selected camera is coming soon and cannot be booked yet. Please select an available camera (DJI Osmo Pocket 3 or Canon PowerShot G7 X Mark III).';
       }
       if (!booking.startDate) {
         errors.startDate = 'Please select a pickup/start date.';
@@ -746,11 +742,11 @@ export default function App() {
 
       // Security Deposit Refund GCash
       if (!booking.gcashAccountName || booking.gcashAccountName.trim().length < 2) {
-        errors.gcashAccountName = 'GCash Account Name is required for your ₱1,000 deposit refund.';
+        errors.gcashAccountName = 'GCash Account Name is required for your deposit refund.';
       }
       const gcashDigits = (booking.gcashAccountNumber || '').replace(/\D/g, '');
       if (!gcashDigits || gcashDigits.length < 10) {
-        errors.gcashAccountNumber = 'Valid GCash Mobile Number is required for your ₱1,000 deposit refund.';
+        errors.gcashAccountNumber = 'Valid GCash Mobile Number is required for your deposit refund.';
       }
     } else if (stepNumber === 5) {
       const cleanRef = (booking.gcashRefNumber || '').replace(/\s+/g, '');
@@ -1136,8 +1132,8 @@ export default function App() {
       a: 'A ₱300 down payment and complete requirements within 24 hours are needed to reserve your calendar slot. This ₱300 is credited directly toward your total rental fee (not an extra charge!). Full payment of the remaining rental balance must be settled prior to equipment release.'
     },
     {
-      q: 'How does the ₱1,000 Security Deposit refund work?',
-      a: 'A ₱1,000 Security Deposit is required before release. The deposit is fully refunded within 24 hours of the equipment being returned, provided it is in the same condition as when rented. It covers any unpaid balances, damages, loss, or unreturned accessories.'
+      q: 'How does the Security Deposit refund work?',
+      a: 'A refundable Security Deposit (₱1,000 for DJI Osmo Pocket 3; verified prior to release for other models) is required before release. The deposit is fully refunded within 24 hours of the equipment being returned, provided it is in the same condition as when rented. It covers any unpaid balances, damages, loss, or unreturned accessories.'
     },
     {
       q: 'What is your cancellation policy?',
@@ -1372,7 +1368,7 @@ export default function App() {
 
             {/* Subheading */}
             <p className="text-lg sm:text-xl text-[#6B6B8A] font-medium max-w-xl leading-relaxed">
-              Rent the <strong className="text-[#1A1A2E] font-bold">DJI Osmo Pocket 3 Standard Kit</strong> starting at just <span className="underline decoration-[#C9B8F0] decoration-4 font-bold text-[#1A1A2E]">₱450/day</span> (as low as ₱350/day on 6+ days). Meet-up at SM East, Bridgetowne, or Opus &amp; Grab Express Delivery across Metro Manila (8:00 AM – 8:00 PM).
+              Rent creator cameras including the <strong className="text-[#1A1A2E] font-bold">DJI Osmo Pocket 3</strong> &amp; <strong className="text-[#1A1A2E] font-bold">Canon PowerShot G7 X Mark III</strong> starting at just <span className="underline decoration-[#C9B8F0] decoration-4 font-bold text-[#1A1A2E]">₱450/day</span> (as low as ₱350/day on extended rentals). Meet-up at SM East, Bridgetowne, or Opus &amp; Grab Express Delivery across Metro Manila (8:00 AM – 8:00 PM).
             </p>
 
             {/* CTAs */}
@@ -1796,7 +1792,7 @@ export default function App() {
                   key={cam.id}
                   onClick={() => {
                     if (!isAvailable) {
-                      showToast(`✨ ${cam.name} is coming soon to our lineup! Currently, only the DJI Osmo Pocket 3 Standard Kit is available for rental.`, 'info');
+                      showToast(`✨ ${cam.name} is coming soon to our lineup! Currently, the DJI Osmo Pocket 3 and Canon PowerShot G7 X Mark III are available for rental.`, 'info');
                       return;
                     }
                     setSelectedCameraId(cam.id);
@@ -1839,7 +1835,7 @@ export default function App() {
                       {cam.name}
                     </h3>
 
-                    {/* Pre-launch Preview Tag for Unavailable Cameras */}
+                    {/* Status Tag for Upcoming Cameras */}
                     {!isAvailable && (
                       <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-[#FFF6EE] border border-[#F5C6A8]/70 flex items-center gap-2 text-[11px] font-bold text-[#C05621]">
                         <Sparkles className="w-3.5 h-3.5 text-[#DD6B20] shrink-0" />
@@ -1866,11 +1862,11 @@ export default function App() {
                       <div>
                         <span className="text-2xl font-black text-[#1A1A2E]">₱{cam.standardRate}</span>
                         <span className="text-xs font-semibold text-[#6B6B8A]">
-                          {isAvailable ? ' / day (1–2d)' : ' / day (Target)'}
+                          {cam.id === 'canon-g7x-mark-iii' ? ' / day (1d)' : isAvailable ? ' / day (1–2d)' : ' / day (Target)'}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-extrabold text-[#38A169]">From ₱{cam.id === 'dji-pocket-3' ? 350 : cam.bulkRate}/day</span>
+                        <span className="text-xs font-extrabold text-[#38A169]">From ₱{cam.bulkRate}/day</span>
                         <span className="text-[10px] block text-[#6B6B8A]">
                           {isAvailable ? 'Tier discounts up to 6+d' : 'Expected bulk'}
                         </span>
@@ -1878,7 +1874,9 @@ export default function App() {
                     </div>
 
                     <div className="text-[11px] text-[#6B6B8A] mb-3 flex items-center justify-between">
-                      <span className="font-semibold text-[#1A1A2E]">Refundable Deposit: ₱{cam.meetupDeposit.toLocaleString()}</span>
+                      <span className="font-semibold text-[#1A1A2E]">
+                        Refundable Deposit: ₱{(cam.depositAmount || cam.meetupDeposit || 1000).toLocaleString()}
+                      </span>
                       <span className="text-[10px] font-bold text-[#2F855A] bg-[#E8F7F1] px-2 py-0.5 rounded-md border border-[#A8DBC8]">
                         Meetup & Grab Express
                       </span>
@@ -2061,7 +2059,7 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         if (!isAvailable) {
-                          showToast(`✨ ${cam.name} is coming soon to our lineup! Currently, only the DJI Osmo Pocket 3 Standard Kit is available for rental.`, 'info');
+                          showToast(`✨ ${cam.name} is coming soon to our lineup! Currently, the DJI Osmo Pocket 3 and Canon PowerShot G7 X Mark III are available for rental.`, 'info');
                           return;
                         }
                         setSelectedCameraId(cam.id);
@@ -2077,12 +2075,12 @@ export default function App() {
                         <span className={`font-black text-xs line-clamp-1 ${!isAvailable ? 'text-[#6B6B8A]' : 'text-[#1A1A2E]'}`}>
                           {cam.shortName}
                         </span>
-                        {!isAvailable ? (
+                        {isCur ? (
+                          <Check className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
+                        ) : !isAvailable ? (
                           <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8]">
                             Coming Soon
                           </span>
-                        ) : isCur ? (
-                          <Check className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
                         ) : (
                           <span className="text-[10px] text-[#6B6B8A]">₱{cam.standardRate}/d</span>
                         )}
@@ -2101,55 +2099,40 @@ export default function App() {
               </div>
             </div>
 
-            {/* Pocket 3 Official Tiered Pricing Strip */}
-            {selectedCamera.id === 'dji-pocket-3' && (
+            {/* Dynamic Camera Official Tiered Pricing Strip */}
+            {selectedCamera.pricingTiers && selectedCamera.pricingTiers.length > 0 && (
               <div className="mb-8 p-4 sm:p-5 rounded-2xl bg-[#FAFAF7] border border-[#E8E4F0]">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3.5">
                   <span className="text-xs font-black uppercase tracking-wider text-[#1A1A2E] flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-[#553C9A]" />
-                    <span>Official Rental Rates</span>
+                    <span>{selectedCamera.shortName} Official Rental Rates</span>
                   </span>
                   <span className="text-[11px] font-bold text-[#234E52] bg-[#E8F7F1] px-2.5 py-0.5 rounded-full border border-[#A8DBC8] w-fit">
-                    Refundable Deposit: ₱1,000 (Meetup & Grab Express)
+                    Refundable Deposit: ₱{(selectedCamera.depositAmount || selectedCamera.meetupDeposit || 1000).toLocaleString()} (Meetup &amp; Grab Express)
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div className={`p-3 rounded-xl border text-center transition-all ${currentQuote.days === 1
-                    ? 'bg-[#EDE8FC] border-[#553C9A] shadow-xs'
-                    : 'bg-white border-[#E8E4F0]'
-                    }`}>
-                    <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">1 Day</span>
-                    <span className="text-base font-black text-[#1A1A2E] mt-0.5 block">₱450</span>
-                    <span className="text-[10px] text-[#6B6B8A] block">Standard</span>
-                  </div>
-
-                  <div className={`p-3 rounded-xl border text-center transition-all ${currentQuote.days === 2 || currentQuote.days === 3
-                    ? 'bg-[#EDE8FC] border-[#553C9A] shadow-xs'
-                    : 'bg-white border-[#E8E4F0]'
-                    }`}>
-                    <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">2 – 3 Days</span>
-                    <span className="text-base font-black text-[#1A1A2E] mt-0.5 block">₱420 – ₱450 <span className="text-[10px] font-semibold text-[#6B6B8A]">/ d</span></span>
-                    <span className="text-[10px] text-[#553C9A] font-bold block">2d: ₱450 • 3d: ₱420</span>
-                  </div>
-
-                  <div className={`p-3 rounded-xl border text-center transition-all ${currentQuote.days === 4 || currentQuote.days === 5
-                    ? 'bg-[#EDE8FC] border-[#553C9A] shadow-xs'
-                    : 'bg-white border-[#E8E4F0]'
-                    }`}>
-                    <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">4 – 5 Days</span>
-                    <span className="text-base font-black text-[#1A1A2E] mt-0.5 block">₱380 <span className="text-[10px] font-semibold text-[#6B6B8A]">/ day</span></span>
-                    <span className="text-[10px] text-[#38A169] font-bold block">Extended Trip</span>
-                  </div>
-
-                  <div className={`p-3 rounded-xl border text-center transition-all ${currentQuote.days >= 6
-                    ? 'bg-[#EDE8FC] border-[#553C9A] shadow-xs'
-                    : 'bg-white border-[#E8E4F0]'
-                    }`}>
-                    <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">6+ Days</span>
-                    <span className="text-base font-black text-[#1A1A2E] mt-0.5 block">₱350 <span className="text-[10px] font-semibold text-[#6B6B8A]">/ day</span></span>
-                    <span className="text-[10px] text-[#38A169] font-bold block">Long-Term Value</span>
-                  </div>
+                  {selectedCamera.pricingTiers.map((tier, idx) => {
+                    const isTierActive = currentQuote.days >= tier.minDays && currentQuote.days <= tier.maxDays;
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-xl border text-center transition-all ${isTierActive
+                          ? 'bg-[#EDE8FC] border-[#553C9A] shadow-xs'
+                          : 'bg-white border-[#E8E4F0]'
+                        }`}
+                      >
+                        <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">{tier.label}</span>
+                        <span className="text-base font-black text-[#1A1A2E] mt-0.5 block">
+                          ₱{tier.rate} <span className="text-[10px] font-semibold text-[#6B6B8A]">/ day</span>
+                        </span>
+                        <span className="text-[10px] text-[#553C9A] font-bold block">
+                          {tier.sublabel || (tier.rate === selectedCamera.standardRate ? 'Standard' : 'Tier Discount')}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -2308,7 +2291,7 @@ export default function App() {
                       </p>
                       <div className="mt-2 text-[11px] font-bold text-[#553C9A] flex items-center justify-between">
                         <span>Handling Fee: +₱200</span>
-                        <span>Deposit: ₱{RENTAL_CONFIG.securityDeposit.toLocaleString()}</span>
+                        <span>Deposit: ₱{currentQuote.deposit.toLocaleString()}</span>
                       </div>
                     </button>
 
@@ -2329,7 +2312,7 @@ export default function App() {
                       </p>
                       <div className="mt-2 text-[11px] font-bold text-[#C05621] flex items-center justify-between">
                         <span>8:00 AM – 8:00 PM ONLY</span>
-                        <span>Deposit: ₱{RENTAL_CONFIG.securityDeposit.toLocaleString()}</span>
+                        <span>Deposit: ₱{currentQuote.deposit.toLocaleString()}</span>
                       </div>
                     </button>
 
@@ -2351,7 +2334,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="p-3.5 rounded-2xl bg-[#FAFAF7] border border-[#E8E4F0] flex items-center justify-between text-xs text-[#6B6B8A]">
-                    <span>Tip: Rent for 3+ days to unlock lower daily rates (down to <strong>₱350/day</strong> on 6+ days).</span>
+                    <span>Tip: Rent for 2+ days to unlock lower daily rates (down to <strong>₱{selectedCamera.bulkRate || 350}/day</strong> on 6+ days for {selectedCamera.shortName}).</span>
                   </div>
                 )}
 
@@ -2660,7 +2643,7 @@ export default function App() {
               <span className="font-black text-xl tracking-tight">PackAndFilm</span>
             </div>
             <p className="text-xs text-gray-400 max-w-sm leading-relaxed">
-              Metro Manila’s favorite pastel aesthetic camera rental for DJI Osmo Pocket 3, Insta360 X4 & Fujifilm X100VI. Designed for creators, concert-goers, and vloggers. Mag-vlog na, wag nang mag-ipon.
+              Metro Manila’s favorite pastel aesthetic camera rental for DJI Osmo Pocket 3, Canon PowerShot G7 X Mark III &amp; Fujifilm X100VI. Designed for creators, concert-goers, and vloggers. Mag-vlog na, wag nang mag-ipon.
             </p>
             <div className="pt-2 text-xs text-gray-500 font-mono">
               Meetups at SM East Ortigas, Bridgetowne &amp; Opus Mall (₱200 fee) • Grab Express Delivery ONLY across Metro Manila (8:00 AM – 8:00 PM).
@@ -2832,7 +2815,7 @@ export default function App() {
                   <div className="p-3 rounded-2xl bg-[#E8F7F1]/80 border border-[#A8DBC8] flex items-center justify-between gap-3 text-xs text-[#234E52]">
                     <div className="flex items-center gap-2 font-bold">
                       <CheckCircle2 className="w-4 h-4 text-[#38A169] shrink-0" />
-                      <span>Active Rental Unit: DJI Osmo Pocket 3 Standard Kit</span>
+                      <span>Selected Rental Unit: {modalCamera.name}</span>
                     </div>
                     <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white text-[#234E52] border border-[#A8DBC8] shrink-0">
                       In Stock
@@ -2991,7 +2974,9 @@ export default function App() {
                           100% Refundable
                         </span>
                       </div>
-                      <span className="font-bold text-[#2F855A]">₱{modalQuote.deposit.toLocaleString()}</span>
+                      <span className="font-bold text-[#2F855A]">
+                        ₱{modalQuote.deposit.toLocaleString()}
+                      </span>
                     </div>
 
                     <div className="pt-2 border-t border-[#E8E4F0] flex items-center justify-between text-xs font-black">
@@ -3048,7 +3033,9 @@ export default function App() {
                       </p>
                       <div className="mt-3 text-xs font-bold text-[#553C9A] flex items-center justify-between">
                         <span>₱200 handling fee applies</span>
-                        <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">₱1,000 Deposit</span>
+                        <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">
+                          ₱{modalQuote.deposit.toLocaleString()} Deposit
+                        </span>
                       </div>
                     </div>
 
@@ -3069,7 +3056,9 @@ export default function App() {
                       </p>
                       <div className="mt-3 text-xs font-bold text-[#C05621] flex items-center justify-between">
                         <span>Metro Manila delivery</span>
-                        <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">₱1,000 Deposit</span>
+                        <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">
+                          ₱{modalQuote.deposit.toLocaleString()} Deposit
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -4102,7 +4091,7 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4 text-[#234E52]" />
                         <span className="text-xs font-extrabold text-[#234E52]">
-                          GCash Account for ₱1,000 Security Deposit Refund <span className="text-red-500 font-bold">*</span>
+                          GCash Account for ₱{modalQuote.deposit.toLocaleString()} Security Deposit Refund <span className="text-red-500 font-bold">*</span>
                         </span>
                       </div>
                       <span className="text-[10px] font-bold text-[#234E52] bg-white px-2 py-0.5 rounded-full border border-[#A8DBC8]">
@@ -4155,7 +4144,7 @@ export default function App() {
                       </div>
                     </div>
                     <p className="text-[10px] text-[#234E52]">
-                      Your ₱1,000 security deposit will be fully refunded within 24 hours of the equipment being returned, provided it is in the same condition as when it was rented.
+                      Your ₱{modalQuote.deposit.toLocaleString()} security deposit will be fully refunded within 24 hours of the equipment being returned, provided it is in the same condition as when it was rented.
                     </p>
                   </div>
                 </div>
@@ -4291,7 +4280,9 @@ export default function App() {
                                 100% Refundable
                               </span>
                             </span>
-                            <span className="font-black text-[#2F855A]">₱{modalQuote.deposit.toLocaleString()}</span>
+                            <span className="font-black text-[#2F855A]">
+                              ₱{modalQuote.deposit.toLocaleString()}
+                            </span>
                           </div>
                           <div className="pt-2 border-t border-[#E8E4F0] flex justify-between items-center">
                             <span className="font-black text-xs text-[#1A1A2E]">Total Package Value:</span>
@@ -4353,7 +4344,9 @@ export default function App() {
                               </p>
                             </div>
                             <div className="text-right pl-5.5 sm:pl-0 shrink-0">
-                              <span className="font-black text-base text-[#2F855A]">₱{modalQuote.refundAfterReturn.toLocaleString()}</span>
+                              <span className="font-black text-base text-[#2F855A]">
+                                ₱{modalQuote.refundAfterReturn.toLocaleString()}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -4483,7 +4476,7 @@ export default function App() {
                           of Pack and Film Camera Rental. <span className="text-red-500 font-bold">*</span>
                         </label>
                         <p className="text-[11px] text-[#6B6B8A] mt-1 leading-relaxed">
-                          Includes ₱300 reservation downpayment (credited to rental), ₱1,000 security deposit (refunded within 24h of return), 8:00 AM – 8:00 PM rental period, ₱200 meetup handling fee, and Grab Express delivery rules.
+                          Includes ₱300 reservation downpayment (credited to rental), ₱{modalQuote.deposit.toLocaleString()} security deposit (refunded within 24h of return), 8:00 AM – 8:00 PM rental period, ₱200 meetup handling fee, and Grab Express delivery rules.
                         </p>
                       </div>
                     </div>
@@ -4584,7 +4577,9 @@ export default function App() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#6B6B8A]">Refundable Security Deposit:</span>
-                      <span className="font-bold text-[#2F855A]">₱{modalQuote.deposit.toLocaleString()} (100% Refundable)</span>
+                      <span className="font-bold text-[#2F855A]">
+                        ₱{modalQuote.deposit.toLocaleString()} (100% Refundable)
+                      </span>
                     </div>
                     <div className="flex justify-between pt-1.5 border-t border-[#E8E4F0]">
                       <span className="font-black text-[#1A1A2E]">Total Due on Handover:</span>
@@ -4592,7 +4587,9 @@ export default function App() {
                     </div>
                     <div className="flex justify-between text-[11px] text-[#2F855A]">
                       <span className="font-bold">Security Deposit Refund:</span>
-                      <span className="font-black">₱{modalQuote.refundAfterReturn.toLocaleString()} (Within 24h of return via GCash)</span>
+                      <span className="font-black">
+                        ₱{modalQuote.refundAfterReturn.toLocaleString()} (Within 24h of return via GCash)
+                      </span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-[#E8E4F0]">
                       <span className="text-[#6B6B8A]">Terms & Conditions:</span>
@@ -4964,7 +4961,7 @@ export default function App() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      showToast(`✨ ${camInfo?.name || 'This camera'} is coming soon to our lineup! Only the DJI Osmo Pocket 3 Standard Kit is currently available for rental.`, 'info');
+                                      showToast(`✨ ${camInfo?.name || 'This camera'} is coming soon to our lineup! The DJI Osmo Pocket 3 and Canon PowerShot G7 X Mark III are currently available for rental.`, 'info');
                                     }}
                                     className="px-3 py-1.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-xs font-bold text-[#6B6B8A] hover:bg-[#FEF0E7] hover:text-[#C05621] transition-colors cursor-pointer flex items-center gap-1"
                                   >

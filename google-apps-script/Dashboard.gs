@@ -494,8 +494,14 @@ function formatAndBeautifyWorkbook() {
     fSheet.getRange(1, 1, 1, FLEET_COLUMNS.length).setValues([FLEET_COLUMNS]);
     fSheet.appendRow([
       "PNF-P3-01", "DJI Osmo Pocket 3 Standard Kit", "6X89K20391", "Available",
-      500, 1000, 1350, 2500,
+      450, 900, 1260, 1000,
       "Wide-Angle Lens, Battery Handle, Protective Cover, Wrist Strap, Type-C Cable",
+      Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
+    ]);
+    fSheet.appendRow([
+      "PNF-G7X-01", "Canon PowerShot G7 X Mark III Creator Vlogging Kit", "G7X398201", "Available",
+      500, 900, 1350, 0,
+      "2x NB-13L Batteries, Dedicated Charger, 32GB SD, OTG Reader, Wrist Strap, Padded Bag",
       Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
     ]);
   }

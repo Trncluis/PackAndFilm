@@ -1,3 +1,11 @@
+export interface PricingTier {
+  minDays: number;
+  maxDays: number;
+  rate: number;
+  label: string;
+  sublabel?: string;
+}
+
 export interface CameraItem {
   id: string;
   name: string;
@@ -5,8 +13,11 @@ export interface CameraItem {
   tagline: string;
   badge: string;
   isAvailable: boolean;
-  standardRate: number; // 1-2 days rate (e.g. 500)
-  bulkRate: number;     // 3+ days rate (e.g. 450)
+  statusText?: string;
+  depositAmount: number; // Uniform 1000 for active units
+  standardRate: number;  // 1-day rate
+  bulkRate: number;      // 6+ days rate
+  pricingTiers: PricingTier[];
   meetupDeposit: number;
   courierDeposit: number;
   rating: number;
@@ -33,11 +44,19 @@ export const CAMERAS: CameraItem[] = [
     shortName: 'Pocket 3',
     tagline: '1-inch sensor, 4K/120fps mechanical gimbal & rotatable OLED screen',
     badge: 'Available Now',
+    statusText: 'Ready to Rent',
     isAvailable: true,
+    depositAmount: 1000,
     standardRate: 450,
-    bulkRate: 420,
+    bulkRate: 350,
     meetupDeposit: 1000,
     courierDeposit: 1000,
+    pricingTiers: [
+      { minDays: 1, maxDays: 2, rate: 450, label: '1–2 Days', sublabel: 'Standard (₱450/d)' },
+      { minDays: 3, maxDays: 3, rate: 420, label: '3 Days', sublabel: 'Long Weekend (₱420/d)' },
+      { minDays: 4, maxDays: 5, rate: 380, label: '4–5 Days', sublabel: 'Extended Trip (₱380/d)' },
+      { minDays: 6, maxDays: 999, rate: 350, label: '6+ Days', sublabel: 'Long-Term Value (₱350/d)' },
+    ],
     rating: 4.98,
     reviewCount: 180,
     specs: ['4K/120fps', '1-inch CMOS Sensor', 'ActiveTrack 6.0', '128GB MicroSD Included'],
@@ -127,101 +146,139 @@ export const CAMERAS: CameraItem[] = [
     ]
   },
   {
-    id: 'insta360-x4',
-    name: 'Insta360 X4 8K 360° Creator Kit',
-    shortName: 'Insta360 X4',
-    tagline: 'Shoot first, point later! 8K 360° capture, invisible selfie stick & bullet-time',
-    badge: 'Coming Soon',
-    isAvailable: false,
-    standardRate: 650,
-    bulkRate: 580,
-    meetupDeposit: 1500,
-    courierDeposit: 3000,
-    rating: 4.96,
-    reviewCount: 42,
-    specs: ['8K 30fps 360°', 'Invisible Selfie Stick', 'FlowState Stabilization', 'Waterproof to 10m'],
+    id: 'canon-g7x-mark-iii',
+    name: 'Canon PowerShot G7 X Mark III Creator Vlogging Kit',
+    shortName: 'Canon G7 X Mark III',
+    tagline: '20.1MP 1.0-inch stacked CMOS sensor, 4.2x f/1.8–2.8 lens & 180° flip touchscreen for iconic warm skin tones',
+    badge: 'Available Now',
+    statusText: 'Ready to Rent',
+    isAvailable: true,
+    depositAmount: 1000,
+    standardRate: 500,
+    bulkRate: 400,
+    meetupDeposit: 1000,
+    courierDeposit: 1000,
+    pricingTiers: [
+      { minDays: 1, maxDays: 1, rate: 500, label: '1 Day', sublabel: 'Standard (₱500/d)' },
+      { minDays: 2, maxDays: 3, rate: 450, label: '2–3 Days', sublabel: 'Weekend Tier (₱450/d)' },
+      { minDays: 4, maxDays: 5, rate: 420, label: '4–5 Days', sublabel: 'Extended Trip (₱420/d)' },
+      { minDays: 6, maxDays: 999, rate: 400, label: '6+ Days', sublabel: 'Long-Term Value (₱400/d)' },
+    ],
+    rating: 4.97,
+    reviewCount: 38,
+    specs: ['20.1MP 1.0" Stacked CMOS', '4.2x f/1.8–2.8 Zoom (24–100mm)', '4K 30p Uncropped Video', '180° Flip-Up Touchscreen'],
     gradient: 'from-[#FEF0E7] via-[#FFF3D6] to-[#EDE8FC]',
     themeColor: '#F5C6A8',
     bagItems: [
       {
         id: 1,
-        title: 'Insta360 X4 Camera Body',
-        badge: '8K Dual Lens',
+        title: 'Canon PowerShot G7 X Mark III Camera Body',
+        badge: 'Main Unit',
         color: 'bg-[#FEF0E7] text-[#C05621]',
         tagBg: 'bg-[#F5C6A8]',
-        desc: 'Dual 1/2" sensors with 8K 360° recording, 5.7K 60fps, and active HDR for action vlogs.',
-        spec: '8K 360° Video • FlowState • AI Gesture Control',
-        tip: 'Use standard lens guards to protect dual fisheye lenses!'
+        desc: '20.1MP 1.0-inch stacked sensor, fast f/1.8–2.8 4.2x optical zoom lens, DIGIC 8 processor, and 180° flip-up touchscreen for aesthetic vlogs.',
+        spec: '20.1MP • 4K 30p Uncropped • 180° Flip Touchscreen • Optical IS',
+        tip: 'Flip screen up for instant selfie framing; use the tactile control ring around the lens for smooth zooming.'
       },
       {
         id: 2,
-        title: '114cm Invisible Selfie Stick',
-        badge: 'Drone Effect',
+        title: '32GB High-Speed SD Card',
+        badge: 'Storage',
         color: 'bg-[#EDE8FC] text-[#553C9A]',
         tagBg: 'bg-[#C9B8F0]',
-        desc: 'Automatically stitches out in video giving you floating drone third-person angles.',
-        spec: '114cm extension • Lightweight aircraft aluminum',
-        tip: 'Keep the stick in a straight line with the camera for 100% invisible stitching.'
+        desc: 'Fast read/write SD memory card certified for 4K video recording and high-speed continuous photo shooting.',
+        spec: '32GB Capacity • Class 10 UHS-I • 4K Ready',
+        tip: 'Sanitized, formatted, and zero leftover clips before every rental handoff.'
       },
       {
         id: 3,
-        title: '128GB High-Speed Extreme Pro MicroSD',
-        badge: 'V30 Extreme',
+        title: 'SD Card Reader (OTG Dual Interface)',
+        badge: 'Instant Transfer',
         color: 'bg-[#E8F7F1] text-[#234E52]',
         tagBg: 'bg-[#A8DBC8]',
-        desc: 'Pre-formatted high bitrate card certified for 8K panoramic recording.',
-        spec: '128GB • 200MB/s Read • A2 V30 speed',
-        tip: 'Supports up to 3+ hours of continuous 360 recording.'
+        desc: 'Plug-and-play high-speed card reader to transfer full-resolution photos and 4K clips directly to your iPhone or Android.',
+        spec: 'Dual Lightning & Type-C OTG • Plug & Play',
+        tip: 'Import straight into iOS Photos or Google Photos to post your reels and TikToks without a computer!'
       },
       {
         id: 4,
-        title: 'Removable Premium Lens Guards',
-        badge: 'Dual Protection',
-        color: 'bg-[#EDE8FC] text-[#553C9A]',
-        tagBg: 'bg-[#C9B8F0]',
-        desc: 'Optical-grade curved lens shields that screw on for scratch protection.',
-        spec: 'Anti-scratch glass • Multi-coating anti-glare',
-        tip: 'Turn on Lens Guard mode in settings for optical correction.'
+        title: 'Dedicated Wall Battery Charger',
+        badge: 'Fast Charging',
+        color: 'bg-[#FEF0E7] text-[#C05621]',
+        tagBg: 'bg-[#F5C6A8]',
+        desc: 'OEM Canon battery charger dock for rapid AC wall charging between shoot locations or overnight.',
+        spec: '100–240V AC Worldwide • LED Charge Indicator',
+        tip: 'Recharge one battery at your accommodation while shooting out with the extra battery.'
       },
       {
         id: 5,
-        title: 'Dual Battery & Fast Charging Hub',
-        badge: 'All Day Power',
-        color: 'bg-[#FEF0E7] text-[#C05621]',
-        tagBg: 'bg-[#F5C6A8]',
-        desc: 'Two 2290mAh batteries and fast multi-charger to never miss a moment.',
-        spec: '2x 2290mAh Batteries • Fast Charge Case',
-        tip: 'Each battery provides up to 135 mins of recording.'
+        title: 'Dual NB-13L Batteries (Main + Extra Battery)',
+        badge: 'Extended Power',
+        color: 'bg-[#EDE8FC] text-[#553C9A]',
+        tagBg: 'bg-[#C9B8F0]',
+        desc: 'Two lithium-ion batteries included so you can shoot events, concerts, and travel days without power anxiety.',
+        spec: '2x NB-13L Batteries • 3.6V 1250mAh • Dual Power',
+        tip: 'Keep the spare battery in your case pouch; swap in seconds when the battery icon blinks.'
       },
       {
         id: 6,
-        title: 'Bullet Time Cord & Tabletop Tripod',
-        badge: 'Matrix FX',
+        title: 'Reinforced Wrist Strap',
+        badge: 'Anti-Drop',
         color: 'bg-[#E8F7F1] text-[#234E52]',
         tagBg: 'bg-[#A8DBC8]',
-        desc: 'Swing accessory and mini tripod handle for slow-mo 360 orbit shots.',
-        spec: 'Bullet-time handle • 1/4" tripod folding legs',
-        tip: 'Set camera to Bullet-time mode and swing overhead!'
+        desc: 'Adjustable woven lanyard attached to the camera eyelet to prevent accidental drops in crowded spaces.',
+        spec: 'Reinforced Paracord • Quick-Cinch Toggle',
+        tip: 'Always loop around your wrist before lifting the camera in crowds or over bridges.'
       },
       {
         id: 7,
-        title: 'Fast OTG Transfer Cable',
-        badge: 'Instant Edit',
-        color: 'bg-[#EDE8FC] text-[#553C9A]',
-        tagBg: 'bg-[#C9B8F0]',
-        desc: 'Direct USB-C to iOS / Android cable for lightning editing inside Insta360 app.',
-        spec: 'High-speed passthrough • Zero Wi-Fi lag',
-        tip: 'Use Insta360 AI edit templates to generate reels in 60s.'
+        title: 'Protective Silicone Case',
+        badge: 'Grip & Cushion',
+        color: 'bg-[#FEF0E7] text-[#C05621]',
+        tagBg: 'bg-[#F5C6A8]',
+        desc: 'Custom-molded silicone case providing non-slip ergonomic grip and drop cushioning without blocking any buttons or ports.',
+        spec: 'Shock-Absorbing Silicone • Non-Slip Matte Finish',
+        tip: 'Provides secure, comfortable one-handed grip when filming talking-head vlogs.'
       },
       {
         id: 8,
-        title: 'Shockproof Hard Travel Case',
-        badge: 'Padded Pouch',
+        title: 'Protective Camera Skin',
+        badge: 'Body Protection',
+        color: 'bg-[#EDE8FC] text-[#553C9A]',
+        tagBg: 'bg-[#C9B8F0]',
+        desc: 'Precision matte vinyl protective skin shielding the camera exterior from minor scuffs and daily cosmetic wear.',
+        spec: 'Precision Die-Cut Vinyl • Anti-Scratch Finish',
+        tip: 'Keeps the camera looking brand new and aesthetically clean for all your photos.'
+      },
+      {
+        id: 9,
+        title: 'Pre-installed Tempered Glass',
+        badge: 'Screen Shield',
+        color: 'bg-[#E8F7F1] text-[#234E52]',
+        tagBg: 'bg-[#A8DBC8]',
+        desc: '9H hardness optical tempered glass screen protector pre-installed over the 3.0" touchscreen to guard against scratches.',
+        spec: '9H Hardness • Oleophobic Coating • Touch Responsive',
+        tip: 'Touchscreen controls remain 100% responsive while keeping the screen pristine.'
+      },
+      {
+        id: 10,
+        title: 'Soft Protective Camera Pouch',
+        badge: 'Daily Sleeve',
+        color: 'bg-[#EDE8FC] text-[#553C9A]',
+        tagBg: 'bg-[#C9B8F0]',
+        desc: 'Soft padded drawstring pouch for carrying the G7 X Mark III safely inside your personal purse, tote, or jacket pocket.',
+        spec: 'Cushioned Lining • Drawstring Closure • Compact',
+        tip: 'Perfect for cafe-hopping when you want to travel light with just the camera.'
+      },
+      {
+        id: 11,
+        title: 'Weatherproof Padded Camera Bag',
+        badge: 'Travel Bag',
         color: 'bg-[#FEF0E7] text-[#C05621]',
         tagBg: 'bg-[#F5C6A8]',
-        desc: 'Form-fitting custom organizer bag with moisture repellent exterior.',
-        spec: 'Sanitized EVA case • Weather resistant',
-        tip: 'Available for Pasig meetup or Metro Manila Grab Express.'
+        desc: 'Custom compartmentalized organizer carry bag holding the camera, charger, spare battery, reader, and all kit items. Sanitized before handoff.',
+        spec: 'Padded Dividers • Water-Resistant Canvas • Sanitized',
+        tip: 'Sanitized hospital-grade at our Pasig base prior to every rental release.'
       }
     ]
   },
@@ -232,10 +289,16 @@ export const CAMERAS: CameraItem[] = [
     tagline: 'Vintage cinematic tones with 40.2MP X-Trans CMOS sensor & built-in Film Sims',
     badge: 'Coming Soon',
     isAvailable: false,
+    depositAmount: 3000,
     standardRate: 900,
     bulkRate: 800,
     meetupDeposit: 3000,
     courierDeposit: 5000,
+    pricingTiers: [
+      { minDays: 1, maxDays: 2, rate: 900, label: '1–2 Days', sublabel: 'Target Rate (₱900/d)' },
+      { minDays: 3, maxDays: 5, rate: 850, label: '3–5 Days', sublabel: 'Extended (₱850/d)' },
+      { minDays: 6, maxDays: 999, rate: 800, label: '6+ Days', sublabel: 'Long-Term (₱800/d)' },
+    ],
     rating: 5.0,
     reviewCount: 19,
     specs: ['40.2MP X-Trans 5', '20 Film Simulations', '6.0-Stop IBIS', 'Fixed 23mm F2.0 Lens'],
