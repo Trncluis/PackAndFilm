@@ -23,7 +23,6 @@ export interface CameraItem {
   rating: number;
   reviewCount: number;
   specs: string[];
-  image: string;
   gradient: string;
   themeColor: string;
   bagItems: {
@@ -46,7 +45,6 @@ export const CAMERAS: CameraItem[] = [
     tagline: '1-inch sensor, 4K/120fps mechanical gimbal & rotatable OLED screen',
     badge: 'Available Now',
     statusText: 'Ready to Rent',
-    image: '/dji-pocket-3-hero.png',
     isAvailable: true,
     depositAmount: 1000,
     standardRate: 450,
@@ -154,7 +152,6 @@ export const CAMERAS: CameraItem[] = [
     tagline: '20.1MP 1.0-inch stacked CMOS sensor, 4.2x f/1.8–2.8 lens & 180° flip touchscreen for iconic warm skin tones',
     badge: 'Available Now',
     statusText: 'Ready to Rent',
-    image: '/canon-g7x-hero.png',
     isAvailable: true,
     depositAmount: 1000,
     standardRate: 500,
@@ -291,7 +288,6 @@ export const CAMERAS: CameraItem[] = [
     shortName: 'Fuji X100VI',
     tagline: 'Vintage cinematic tones with 40.2MP X-Trans CMOS sensor & built-in Film Sims',
     badge: 'Coming Soon',
-    image: '/fujifilm-x100vi-hero.jpg',
     isAvailable: false,
     depositAmount: 3000,
     standardRate: 900,
