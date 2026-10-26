@@ -186,7 +186,8 @@ export default function App() {
   });
   const [copiedGcash, setCopiedGcash] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
-  const [previewBagItem, setPreviewBagItem] = useState<number | null>(null);
+  const [inclusionsModalCamera, setInclusionsModalCamera] = useState<CameraItem | null>(null);
+  const [inclusionsTipId, setInclusionsTipId] = useState<number | null>(null);
 
   // FAQ Accordion State
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -1349,7 +1350,6 @@ export default function App() {
           {/* Desktop Nav Links (Spacious for xl and up) */}
           <nav className="hidden xl:flex items-center gap-5 2xl:gap-6 text-sm font-semibold text-[#1A1A2E] whitespace-nowrap">
             <a href="#catalog" className="hover:text-[#6B46C1] transition-colors">Camera Catalog</a>
-            <a href="#bag" className="hover:text-[#6B46C1] transition-colors">What&apos;s in the Bag</a>
             <a href="#kyc-requirements" className="hover:text-[#6B46C1] transition-colors">Requirements</a>
             <a href="#how" className="hover:text-[#6B46C1] transition-colors">How to Book</a>
             <a href="#pricing" className="hover:text-[#6B46C1] transition-colors">Pricing & Calculator</a>
@@ -1400,13 +1400,6 @@ export default function App() {
               className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               Camera Catalog
-            </a>
-            <a
-              href="#bag"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
-            >
-              What&apos;s in the Bag
             </a>
             <a
               href="#kyc-requirements"
@@ -1713,99 +1706,6 @@ export default function App() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          3. WHAT'S IN THE BAG SECTION (8-Card Grid)
-      ───────────────────────────────────────────────────────────── */}
-      <section id="bag" className="py-16 sm:py-20 px-4 sm:px-8 bg-white border-y border-[#E8E4F0]">
-        <div className="max-w-7xl mx-auto">
-
-          <div className="text-center max-w-2xl mx-auto mb-10">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8F7F1] text-[#234E52] border border-[#A8DBC8] text-xs font-bold mb-3">
-              <ShoppingBag className="w-3.5 h-3.5 text-[#319795]" />
-              <span>Full Kit Inclusions &amp; Accessories</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-black text-[#1A1A2E] tracking-tight">
-              What&apos;s in the Bag?
-            </h2>
-            <p className="mt-2 text-base text-[#6B6B8A] font-medium">
-              Sanitized at our Pasig base before every rental. Everything you need to film, shoot, and export directly to your smartphone.
-            </p>
-
-            {/* Camera Switcher Tabs for Bag Inclusions */}
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-6">
-              {CAMERAS.filter(c => c.isAvailable).map((cam) => {
-                const isActive = selectedCameraId === cam.id;
-                return (
-                  <button
-                    key={cam.id}
-                    type="button"
-                    onClick={() => setSelectedCameraId(cam.id)}
-                    className={`min-h-[42px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
-                      isActive
-                        ? 'bg-[#1A1A2E] text-white border-[#1A1A2E] shadow-sm'
-                        : 'bg-[#FAFAF7] text-[#6B6B8A] border-[#E8E4F0] hover:text-[#1A1A2E] hover:border-[#1A1A2E]'
-                    }`}
-                  >
-                    <Camera className="w-3.5 h-3.5 text-[#F5C6A8]" />
-                    <span className="hidden sm:inline">{cam.name}</span>
-                    <span className="sm:hidden">{cam.shortName} Kit</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 8-Card Responsive Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {currentBagItems.map((item) => (
-              <div
-                key={item.id}
-                className="group relative bg-[#FAFAF7] rounded-[24px] border-2 border-[#E8E4F0] p-5 flex flex-col justify-between hover:border-[#1A1A2E] hover:shadow-[4px_4px_0px_0px_#1A1A2E] hover:-translate-y-1 transition-all duration-200"
-              >
-                <div>
-                  {/* Top Bar inside Card */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 rounded-2xl bg-white border border-[#E8E4F0] flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-                      <Camera className="w-6 h-6 text-[#1A1A2E]" />
-                    </div>
-                    <span className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full ${item.color}`}>
-                      {item.badge}
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-[#1A1A2E] group-hover:text-[#6B46C1] transition-colors">
-                    {item.title}
-                  </h3>
-
-                  <p className="mt-2 text-xs text-[#6B6B8A] leading-relaxed">
-                    {item.desc}
-                  </p>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-[#E8E4F0]/80">
-                  <div className="text-[11px] font-semibold text-[#1A1A2E] flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-[#38A169]" />
-                    <span>{item.spec}</span>
-                  </div>
-                  <button
-                    onClick={() => setPreviewBagItem(previewBagItem === item.id ? null : item.id)}
-                    className="mt-2 text-[11px] font-bold text-[#6B46C1] hover:underline flex items-center gap-1"
-                  >
-                    <span>{previewBagItem === item.id ? 'Hide Pro-Tip ▲' : 'View Pro-Tip ▼'}</span>
-                  </button>
-                  {previewBagItem === item.id && (
-                    <div className="mt-2 p-2 rounded-xl bg-white border border-[#C9B8F0] text-[11px] text-[#553C9A] leading-tight animate-fadeIn">
-                      💡 {item.tip}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-        </div>
-      </section>
-
-      {/* ─────────────────────────────────────────────────────────────
           4. HOW TO BOOK SECTION (5 Simple Steps from Handout)
       ───────────────────────────────────────────────────────────── */}
       <section id="how" className="py-16 sm:py-20 px-4 sm:px-8">
@@ -2084,6 +1984,24 @@ export default function App() {
                         </span>
                       ))}
                     </div>
+
+                    {/* View Kit Inclusions & Accessories Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInclusionsModalCamera(cam);
+                      }}
+                      className="mt-4 w-full py-2.5 px-3.5 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#E8E4F0] hover:border-[#553C9A] text-[#1A1A2E] text-xs font-bold transition-all flex items-center justify-between group/inc cursor-pointer shadow-2xs"
+                    >
+                      <span className="flex items-center gap-2">
+                        <ShoppingBag className="w-3.5 h-3.5 text-[#553C9A]" />
+                        <span>Kit Inclusions &amp; Accessories</span>
+                      </span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-[#EDE8FC] text-[#553C9A] group-hover/inc:bg-[#553C9A] group-hover/inc:text-white transition-colors">
+                        {cam.bagItems.length} Items →
+                      </span>
+                    </button>
                   </div>
 
                   <div className="mt-6 pt-4 border-t border-[#E8E4F0]">
@@ -2890,7 +2808,7 @@ export default function App() {
               Quick Links
             </div>
             <ul className="space-y-2 text-xs text-gray-300">
-              <li><a href="#bag" className="hover:text-white transition-colors">What&apos;s in the Bag</a></li>
+              <li><a href="#catalog" className="hover:text-white transition-colors">Camera Catalog</a></li>
               <li><a href="#how" className="hover:text-white transition-colors">How It Works</a></li>
               <li><a href="#pricing" className="hover:text-white transition-colors">Pricing & Calculator</a></li>
               <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
@@ -5359,6 +5277,212 @@ export default function App() {
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>I Understand &amp; Agree to Terms</span>
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          CAMERA KIT INCLUSIONS & ACCESSORIES MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {inclusionsModalCamera && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[28px] sm:rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[92vh] my-auto">
+
+            {/* Modal Header Bar */}
+            <div className="px-5 sm:px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-center justify-center text-[#553C9A] shrink-0">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg text-[#1A1A2E]">
+                    Full Kit Inclusions &amp; Accessories
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-[#6B6B8A] font-medium">
+                    Sanitized &amp; packed in Pasig before every rental • Ready to film
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInclusionsModalCamera(null);
+                  setInclusionsTipId(null);
+                }}
+                className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#FEF0E7] flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer shrink-0"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Camera Overview Card inside Modal */}
+            <div className="px-5 sm:px-6 pt-5 pb-4 bg-white border-b border-[#E8E4F0]">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="w-24 sm:w-28 aspect-[4/3] rounded-2xl bg-gradient-to-b from-[#F5F2FC] to-[#FEF6F0] p-2 flex items-center justify-center border border-[#E8E4F0] shrink-0">
+                  <img
+                    src={inclusionsModalCamera.image}
+                    alt={inclusionsModalCamera.name}
+                    className="h-full w-full object-contain drop-shadow-sm"
+                  />
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1.5">
+                    <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]">
+                      {inclusionsModalCamera.badge}
+                    </span>
+                    <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#E8F7F1] text-[#234E52] border border-[#A8DBC8] flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-[#234E52]" />
+                      <span>{inclusionsModalCamera.bagItems.length} Kit Inclusions</span>
+                    </span>
+                    {inclusionsModalCamera.isAvailable ? (
+                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#E8F7F1] text-[#38A169] border border-[#A8DBC8]">
+                        Ready to Rent
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8]">
+                        Coming Soon
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-lg font-black text-[#1A1A2E]">
+                    {inclusionsModalCamera.name}
+                  </h4>
+                  <p className="text-xs text-[#6B6B8A] mt-1 line-clamp-2">
+                    {inclusionsModalCamera.tagline}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Scrollable Inclusions Grid */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="p-3 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] text-xs text-[#7B341E] flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-[#DD6B20] shrink-0 mt-0.5" />
+                <span>
+                  <strong>Complete Creator Bag:</strong> Every item listed below is physically provided inside your protective bag. Plug into your phone via the included high-speed OTG reader to edit immediately.
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {inclusionsModalCamera.bagItems.map((item, index) => {
+                  const isTipOpen = inclusionsTipId === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white rounded-2xl border-2 border-[#E8E4F0] p-4 flex flex-col justify-between hover:border-[#1A1A2E] hover:shadow-[3px_3px_0px_#1A1A2E] transition-all"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="w-6 h-6 rounded-lg bg-[#FAFAF7] border border-[#E8E4F0] text-[#1A1A2E] text-[11px] font-black flex items-center justify-center shrink-0">
+                            #{index + 1}
+                          </span>
+                          <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${item.color}`}>
+                            {item.badge}
+                          </span>
+                        </div>
+
+                        <h5 className="text-sm font-bold text-[#1A1A2E]">
+                          {item.title}
+                        </h5>
+                        <p className="mt-1 text-xs text-[#6B6B8A] leading-relaxed">
+                          {item.desc}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-[#E8E4F0]">
+                        <div className="text-[11px] font-semibold text-[#1A1A2E] flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#38A169] shrink-0" />
+                          <span className="line-clamp-1">{item.spec}</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setInclusionsTipId(isTipOpen ? null : item.id)}
+                          className="mt-2 text-[11px] font-bold text-[#553C9A] hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>{isTipOpen ? 'Hide Tip ▲' : 'View Pro-Tip ▼'}</span>
+                        </button>
+
+                        {isTipOpen && (
+                          <div className="mt-2 p-2.5 rounded-xl bg-[#EDE8FC] border border-[#C9B8F0] text-[11px] text-[#553C9A] leading-tight animate-fadeIn">
+                            💡 {item.tip}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Sticky Footer */}
+            <div className="px-5 sm:px-6 py-4 bg-white border-t border-[#E8E4F0] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+              <div className="text-center sm:text-left">
+                <div className="flex items-baseline justify-center sm:justify-start gap-1.5">
+                  <span className="text-xl font-black text-[#1A1A2E]">
+                    {inclusionsModalCamera.standardRate > 0 ? `₱${inclusionsModalCamera.standardRate}` : '₱---'}
+                  </span>
+                  <span className="text-xs font-semibold text-[#6B6B8A]">
+                    {inclusionsModalCamera.isAvailable ? '/ day' : '/ day (Target)'}
+                  </span>
+                  {inclusionsModalCamera.isAvailable && (
+                    <span className="text-[11px] text-[#38A169] font-bold ml-1.5">
+                      (from ₱{inclusionsModalCamera.bulkRate}/d bulk)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#6B6B8A] font-medium">
+                  {inclusionsModalCamera.depositAmount > 0
+                    ? `100% Refundable Security Deposit: ₱${(inclusionsModalCamera.depositAmount || 1000).toLocaleString()}`
+                    : 'Refundable Security Deposit: TBA'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInclusionsModalCamera(null);
+                    setInclusionsTipId(null);
+                  }}
+                  className="w-1/3 sm:w-auto px-4 py-2.5 rounded-xl border border-[#E8E4F0] text-xs font-bold text-[#6B6B8A] hover:bg-[#FAFAF7] transition-all cursor-pointer text-center"
+                >
+                  Close
+                </button>
+
+                {inclusionsModalCamera.isAvailable ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const camId = inclusionsModalCamera.id;
+                      setInclusionsModalCamera(null);
+                      setInclusionsTipId(null);
+                      handleOpenBookingModal(camId);
+                    }}
+                    className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-[#1A1A2E] hover:bg-[#553C9A] text-white text-xs font-black transition-all flex items-center justify-center gap-2 shadow-[2px_2px_0px_#553C9A] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 cursor-pointer"
+                  >
+                    <span>Book This Complete Kit</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-[#F5C6A8]" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInclusionsModalCamera(null);
+                      setInclusionsTipId(null);
+                      showToast(`✨ ${inclusionsModalCamera.name} is coming soon! DM us on Instagram @packandfilm.ph to get notified first.`, 'info');
+                    }}
+                    className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] hover:bg-[#FBD38D] text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#DD6B20]" />
+                    <span>Coming Soon • Notify Me</span>
+                  </button>
+                )}
+              </div>
             </div>
 
           </div>

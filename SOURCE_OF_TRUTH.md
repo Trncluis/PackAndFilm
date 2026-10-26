@@ -49,6 +49,7 @@ graph TD
 ---
 
 ## 3. Camera Lineup, Specs & Bag Inclusions
+*(Note: Full kit inclusions and accessories are accessible directly via the **"Kit Inclusions & Accessories"** modal button on each camera listing card in `#catalog`, replacing the previous standalone 8-card section for a cleaner, conversion-focused page flow).*
 
 ### 3.1. DJI Osmo Pocket 3 Standard Kit
 * **Status:** Available Now (Active Inventory)
