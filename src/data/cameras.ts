@@ -25,7 +25,6 @@ export interface CameraItem {
   specs: string[];
   gradient: string;
   themeColor: string;
-  image: string;
   bagItems: {
     id: number;
     title: string;
@@ -60,10 +59,9 @@ export const CAMERAS: CameraItem[] = [
     ],
     rating: 4.98,
     reviewCount: 180,
-    specs: ['4K/120fps Video', '1-inch CMOS Sensor', 'ActiveTrack 6.0', '128GB MicroSD Included'],
+    specs: ['4K/120fps', '1-inch CMOS Sensor', 'ActiveTrack 6.0', '128GB MicroSD Included'],
     gradient: 'from-[#EDE8FC] via-[#FEF0E7] to-[#E8F7F1]',
     themeColor: '#C9B8F0',
-    image: '/dji-pocket-3-hero.png',
     bagItems: [
       {
         id: 1,
@@ -171,7 +169,6 @@ export const CAMERAS: CameraItem[] = [
     specs: ['20.1MP 1.0" Stacked CMOS', '4.2x f/1.8–2.8 Zoom (24–100mm)', '4K 30p Uncropped Video', '180° Flip-Up Touchscreen'],
     gradient: 'from-[#FEF0E7] via-[#FFF3D6] to-[#EDE8FC]',
     themeColor: '#F5C6A8',
-    image: '/canon-g7x-hero.png',
     bagItems: [
       {
         id: 1,
@@ -307,7 +304,6 @@ export const CAMERAS: CameraItem[] = [
     specs: ['40.2MP X-Trans 5', '20 Film Simulations', '6.0-Stop IBIS', 'Fixed 23mm F2.0 Lens'],
     gradient: 'from-[#E8F7F1] via-[#EDE8FC] to-[#FEF0E7]',
     themeColor: '#A8DBC8',
-    image: '/fujifilm-x100vi-hero.jpg',
     bagItems: [
       {
         id: 1,
