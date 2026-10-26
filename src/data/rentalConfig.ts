@@ -13,8 +13,10 @@ export const RENTAL_CONFIG = {
   legalName: 'Pack and Film - Camera Rentals',
   instagramHandle: '@packandfilm.ph',
   instagramUrl: 'https://www.instagram.com/packandfilm.ph/',
-  messengerUrl: 'https://m.me/packandfilm.ph',
-  facebookAdminAccount: 'PackAndFilm Camera Rentals',
+  facebookHandle: '@Pack and Film',
+  facebookUrl: 'https://www.facebook.com/people/Pack-and-Film/61595302043810/',
+  messengerUrl: 'https://www.facebook.com/people/Pack-and-Film/61595302043810/',
+  facebookAdminAccount: 'Pack and Film',
 
   // Operating Hours
   operatingHours: '8:00 AM – 8:00 PM ONLY',

@@ -1887,13 +1887,13 @@ export default function App() {
                   <span>Instagram @packandfilm.ph</span>
                 </a>
                 <a
-                  href="https://m.me/packandfilm.ph"
+                  href="https://www.facebook.com/people/Pack-and-Film/61595302043810/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2.5 rounded-xl bg-[#1A1A2E] hover:bg-[#553C9A] text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  className="px-4 py-2.5 rounded-xl bg-[#1A1A2E] hover:bg-[#553C9A] text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-[#F5C6A8]" />
-                  <span>Chat on Messenger</span>
+                  <span>Facebook @Pack and Film</span>
                 </a>
               </div>
             </div>
@@ -2789,13 +2789,13 @@ export default function App() {
                 <span>DM on Instagram</span>
               </a>
               <a
-                href="https://m.me/packandfilm.ph"
+                href="https://www.facebook.com/people/Pack-and-Film/61595302043810/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2.5 rounded-full bg-white border border-[#F5C6A8] text-[#C05621] font-bold text-xs hover:bg-[#FEF0E7] transition-colors flex items-center gap-1.5 shadow-sm"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                <span>Chat on Messenger</span>
+                <span>Facebook @Pack and Film</span>
               </a>
             </div>
           </div>
@@ -2858,13 +2858,13 @@ export default function App() {
               </p>
               <p>
                 <a
-                  href="https://m.me/packandfilm.ph"
+                  href="https://www.facebook.com/people/Pack-and-Film/61595302043810/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-semibold text-white hover:text-[#C9B8F0] transition-colors inline-flex items-center gap-1.5"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-[#C9B8F0]" />
-                  <span>Facebook Messenger / Page</span>
+                  <span>Facebook: Pack and Film</span>
                 </a>
               </p>
               <p className="text-gray-400">Email: rentals@packandfilm.ph</p>
@@ -4805,13 +4805,13 @@ export default function App() {
                       <span>Chat on Instagram</span>
                     </a>
                     <a
-                      href="https://m.me/packandfilm.ph"
+                      href="https://www.facebook.com/people/Pack-and-Film/61595302043810/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 py-3 px-4 rounded-2xl bg-[#0084FF] text-white font-extrabold text-xs hover:bg-[#0070D8] shadow-md transition-all flex items-center justify-center gap-1.5"
                     >
                       <ExternalLink className="w-4 h-4" />
-                      <span>Chat on Messenger</span>
+                      <span>Chat on Facebook Page</span>
                     </a>
                     <button
                       onClick={() => setIsModalOpen(false)}
