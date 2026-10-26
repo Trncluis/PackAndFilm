@@ -91,11 +91,11 @@ graph TD
   10. Soft Protective Drawstring Pouch
   11. Weatherproof Padded Organizer Camera Bag
 
-### 3.3. Fujifilm X100VI Digital Film Simulation Kit
-* **Status:** Coming Soon (Preview Only)
-* **Hardware Specs:** 40.2MP X-Trans CMOS 5 HR Sensor, 20 Film Simulations, 6.0-Stop In-Body Image Stabilization (IBIS), Fixed 23mm F2.0 Lens
-* **Target Rates:** ₱900/day (1–2d), ₱850/day (3–5d), ₱800/day (6+d)
-* **Security Deposit:** ₱3,000 (Meetup) / ₱5,000 (Courier)
+### 3.3. KODAK PIXPRO FZ55 Digital Camera
+* **Status:** Coming Soon (Planned Lineup • Preview Only)
+* **Hardware Specs:** 16MP 1/2.3" CMOS Sensor, 5x Optical Zoom (28–140mm equivalent), 1080p Full HD Video, 2.7" LCD Screen, Rechargeable Li-ion LB-012 battery
+* **Target Rates:** ₱--- / day (Target • TBA upon acquisition)
+* **Security Deposit:** TBA (₱---)
 
 ---
 

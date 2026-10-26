@@ -385,8 +385,8 @@ export default function App() {
     let matchedCameraId = 'dji-pocket-3';
     if (camRaw.includes('canon') || camRaw.includes('g7x') || camRaw.includes('g7 x') || camRaw.includes('powershot')) {
       matchedCameraId = 'canon-g7x-mark-iii';
-    } else if (camRaw.includes('fuji') || camRaw.includes('x100')) {
-      matchedCameraId = 'fujifilm-x100vi';
+    } else if (camRaw.includes('kodak') || camRaw.includes('fz55') || camRaw.includes('pixpro') || camRaw.includes('fuji') || camRaw.includes('x100')) {
+      matchedCameraId = 'kodak-pixpro-fz55';
     } else if (camRaw.includes('pocket') || camRaw.includes('dji')) {
       matchedCameraId = 'dji-pocket-3';
     } else {
@@ -2060,13 +2060,17 @@ export default function App() {
                   <div className="mt-6 pt-4 border-t border-[#E8E4F0]">
                     <div className="flex items-baseline justify-between mb-3">
                       <div>
-                        <span className="text-2xl font-black text-[#1A1A2E]">₱{cam.standardRate}</span>
+                        <span className="text-2xl font-black text-[#1A1A2E]">
+                          {cam.standardRate > 0 ? `₱${cam.standardRate}` : '₱---'}
+                        </span>
                         <span className="text-xs font-semibold text-[#6B6B8A]">
                           {isAvailable ? ' / day (1d)' : ' / day (Target)'}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-extrabold text-[#38A169]">From ₱{cam.bulkRate}/day</span>
+                        <span className="text-xs font-extrabold text-[#38A169]">
+                          {cam.bulkRate > 0 ? `From ₱${cam.bulkRate}/day` : 'TBA'}
+                        </span>
                         <span className="text-[10px] block text-[#6B6B8A]">
                           {isAvailable ? 'Tier discounts up to 6+d' : 'Expected bulk'}
                         </span>
@@ -2075,7 +2079,9 @@ export default function App() {
 
                     <div className="text-[11px] text-[#6B6B8A] mb-3 flex items-center justify-between">
                       <span className="font-semibold text-[#1A1A2E]">
-                        Refundable Deposit: ₱{(cam.depositAmount || cam.meetupDeposit || 1000).toLocaleString()}
+                        {cam.depositAmount > 0
+                          ? `Refundable Deposit: ₱${(cam.depositAmount || cam.meetupDeposit || 1000).toLocaleString()}`
+                          : 'Refundable Deposit: ₱--- (TBA)'}
                       </span>
                       <span className="text-[10px] font-bold text-[#2F855A] bg-[#E8F7F1] px-2 py-0.5 rounded-md border border-[#A8DBC8]">
                         Meetup & Grab Express
@@ -2287,7 +2293,7 @@ export default function App() {
                       </div>
                       <div className="mt-1 flex items-center justify-between text-[11px] w-full">
                         <span className={`font-extrabold ${!isAvailable ? 'text-[#6B6B8A]' : 'text-[#553C9A]'}`}>
-                          ₱{cam.standardRate}/day {!isAvailable && <span className="text-[9px] font-normal text-[#8A8A9E]">(Target)</span>}
+                          {cam.standardRate > 0 ? `₱${cam.standardRate}/day` : '₱--- / day'} {!isAvailable && <span className="text-[9px] font-normal text-[#8A8A9E]">(Target)</span>}
                         </span>
                         <span className={`text-[10px] font-bold ${!isAvailable ? 'text-[#8A8A9E]' : 'text-[#38A169]'}`}>
                           {!isAvailable ? 'Pre-launch' : `₱${cam.bulkRate} bulk`}
@@ -2843,7 +2849,7 @@ export default function App() {
               <span className="font-black text-xl tracking-tight">PackAndFilm</span>
             </div>
             <p className="text-xs text-gray-400 max-w-sm leading-relaxed">
-              Metro Manila’s favorite pastel aesthetic camera rental for DJI Osmo Pocket 3, Canon PowerShot G7 X Mark III &amp; Fujifilm X100VI. Designed for creators, concert-goers, and vloggers. Mag-vlog na, wag nang mag-ipon.
+              Metro Manila’s favorite pastel aesthetic camera rental for DJI Osmo Pocket 3, Canon PowerShot G7 X Mark III &amp; KODAK PIXPRO FZ55. Designed for creators, concert-goers, and vloggers. Mag-vlog na, wag nang mag-ipon.
             </p>
             <div className="pt-2 text-xs text-gray-500 font-mono">
               Meetups at SM East Ortigas, Bridgetowne &amp; Opus Mall (₱200 fee) • Grab Express Delivery ONLY across Metro Manila (8:00 AM – 8:00 PM).
