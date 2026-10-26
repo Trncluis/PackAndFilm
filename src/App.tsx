@@ -1773,24 +1773,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* Quick Notice Banner */}
-          <div className="mt-10 p-5 rounded-3xl bg-[#EDE8FC] border-2 border-[#C9B8F0] flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center shrink-0">
-                <Sparkles className="w-5 h-5 text-[#6B46C1]" />
-              </div>
-              <p className="text-sm font-semibold text-[#553C9A]">
-                Need an extra battery handle or DJI Mic 2 transmitter? Mention it on your booking notes for quick add-on availability!
-              </p>
-            </div>
-            <button
-              onClick={() => handleOpenBookingModal()}
-              className="whitespace-nowrap px-5 py-2.5 rounded-full bg-[#1A1A2E] text-white font-bold text-xs hover:bg-[#553C9A] transition-colors cursor-pointer"
-            >
-              Book Complete Bag
-            </button>
-          </div>
-
         </div>
       </section>
 
@@ -2027,6 +2009,24 @@ export default function App() {
                       ) : (
                         <span className="text-[10px] font-bold text-[#6B6B8A] bg-white px-2.5 py-0.5 rounded-full border border-[#E8E4F0]">
                           Lineup Addition
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Camera Product Image with Consistent 4:3 Aspect Ratio */}
+                    <div className="relative w-full aspect-[4/3] rounded-2xl bg-gradient-to-b from-[#F5F2FC] via-[#FAFAF7] to-[#FEF6F0] p-4 flex items-center justify-center overflow-hidden border border-[#E8E4F0] mb-3.5 group">
+                      <img
+                        src={cam.image}
+                        alt={cam.name}
+                        className="h-full w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                      <span className="absolute bottom-2.5 left-2.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-[#1A1A2E]/85 backdrop-blur-xs text-white shadow-xs">
+                        {cam.shortName.toUpperCase()}
+                      </span>
+                      {!isAvailable && (
+                        <span className="absolute top-2.5 right-2.5 text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8]">
+                          Preview Only
                         </span>
                       )}
                     </div>
