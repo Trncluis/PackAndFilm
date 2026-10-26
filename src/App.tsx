@@ -1221,7 +1221,7 @@ export default function App() {
     },
     {
       q: 'How does the Security Deposit refund work?',
-      a: 'A refundable Security Deposit (₱1,000 for DJI Osmo Pocket 3; verified prior to release for other models) is required before release. The deposit is fully refunded within 24 hours of the equipment being returned, provided it is in the same condition as when rented. It covers any unpaid balances, damages, loss, or unreturned accessories.'
+      a: 'A refundable Security Deposit (₱1,000 for active rental units including DJI Osmo Pocket 3 and Canon PowerShot G7 X Mark III) is required before release. The deposit is fully refunded within 24 hours of the equipment being returned, provided it is in the same condition as when rented. It covers any unpaid balances, damages, loss, or unreturned accessories.'
     },
     {
       q: 'What is your cancellation policy?',
@@ -1325,8 +1325,8 @@ export default function App() {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-xl tracking-tight text-[#1A1A2E]">PackAndFilm</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]/50">
-                  {selectedCamera.shortName}
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]/50">
+                  Camera Rentals
                 </span>
               </div>
               <p className="text-xs text-[#6B6B8A] font-medium tracking-wide">@packandfilm.ph • Metro Manila</p>
@@ -1690,10 +1690,10 @@ export default function App() {
       <section id="bag" className="py-16 sm:py-20 px-4 sm:px-8 bg-white border-y border-[#E8E4F0]">
         <div className="max-w-7xl mx-auto">
 
-          <div className="text-center max-w-2xl mx-auto mb-14">
+          <div className="text-center max-w-2xl mx-auto mb-10">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8F7F1] text-[#234E52] border border-[#A8DBC8] text-xs font-bold mb-3">
               <ShoppingBag className="w-3.5 h-3.5 text-[#319795]" />
-              <span>{selectedCamera.shortName} Full Kit Inclusions</span>
+              <span>Full Kit Inclusions &amp; Accessories</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-black text-[#1A1A2E] tracking-tight">
               What&apos;s in the Bag?
@@ -1701,6 +1701,28 @@ export default function App() {
             <p className="mt-2 text-base text-[#6B6B8A] font-medium">
               Sanitized at our Pasig base before every rental. Everything you need to film, shoot, and export directly to your smartphone.
             </p>
+
+            {/* Camera Switcher Tabs for Bag Inclusions */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+              {CAMERAS.filter(c => c.isAvailable).map((cam) => {
+                const isActive = selectedCameraId === cam.id;
+                return (
+                  <button
+                    key={cam.id}
+                    type="button"
+                    onClick={() => setSelectedCameraId(cam.id)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                      isActive
+                        ? 'bg-[#1A1A2E] text-white border-[#1A1A2E] shadow-sm'
+                        : 'bg-[#FAFAF7] text-[#6B6B8A] border-[#E8E4F0] hover:text-[#1A1A2E] hover:border-[#1A1A2E]'
+                    }`}
+                  >
+                    <Camera className="w-3.5 h-3.5 text-[#F5C6A8]" />
+                    <span>{cam.name}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* 8-Card Responsive Grid */}
@@ -1918,7 +1940,7 @@ export default function App() {
                 <div>
                   <h4 className="text-sm font-extrabold text-[#1A1A2E]">All-in-One Ready Kits</h4>
                   <p className="text-xs text-[#6B6B8A] mt-1 leading-relaxed font-medium">
-                    Sanitized Pocket 3 unit, 128GB fast MicroSD, direct iOS/Android phone OTG reader, and protective casing included.
+                    Sanitized camera kit (Pocket 3 or Canon G7 X), high-speed storage, direct phone OTG reader, and protective casing included.
                   </p>
                 </div>
               </div>
@@ -5315,7 +5337,7 @@ export default function App() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1A1A2E] text-white text-xs font-bold shadow-lg border-2 border-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
         >
           <Camera className="w-4 h-4 text-[#F5C6A8]" />
-          <span>Rent {selectedCamera.shortName}</span>
+          <span>Rent a Camera</span>
         </button>
       </div>
 
