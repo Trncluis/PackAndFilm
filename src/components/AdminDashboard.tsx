@@ -23,7 +23,10 @@ import {
   ShieldAlert,
   Trash2,
   AlertTriangle,
-  XCircle
+  XCircle,
+  Copy,
+  Download,
+  MessageSquare
 } from 'lucide-react';
 
 export interface AdminBookingItem {
@@ -528,6 +531,122 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setWorkflowErrorMsg(null);
     }
   }, [selectedBooking?.bookingRef]);
+
+  // Copy state and handlers for One-Click Message Templates
+  const [copiedTemplateKey, setCopiedTemplateKey] = useState<string | null>(null);
+
+  const handleCopyTemplate = (key: 'handover' | 'reminder' | 'refund', text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedTemplateKey(key);
+    setActionSuccessMsg(
+      `Copied ${key === 'handover' ? 'Handover Message' : key === 'reminder' ? 'Return Reminder' : 'Deposit Refunded Confirmation'} to clipboard!`
+    );
+    setTimeout(() => setCopiedTemplateKey(null), 2500);
+    setTimeout(() => setActionSuccessMsg(null), 4000);
+  };
+
+  const openGoogleCalendar = (b: AdminBookingItem) => {
+    const start = (b.startDate || '').replace(/-/g, '');
+    const end = (b.endDate || '').replace(/-/g, '');
+    const title = encodeURIComponent(`PackAndFilm: ${b.cameraRented} - ${b.customerName}`);
+    const details = encodeURIComponent(
+      `Camera Rental: ${b.cameraRented}\nCustomer: ${b.customerName} (${b.contactNumber})\nBooking Ref: ${b.bookingRef}\nHandover: ${b.handoverMethod} (${b.address})\nBalance Due: ₱${Number(b.balanceDue || 0).toLocaleString()}\nNotes: ${b.notes || 'None'}`
+    );
+    const location = encodeURIComponent(b.address || b.handoverMethod || 'Pasig City Hub');
+    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${location}`;
+    window.open(gcalUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const downloadIcsCalendar = (b: AdminBookingItem) => {
+    const start = (b.startDate || '').replace(/-/g, '');
+    const end = (b.endDate || '').replace(/-/g, '');
+    const title = `PackAndFilm: ${b.cameraRented} - ${b.customerName}`;
+    const description = `Camera Rental: ${b.cameraRented}\\nCustomer: ${b.customerName} (${b.contactNumber})\\nBooking Ref: ${b.bookingRef}\\nHandover: ${b.handoverMethod} (${b.address})\\nBalance Due: ₱${Number(b.balanceDue || 0).toLocaleString()}`;
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//PackAndFilm//Rental Dispatch//EN',
+      'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:${b.bookingRef}@packandfilm.ph`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      `DTSTART;VALUE=DATE:${start}`,
+      `DTEND;VALUE=DATE:${end}`,
+      `SUMMARY:${title}`,
+      `DESCRIPTION:${description}`,
+      `LOCATION:${b.address || b.handoverMethod || 'Pasig City Hub'}`,
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `PackAndFilm_${b.bookingRef}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setActionSuccessMsg(`Downloaded calendar event (.ics) for ${b.bookingRef}!`);
+    setTimeout(() => setActionSuccessMsg(null), 3000);
+  };
+
+  const getHandoverMessage = (b: AdminBookingItem) => {
+    const deposit = Number(b.securityDeposit || 1000);
+    const bal = Number(b.balanceDue || 0);
+    return `Hi ${b.customerName || 'there'}! ✨ This is PackAndFilm confirming your upcoming camera rental details:
+
+📸 Camera Model: ${b.cameraRented}
+🗓️ Confirmed Rental Dates: ${b.startDate} to ${b.endDate} (${b.rentalDays || 1} day/s)
+📍 Handover Location: ${b.address || b.handoverMethod || 'Pasig Hub / Meetup Point'}
+💰 Remaining Balance Due Upon Handover: ₱${bal.toLocaleString()} (Includes remaining rental balance + ₱${deposit.toLocaleString()} refundable security deposit)
+🔖 Booking Reference: ${b.bookingRef}
+
+📌 Handover Reminders:
+• Please bring the original physical IDs submitted during KYC verification.
+• We will conduct a quick 3-minute physical inspection together to check all gear and accessories.
+• Operating hours: 8:00 AM – 8:00 PM.
+
+Let us know your estimated arrival time! Excited for your shoot! 💖📸`;
+  };
+
+  const getReturnReminderMessage = (b: AdminBookingItem) => {
+    const deposit = Number(b.securityDeposit || 1000);
+    return `Hi ${b.customerName || 'there'}! Hope you had an amazing shoot with the ${b.cameraRented}! 📸✨
+
+Friendly reminder that your camera rental is scheduled for return today:
+🗓️ Return Date: ${b.endDate}
+⏰ Return Cutoff: 8:00 PM
+📍 Return Location: ${b.address || b.handoverMethod || 'Pasig Hub / Meetup Point'}
+
+🎒 Return Checklist:
+• Camera unit and battery
+• High-speed SD / MicroSD card & OTG card reader
+• All included cables, mounts, wrist strap, and silicone/hard case
+• Padded organizer travel bag
+
+💳 Security Deposit Refund Procedure:
+Upon receiving the unit, our team will perform a standard 5-minute gear inspection (checking lens optics, gimbal calibration, and accessory count). Once verified in order, your ₱${deposit.toLocaleString()} refundable security deposit will be processed promptly via GCash.
+
+Please update us with your ETA or courier tracking details when dispatching. Thank you for taking great care of our gear! 💖`;
+  };
+
+  const getDepositRefundedMessage = (b: AdminBookingItem) => {
+    const deposit = Number(b.securityDeposit || 1000);
+    const gcashInfo = b.gcashRefNumber ? ` (GCash Ref: ${b.gcashRefNumber})` : '';
+    const contactInfo = b.contactNumber ? ` to ${b.contactNumber}` : '';
+    return `Hi ${b.customerName || 'there'}! 💖 Good news: gear inspection for your ${b.cameraRented} rental (Ref: ${b.bookingRef}) is complete!
+
+All equipment and inclusions were inspected and received in excellent condition! ✨
+
+✅ Security Deposit Refunded: ₱${deposit.toLocaleString()}${contactInfo}${gcashInfo}
+📱 Status: Verified Returned & Completed
+
+Thank you so much for renting with PackAndFilm! We'd love to see your shots—feel free to tag us on Instagram @packandfilm.ph or on Facebook. Can't wait to have you again! 📸🎉`;
+  };
 
   // ─────────────────────────────────────────────────────────────
   // BACKEND AUTHENTICATION (POST action: adminLogin & SHA-256 Verification)
@@ -1726,6 +1845,131 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <p className="font-medium text-[#1A1A2E] whitespace-pre-line leading-relaxed">
                     {selectedBooking.notes || 'None provided.'}
                   </p>
+                </div>
+
+                {/* Calendar Sync & Customer Dispatch Section */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white border-2 border-[#1A1A2E] shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-[#553C9A]" />
+                      <h4 className="font-black text-xs text-[#1A1A2E] uppercase tracking-wider">
+                        Calendar Sync &amp; Customer Dispatch
+                      </h4>
+                    </div>
+                    <span className="text-[10px] text-[#6B6B8A] font-bold">
+                      Ref: {selectedBooking.bookingRef}
+                    </span>
+                  </div>
+
+                  {/* Calendar Sync Action Buttons */}
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => openGoogleCalendar(selectedBooking)}
+                      className="px-3.5 py-2 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#E8E4F0] hover:border-[#C9B8F0] text-xs font-bold text-[#1A1A2E] flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-[#553C9A]" />
+                      <span>Add to Google Calendar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => downloadIcsCalendar(selectedBooking)}
+                      className="px-3.5 py-2 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#E8E4F0] hover:border-[#C9B8F0] text-xs font-bold text-[#1A1A2E] flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Download className="w-3.5 h-3.5 text-[#553C9A]" />
+                      <span>Download Apple/Outlook .ics</span>
+                    </button>
+                  </div>
+
+                  {/* One-Click Customer Message Templates (FB / IG / Viber / SMS) */}
+                  <div className="p-3.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#6B6B8A] flex items-center gap-1.5">
+                        <MessageSquare className="w-3 h-3 text-[#553C9A]" />
+                        <span>One-Click FB &amp; IG Customer Message Templates</span>
+                      </span>
+                      <span className="text-[9px] font-bold text-[#553C9A] bg-[#EDE8FC] px-2 py-0.5 rounded-full">
+                        Ready for FB &amp; IG
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {/* Template 1: Handover Message */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyTemplate('handover', getHandoverMessage(selectedBooking))}
+                        className={`p-2.5 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
+                          copiedTemplateKey === 'handover'
+                            ? 'bg-[#E8F7F1] border-[#38A169] text-[#22543D]'
+                            : 'bg-white hover:bg-[#EDE8FC] border-[#E8E4F0] hover:border-[#C9B8F0] text-[#1A1A2E]'
+                        }`}
+                        title="Copy customer-ready handover confirmation message for FB Messenger, IG, or SMS"
+                      >
+                        <span className="truncate">Handover Message</span>
+                        {copiedTemplateKey === 'handover' ? (
+                          <Check className="w-3.5 h-3.5 text-[#38A169] shrink-0" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-[#6B6B8A] shrink-0" />
+                        )}
+                      </button>
+
+                      {/* Template 2: Return Reminder */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyTemplate('reminder', getReturnReminderMessage(selectedBooking))}
+                        className={`p-2.5 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
+                          copiedTemplateKey === 'reminder'
+                            ? 'bg-[#E8F7F1] border-[#38A169] text-[#22543D]'
+                            : 'bg-white hover:bg-[#EDE8FC] border-[#E8E4F0] hover:border-[#C9B8F0] text-[#1A1A2E]'
+                        }`}
+                        title="Copy polite 8:00 PM return reminder with checklist and deposit refund procedure"
+                      >
+                        <span className="truncate">8 PM Return Reminder</span>
+                        {copiedTemplateKey === 'reminder' ? (
+                          <Check className="w-3.5 h-3.5 text-[#38A169] shrink-0" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-[#6B6B8A] shrink-0" />
+                        )}
+                      </button>
+
+                      {/* Template 3: Deposit Refunded (Strictly Guarded) */}
+                      {selectedBooking.status === 'Completed' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyTemplate('refund', getDepositRefundedMessage(selectedBooking))}
+                          className={`p-2.5 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
+                            copiedTemplateKey === 'refund'
+                              ? 'bg-[#E8F7F1] border-[#38A169] text-[#22543D]'
+                              : 'bg-white hover:bg-[#EDE8FC] border-[#E8E4F0] hover:border-[#C9B8F0] text-[#1A1A2E]'
+                          }`}
+                          title="Copy deposit refunded confirmation message"
+                        >
+                          <span className="truncate">Deposit Refunded</span>
+                          {copiedTemplateKey === 'refund' ? (
+                            <Check className="w-3.5 h-3.5 text-[#38A169] shrink-0" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-[#6B6B8A] shrink-0" />
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorkflowErrorMsg(
+                              "Deposit Refund confirmation template is only unlocked once equipment is marked as 'Completed' after return inspection."
+                            );
+                            setTimeout(() => setWorkflowErrorMsg(null), 5000);
+                          }}
+                          className="p-2.5 rounded-xl border text-left text-xs font-semibold bg-[#FAFAF7] border-[#E8E4F0] text-[#8A8A9E] flex items-center justify-between gap-1.5 cursor-not-allowed opacity-75 hover:bg-[#FFF5F5] hover:text-[#C53030]"
+                          title="Available once booking is marked Completed in Step 4"
+                        >
+                          <span className="truncate">Deposit Refunded (When Done)</span>
+                          <AlertCircle className="w-3.5 h-3.5 text-[#8A8A9E] shrink-0" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
               </div>

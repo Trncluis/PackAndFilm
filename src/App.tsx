@@ -36,7 +36,8 @@ import {
   Video,
   GraduationCap,
   Loader2,
-  Clock
+  Clock,
+  PackageCheck
 } from 'lucide-react';
 
 import { CAMERAS, CameraItem } from './data/cameras';
@@ -1990,23 +1991,17 @@ export default function App() {
               return (
                 <div
                   key={cam.id}
-                  onClick={() => {
-                    if (!isAvailable) {
-                      showToast(`✨ ${cam.name} is coming soon to our lineup! Currently, the DJI Osmo Pocket 3 and Canon PowerShot G7 X Mark III are available for rental.`, 'info');
-                      return;
-                    }
-                    setSelectedCameraId(cam.id);
-                  }}
-                  className={`relative rounded-[28px] border-2 p-6 flex flex-col justify-between transition-all ${!isAvailable
-                    ? 'bg-[#FAFAF7]/95 border-[#E8E4F0] hover:border-[#F5C6A8] hover:shadow-[3px_3px_0px_0px_#F5C6A8] cursor-pointer'
-                    : isSelected
-                      ? 'bg-white border-[#1A1A2E] shadow-[6px_6px_0px_0px_#1A1A2E] -translate-y-1 cursor-pointer'
-                      : 'bg-white/90 border-[#E8E4F0] hover:border-[#1A1A2E] hover:shadow-[3px_3px_0px_0px_#1A1A2E] cursor-pointer'
-                    }`}
+                  className={`relative rounded-[28px] border-2 p-5 sm:p-6 flex flex-col justify-between transition-all ${
+                    !isAvailable
+                      ? 'bg-[#FAFAF7]/95 border-[#E8E4F0] hover:border-[#F5C6A8]'
+                      : isSelected
+                      ? 'bg-white border-[#1A1A2E] shadow-[6px_6px_0px_0px_#1A1A2E] -translate-y-1'
+                      : 'bg-white/90 border-[#E8E4F0] hover:border-[#1A1A2E] hover:shadow-[4px_4px_0px_0px_#1A1A2E]'
+                  }`}
                 >
-                  <div>
-                    {/* Badge & Status Header */}
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="flex flex-col">
+                    {/* Badge & Rating Header */}
+                    <div className="flex items-center justify-between mb-3.5">
                       {isAvailable ? (
                         <span className="text-[11px] font-extrabold px-3 py-1 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-[#38A169] animate-pulse" />
@@ -2019,46 +2014,80 @@ export default function App() {
                         </span>
                       )}
 
-                      {isAvailable ? (
-                        <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-2.5 py-0.5 rounded-full border border-[#A8DBC8] flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-[#38A169]" />
-                          <span>Ready to Rent</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold text-[#6B6B8A] bg-white px-2.5 py-0.5 rounded-full border border-[#E8E4F0]">
-                          Lineup Addition
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-[#1A1A2E] bg-[#FAFAF7] px-2.5 py-1 rounded-full border border-[#E8E4F0]">
+                        <span className="text-[#DD6B20]">★</span>
+                        <span>{cam.rating.toFixed(2)}</span>
+                        <span className="text-[#8A8A9E] font-normal">({cam.reviewCount})</span>
+                      </div>
+                    </div>
+
+                    {/* Camera Product Image with Consistent Aspect Ratio */}
+                    <div className="relative w-full aspect-[4/3] rounded-2xl bg-gradient-to-b from-[#F5F2FC] via-[#FAFAF7] to-[#FEF6F0] p-4 flex items-center justify-center overflow-hidden border border-[#E8E4F0] mb-4 group">
+                      <img
+                        src={cam.image}
+                        alt={cam.name}
+                        className="h-full w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <span className="absolute bottom-2.5 left-2.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-[#1A1A2E]/85 backdrop-blur-xs text-white shadow-xs">
+                        {cam.shortName.toUpperCase()}
+                      </span>
+                      {!isAvailable && (
+                        <span className="absolute top-2.5 right-2.5 text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8]">
+                          Preview Only
                         </span>
                       )}
                     </div>
 
-                    <h3 className="text-xl font-black text-[#1A1A2E] mt-1">
+                    {/* Camera Name & Short Description */}
+                    <h3 className="text-xl font-black text-[#1A1A2E] tracking-tight leading-snug">
                       {cam.name}
                     </h3>
-
-                    {/* Status Tag for Upcoming Cameras */}
-                    {!isAvailable && (
-                      <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-[#FFF6EE] border border-[#F5C6A8]/70 flex items-center gap-2 text-[11px] font-bold text-[#C05621]">
-                        <Sparkles className="w-3.5 h-3.5 text-[#DD6B20] shrink-0" />
-                        <span>Planned Lineup • Preview Only</span>
-                      </div>
-                    )}
-
-                    <p className="text-xs text-[#6B6B8A] mt-2 leading-relaxed">
+                    <p className="text-xs text-[#6B6B8A] mt-1.5 leading-relaxed">
                       {cam.tagline}
                     </p>
 
-                    {/* Specs Pills */}
-                    <div className="mt-4 flex flex-wrap gap-1.5">
+                    {/* Key Specifications Checklist */}
+                    <div className="mt-3.5 space-y-1.5">
                       {cam.specs.map((spec, i) => (
-                        <span key={i} className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-[#FAFAF7] border border-[#E8E4F0] text-[#1A1A2E]">
-                          {spec}
-                        </span>
+                        <div key={i} className="flex items-center gap-2 text-xs font-semibold text-[#1A1A2E]">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#38A169] shrink-0" />
+                          <span>{spec}</span>
+                        </div>
                       ))}
+                    </div>
+
+                    {/* Equipment Inclusions Directly Inside Card */}
+                    <div className="mt-4 p-3.5 rounded-2xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                      <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-[#E8E4F0]">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-[#1A1A2E] flex items-center gap-1.5">
+                          <PackageCheck className="w-3.5 h-3.5 text-[#553C9A]" />
+                          <span>Kit Inclusions ({cam.bagItems.length} Items)</span>
+                        </span>
+                        <span className="text-[9px] font-extrabold text-[#2F855A] bg-[#E8F7F1] px-2 py-0.5 rounded-full border border-[#A8DBC8]">
+                          Sanitized &amp; Complete
+                        </span>
+                      </div>
+
+                      <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {cam.bagItems.map((item) => (
+                          <li key={item.id} className="flex items-start justify-between gap-2 text-[11px] leading-tight">
+                            <span className="flex items-start gap-1.5 text-[#1A1A2E]">
+                              <span className="text-[#38A169] font-bold">✓</span>
+                              <span className="font-semibold">{item.title}</span>
+                            </span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white border border-[#E8E4F0] text-[#6B6B8A] shrink-0">
+                              {item.badge}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-[#E8E4F0]">
-                    <div className="flex items-baseline justify-between mb-3">
+                  {/* Card Bottom: Rates, Deposit & Reserve CTA */}
+                  <div className="mt-5 pt-4 border-t border-[#E8E4F0]">
+                    {/* Primary Rate & Bulk Rate */}
+                    <div className="flex items-baseline justify-between mb-2">
                       <div>
                         <span className="text-2xl font-black text-[#1A1A2E]">₱{cam.standardRate}</span>
                         <span className="text-xs font-semibold text-[#6B6B8A]">
@@ -2068,54 +2097,65 @@ export default function App() {
                       <div className="text-right">
                         <span className="text-xs font-extrabold text-[#38A169]">From ₱{cam.bulkRate}/day</span>
                         <span className="text-[10px] block text-[#6B6B8A]">
-                          {isAvailable ? 'Tier discounts up to 6+d' : 'Expected bulk'}
+                          {isAvailable ? 'on 6+ day bookings' : 'Expected bulk'}
                         </span>
                       </div>
                     </div>
 
-                    <div className="text-[11px] text-[#6B6B8A] mb-3 flex items-center justify-between">
-                      <span className="font-semibold text-[#1A1A2E]">
-                        Refundable Deposit: ₱{(cam.depositAmount || cam.meetupDeposit || 1000).toLocaleString()}
-                      </span>
-                      <span className="text-[10px] font-bold text-[#2F855A] bg-[#E8F7F1] px-2 py-0.5 rounded-md border border-[#A8DBC8]">
-                        Meetup & Grab Express
-                      </span>
+                    {/* Compact Pricing Tiers Strip */}
+                    {cam.pricingTiers && cam.pricingTiers.length > 0 && (
+                      <div className="grid grid-cols-4 gap-1.5 mb-3">
+                        {cam.pricingTiers.map((tier, idx) => (
+                          <div key={idx} className="p-1.5 rounded-lg bg-[#FAFAF7] border border-[#E8E4F0] text-center">
+                            <span className="text-[9px] font-bold text-[#6B6B8A] block truncate">{tier.label}</span>
+                            <span className="text-[11px] font-black text-[#1A1A2E] block">₱{tier.rate}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Refundable Deposit & Reservation Fee Info */}
+                    <div className="p-2.5 rounded-xl bg-[#EDE8FC]/50 border border-[#C9B8F0]/70 mb-3.5 space-y-1 text-[11px]">
+                      <div className="flex items-center justify-between font-bold text-[#1A1A2E]">
+                        <span>Refundable Security Deposit:</span>
+                        <span className="text-[#553C9A]">₱{(cam.depositAmount || cam.meetupDeposit || 1000).toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-[#6B6B8A]">
+                        <span>Locks with Downpayment:</span>
+                        <span className="font-bold text-[#38A169]">₱300 (Credited to Total)</span>
+                      </div>
                     </div>
 
+                    {/* Prominent Reserve Button */}
                     {isAvailable ? (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedCameraId(cam.id);
-                          const pricingEl = document.getElementById('pricing');
-                          pricingEl?.scrollIntoView({ behavior: 'smooth' });
+                          setBooking(prev => ({
+                            ...prev,
+                            cameraId: cam.id
+                          }));
+                          setIsModalOpen(true);
+                          setModalStep(1);
                         }}
-                        className={`w-full py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${isSelected
-                          ? 'bg-[#1A1A2E] text-white shadow-sm'
-                          : 'bg-[#FAFAF7] hover:bg-[#EDE8FC] text-[#1A1A2E] border border-[#E8E4F0]'
-                          }`}
+                        className="w-full py-3 rounded-2xl bg-[#1A1A2E] hover:bg-[#553C9A] text-white font-black text-xs sm:text-sm transition-all shadow-[4px_4px_0px_#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        {isSelected ? (
-                          <>
-                            <Check className="w-4 h-4 text-[#A8DBC8]" />
-                            <span>Selected Camera Active</span>
-                          </>
-                        ) : (
-                          <span>Select & Calculate Dates</span>
-                        )}
+                        <Calendar className="w-4 h-4 text-[#F5C6A8]" />
+                        <span>Reserve {cam.shortName}</span>
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          showToast(`✨ ${cam.name} is coming soon to our lineup! You can DM us on Instagram @packandfilm.ph to be notified as soon as units arrive.`, 'info');
+                          showToast(`✨ ${cam.name} is coming soon to our lineup! You can message us on Instagram @packandfilm.ph or Facebook to be notified as soon as units arrive.`, 'info');
                         }}
-                        className="w-full py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 bg-[#F3F1ED] hover:bg-[#FEF0E7] text-[#6B6B8A] hover:text-[#C05621] border border-[#E8E4F0] hover:border-[#F5C6A8] cursor-pointer"
+                        className="w-full py-3 rounded-2xl bg-[#F3F1ED] hover:bg-[#FEF0E7] text-[#6B6B8A] hover:text-[#C05621] border border-[#E8E4F0] hover:border-[#F5C6A8] font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                       >
                         <Clock className="w-3.5 h-3.5 text-[#DD6B20]" />
-                        <span>Coming Soon • Inquire / Notify Me</span>
+                        <span>Notify Me (Coming Soon)</span>
                       </button>
                     )}
                   </div>
