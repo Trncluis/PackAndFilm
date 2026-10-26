@@ -484,6 +484,16 @@ export default function App() {
   });
 
   const [isHeroHovered, setIsHeroHovered] = useState(false);
+  const [showFloatingCta, setShowFloatingCta] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowFloatingCta(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Auto-rotate hero slide every 5.5s unless hovered
   useEffect(() => {
@@ -506,9 +516,9 @@ export default function App() {
       alt: 'DJI Osmo Pocket 3 Standard Kit',
       hasLed: true,
       chips: [
-        { text: '4K 60fps / 120fps', position: '-top-4 -left-4', bg: 'bg-[#F5C6A8]', rotate: 'rotate-[-5deg]', anim: 'animate-float-subtle' },
-        { text: '128GB MicroSD Included', position: 'top-1/2 -right-4', bg: 'bg-[#A8DBC8]', rotate: 'rotate-[6deg]', anim: 'animate-float-gentle' },
-        { text: 'Ultra Compact Gimbal', position: '-bottom-4 left-6', bg: 'bg-[#C9B8F0]', rotate: 'rotate-[-3deg]', anim: '' },
+        { text: '4K 60fps / 120fps', position: '-top-3 sm:-top-4 left-2 sm:-left-3', bg: 'bg-[#F5C6A8]', rotate: 'rotate-[-3deg] sm:rotate-[-5deg]', anim: 'animate-float-subtle' },
+        { text: '128GB MicroSD Included', position: 'top-1/2 -right-2 sm:-right-4', bg: 'bg-[#A8DBC8]', rotate: 'rotate-[4deg] sm:rotate-[6deg]', anim: 'animate-float-gentle' },
+        { text: 'Ultra Compact Gimbal', position: '-bottom-3 sm:-bottom-4 left-4 sm:left-6', bg: 'bg-[#C9B8F0]', rotate: 'rotate-[-3deg]', anim: '' },
       ],
     },
     'canon-g7x-mark-iii': {
@@ -522,9 +532,9 @@ export default function App() {
       alt: 'Canon PowerShot G7 X Mark III Creator Kit',
       hasLed: false,
       chips: [
-        { text: '20.1MP 1.0" Sensor', position: '-top-4 -left-4', bg: 'bg-[#F5C6A8]', rotate: 'rotate-[-5deg]', anim: 'animate-float-subtle' },
-        { text: '180° Flip Screen', position: 'top-1/2 -right-4', bg: 'bg-[#FFE8A3]', rotate: 'rotate-[6deg]', anim: 'animate-float-gentle' },
-        { text: '4.2x Optical Zoom', position: '-bottom-4 left-6', bg: 'bg-[#C9B8F0]', rotate: 'rotate-[-3deg]', anim: '' },
+        { text: '20.1MP 1.0" Sensor', position: '-top-3 sm:-top-4 left-2 sm:-left-3', bg: 'bg-[#F5C6A8]', rotate: 'rotate-[-3deg] sm:rotate-[-5deg]', anim: 'animate-float-subtle' },
+        { text: '180° Flip Screen', position: 'top-1/2 -right-2 sm:-right-4', bg: 'bg-[#FFE8A3]', rotate: 'rotate-[4deg] sm:rotate-[6deg]', anim: 'animate-float-gentle' },
+        { text: '4.2x Optical Zoom', position: '-bottom-3 sm:-bottom-4 left-4 sm:left-6', bg: 'bg-[#C9B8F0]', rotate: 'rotate-[-3deg]', anim: '' },
       ],
     },
   };
@@ -1313,7 +1323,7 @@ export default function App() {
             className="flex items-center gap-3 group"
             title="PackAndFilm"
           >
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#C9B8F0] via-[#F5C6A8] to-[#A8DBC8] p-0.5 shadow-sm group-hover:rotate-6 transition-transform shrink-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-[#C9B8F0] via-[#F5C6A8] to-[#A8DBC8] p-0.5 shadow-sm group-hover:rotate-6 transition-transform shrink-0">
               <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center overflow-hidden p-0">
                 <img
                   src="/logo.png"
@@ -1324,17 +1334,20 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-xl tracking-tight text-[#1A1A2E]">PackAndFilm</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]/50">
+                <span className="font-extrabold text-lg sm:text-xl tracking-tight text-[#1A1A2E]">PackAndFilm</span>
+                <span className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]/50">
                   Camera Rentals
                 </span>
               </div>
-              <p className="text-xs text-[#6B6B8A] font-medium tracking-wide">@packandfilm.ph • Metro Manila</p>
+              <p className="text-[11px] sm:text-xs text-[#6B6B8A] font-medium tracking-wide">
+                <span className="sm:hidden">@packandfilm.ph</span>
+                <span className="hidden sm:inline">@packandfilm.ph • Metro Manila</span>
+              </p>
             </div>
           </a>
 
-          {/* Desktop Nav Links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-[#1A1A2E]">
+          {/* Desktop Nav Links (Spacious for xl and up) */}
+          <nav className="hidden xl:flex items-center gap-5 2xl:gap-6 text-sm font-semibold text-[#1A1A2E] whitespace-nowrap">
             <a href="#catalog" className="hover:text-[#6B46C1] transition-colors">Camera Catalog</a>
             <a href="#bag" className="hover:text-[#6B46C1] transition-colors">What&apos;s in the Bag</a>
             <a href="#kyc-requirements" className="hover:text-[#6B46C1] transition-colors">Requirements</a>
@@ -1344,23 +1357,23 @@ export default function App() {
             <a href="#faq" className="hover:text-[#6B46C1] transition-colors">FAQ</a>
           </nav>
 
-          {/* CTA & Mobile Toggle */}
-          <div className="flex items-center gap-3">
+          {/* CTA & Responsive Mobile / Tablet Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => handleOpenBookingModal()}
-              className="relative inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-bold text-sm bg-[#1A1A2E] text-white shadow-md hover:bg-[#2B2B48] hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
+              className="relative inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm bg-[#1A1A2E] text-white shadow-md hover:bg-[#2B2B48] hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer whitespace-nowrap"
             >
               <span>Book Now</span>
-              <ArrowRight className="w-4 h-4 text-[#F5C6A8]" />
-              <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
+              <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F5C6A8]" />
+              <span className="absolute -top-1 -right-1 sm:-top-1.5 sm:-right-1.5 flex h-2.5 w-2.5 sm:h-3 sm:w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#A8DBC8] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-[#A8DBC8]"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-[#A8DBC8]"></span>
               </span>
             </button>
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl text-[#1A1A2E] bg-white border border-[#E8E4F0] hover:bg-[#EDE8FC]"
+              className="xl:hidden p-2 rounded-xl text-[#1A1A2E] bg-white border border-[#E8E4F0] hover:bg-[#EDE8FC] transition-colors cursor-pointer"
               aria-label="Toggle navigation menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -1368,41 +1381,51 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile Dropdown Menu */}
+        {/* Mobile & Tablet Dropdown Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden mt-3 pt-3 border-t border-[#E8E4F0] flex flex-col gap-2.5 pb-2 px-2 animate-fadeIn">
+          <div className="xl:hidden mt-3 pt-3 border-t border-[#E8E4F0] flex flex-col gap-2 pb-2 px-2 animate-fadeIn">
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleOpenBookingModal();
+              }}
+              className="w-full py-2.5 px-3 rounded-xl bg-[#1A1A2E] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+            >
+              <span>Book Camera Now</span>
+              <ArrowRight className="w-3.5 h-3.5 text-[#F5C6A8]" />
+            </button>
             <a
               href="#catalog"
               onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
+              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               Camera Catalog
             </a>
             <a
               href="#bag"
               onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
+              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               What&apos;s in the Bag
             </a>
             <a
               href="#kyc-requirements"
               onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
+              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               Rental Requirements
             </a>
             <a
               href="#how"
               onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
+              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               How to Book
             </a>
             <a
               href="#pricing"
               onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
+              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               Pricing Calculator
             </a>
@@ -1460,17 +1483,17 @@ export default function App() {
             </p>
 
             {/* CTAs */}
-            <div className="flex flex-wrap items-center gap-3.5 pt-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2 w-full sm:w-auto">
               <a
                 href="#catalog"
-                className="flex-1 sm:flex-none px-7 py-4 rounded-full font-extrabold text-base bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_0px_#1A1A2E] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_#1A1A2E] transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
+                className="w-full sm:w-auto min-h-[48px] sm:min-h-[52px] px-6 sm:px-7 py-3.5 sm:py-4 rounded-full font-extrabold text-sm sm:text-base bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_0px_#1A1A2E] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_#1A1A2E] transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
               >
                 <span>Select Camera & Dates</span>
               </a>
 
               <a
                 href="#kyc-requirements"
-                className="flex-1 sm:flex-none px-6 py-4 rounded-full font-bold text-base bg-white text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FEF0E7] transition-all text-center"
+                className="w-full sm:w-auto min-h-[48px] sm:min-h-[52px] px-6 py-3.5 sm:py-4 rounded-full font-bold text-sm sm:text-base bg-white text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FEF0E7] transition-all flex items-center justify-center text-center"
               >
                 Rental Requirements
               </a>
@@ -1505,23 +1528,26 @@ export default function App() {
 
           {/* Right Column: Hero Interactive Product Visual Card (Smart Priority Carousel) */}
           <div
-            className="lg:col-span-5 relative flex justify-center"
+            className="lg:col-span-5 flex justify-center w-full"
             onMouseEnter={() => setIsHeroHovered(true)}
             onMouseLeave={() => setIsHeroHovered(false)}
           >
 
-            {/* Ambient Sticker Chips Floating — Synced with Active Slide */}
-            {activeHeroSlide.chips.map((chip, idx) => (
-              <div
-                key={`${activeHeroSlide.id}-chip-${idx}`}
-                className={`absolute ${chip.position} z-20 ${chip.bg} text-[#1A1A2E] font-black text-xs px-3.5 py-1.5 rounded-full border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] ${chip.rotate} ${chip.anim} transition-all duration-300 pointer-events-none select-none`}
-              >
-                {chip.text}
-              </div>
-            ))}
+            {/* Dedicated Box Wrapper to Anchor Floating Sticker Chips on All Screen Sizes */}
+            <div className="relative w-full max-w-sm">
 
-            {/* Main Product Showcase Box */}
-            <div className="w-full max-w-sm rounded-[32px] bg-white border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] p-6 relative overflow-hidden transition-all duration-300 hover:-translate-y-1">
+              {/* Ambient Sticker Chips Floating — Synced with Active Slide */}
+              {activeHeroSlide.chips.map((chip, idx) => (
+                <div
+                  key={`${activeHeroSlide.id}-chip-${idx}`}
+                  className={`absolute ${chip.position} z-20 ${chip.bg} text-[#1A1A2E] font-black text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] sm:shadow-[3px_3px_0px_#1A1A2E] ${chip.rotate} ${chip.anim} transition-all duration-300 pointer-events-none select-none whitespace-nowrap`}
+                >
+                  {chip.text}
+                </div>
+              ))}
+
+              {/* Main Product Showcase Box */}
+              <div className="w-full rounded-[32px] bg-white border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] p-5 sm:p-6 relative overflow-hidden transition-all duration-300 hover:-translate-y-1">
 
               {/* Header inside card: Mac window dots + Camera Switcher Tabs */}
               <div className="flex items-center justify-between pb-3.5 border-b border-[#E8E4F0] gap-2">
@@ -1681,6 +1707,8 @@ export default function App() {
 
           </div>
 
+          </div>
+
         </div>
       </section>
 
@@ -1703,7 +1731,7 @@ export default function App() {
             </p>
 
             {/* Camera Switcher Tabs for Bag Inclusions */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-6">
               {CAMERAS.filter(c => c.isAvailable).map((cam) => {
                 const isActive = selectedCameraId === cam.id;
                 return (
@@ -1711,14 +1739,15 @@ export default function App() {
                     key={cam.id}
                     type="button"
                     onClick={() => setSelectedCameraId(cam.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                    className={`min-h-[42px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
                       isActive
                         ? 'bg-[#1A1A2E] text-white border-[#1A1A2E] shadow-sm'
                         : 'bg-[#FAFAF7] text-[#6B6B8A] border-[#E8E4F0] hover:text-[#1A1A2E] hover:border-[#1A1A2E]'
                     }`}
                   >
                     <Camera className="w-3.5 h-3.5 text-[#F5C6A8]" />
-                    <span>{cam.name}</span>
+                    <span className="hidden sm:inline">{cam.name}</span>
+                    <span className="sm:hidden">{cam.shortName} Kit</span>
                   </button>
                 );
               })}
@@ -2354,25 +2383,25 @@ export default function App() {
                   <label className="block text-xs font-extrabold uppercase tracking-wider text-[#6B6B8A] mb-2">
                     Step 2: Quick Trip Presets
                   </label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
                     <button
                       type="button"
                       onClick={() => handleSetPreset(2)}
-                      className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FEF0E7] transition-all cursor-pointer flex-1 sm:flex-none text-center"
+                      className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FEF0E7] transition-all cursor-pointer text-center flex items-center justify-center"
                     >
                       Concert Night (2 Days)
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSetPreset(3)}
-                      className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] transition-all cursor-pointer flex-1 sm:flex-none text-center"
+                      className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] transition-all cursor-pointer text-center flex items-center justify-center"
                     >
                       Weekend Getaway (3 Days)
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSetPreset(5)}
-                      className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#E8F7F1] transition-all cursor-pointer flex-1 sm:flex-none text-center"
+                      className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#E8F7F1] transition-all cursor-pointer text-center flex items-center justify-center"
                     >
                       Out of Town (5 Days)
                     </button>
@@ -5336,11 +5365,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Floating Messenger Quick Contact Pill */}
-      <div className="fixed bottom-5 right-5 z-30">
+      {/* Floating Quick Rent Pill (Gracefully fades in when scrolling past Hero) */}
+      <div
+        className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 transition-all duration-300 transform ${
+          showFloatingCta ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+      >
         <button
           onClick={() => handleOpenBookingModal()}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1A1A2E] text-white text-xs font-bold shadow-lg border-2 border-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#1A1A2E]/95 backdrop-blur-md text-white text-xs font-bold shadow-[0_8px_24px_rgba(26,26,46,0.3)] border-2 border-white/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
         >
           <Camera className="w-4 h-4 text-[#F5C6A8]" />
           <span>Rent a Camera</span>
