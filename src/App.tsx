@@ -1708,7 +1708,7 @@ export default function App() {
       {/* ─────────────────────────────────────────────────────────────
           4. HOW TO BOOK SECTION (5 Simple Steps from Handout)
       ───────────────────────────────────────────────────────────── */}
-      <section id="how" className="py-16 sm:py-20 px-4 sm:px-8">
+      <section id="how" className="py-16 sm:py-20 px-4 sm:px-8 bg-white border-y border-[#E8E4F0]">
         <div className="max-w-7xl mx-auto">
 
           <div className="text-center max-w-2xl mx-auto mb-14">
@@ -1751,7 +1751,7 @@ export default function App() {
               return (
                 <div
                   key={s.step}
-                  className="bg-white rounded-[28px] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] shadow-none hover:shadow-[5px_5px_0px_0px_#1A1A2E] p-6 flex flex-col justify-between relative group hover:-translate-y-1 transition-all duration-200"
+                  className="bg-[#FAFAF7] rounded-[28px] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] shadow-none hover:shadow-[5px_5px_0px_0px_#1A1A2E] p-6 flex flex-col justify-between relative group hover:-translate-y-1 transition-all duration-200"
                 >
                   <div className={`absolute -top-3.5 left-6 ${badgeColors[idx % badgeColors.length]} text-[#1A1A2E] font-black text-xs px-3 py-1 rounded-full border border-[#E8E4F0] group-hover:border-[#1A1A2E] transition-colors`}>
                     STEP {s.step}
@@ -1795,7 +1795,7 @@ export default function App() {
           </div>
 
           {/* Why Rent With Us • What You Can Expect Section */}
-          <div className="mt-14 p-6 sm:p-8 rounded-3xl bg-white border-2 border-[#E8E4F0] hover:border-[#1A1A2E] shadow-none hover:shadow-[6px_6px_0px_0px_#1A1A2E] transition-all duration-200">
+          <div className="mt-14 p-6 sm:p-8 rounded-3xl bg-[#FAFAF7] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] shadow-none hover:shadow-[6px_6px_0px_0px_#1A1A2E] transition-all duration-200">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-[#E8E4F0]">
               <div>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EDE8FC] text-[#553C9A] text-xs font-bold mb-2">
