@@ -504,6 +504,12 @@ function formatAndBeautifyWorkbook() {
       "2x NB-13L Batteries, Dedicated Charger, 32GB SD, OTG Reader, Wrist Strap, Padded Bag",
       Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
     ]);
+    fSheet.appendRow([
+      "PNF-FZ55-01", "KODAK PIXPRO FZ55 Digital Camera", "TBA", "Coming Soon",
+      0, 0, 0, 0,
+      "LB-012 Battery, AC Adapter, USB Cable, Wrist Strap, Padded Drawstring Pouch",
+      Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
+    ]);
   }
 
   const fHeader = fSheet.getRange(1, 1, 1, FLEET_WIDTHS.length);
@@ -1224,4 +1230,68 @@ function formatCalendarSyncSheet() {
   cSheet.getRange(2, 6, maxCRows, 1).setDataValidation(calStatusRule);
 
   SpreadsheetApp.getActiveSpreadsheet().toast("Calendar Sync tab design successfully refreshed!", "PackAndFilm System", 4);
+}
+
+/**
+ * Automatically syncs the Fleet Inventory sheet with all 3 camera units:
+ * - DJI Osmo Pocket 3 Standard Kit
+ * - Canon PowerShot G7 X Mark III Creator Vlogging Kit
+ * - KODAK PIXPRO FZ55 Digital Camera (Coming Soon)
+ *
+ * Safe to run anytime: Only appends units that are not already present!
+ */
+function syncFleetInventory() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let fSheet = ss.getSheetByName("Fleet Inventory");
+  if (!fSheet) {
+    fSheet = ss.insertSheet("Fleet Inventory");
+  }
+
+  ensureColumns(fSheet, FLEET_WIDTHS.length);
+  if (fSheet.getLastRow() === 0 || String(fSheet.getRange(1, 1).getValue()).trim() === "") {
+    fSheet.getRange(1, 1, 1, FLEET_COLUMNS.length).setValues([FLEET_COLUMNS]);
+  }
+
+  const existingData = fSheet.getDataRange().getValues();
+  const existingUnitIds = existingData.slice(1).map(r => String(r[0]).trim());
+
+  const fleetUnits = [
+    [
+      "PNF-P3-01", "DJI Osmo Pocket 3 Standard Kit", "6X89K20391", "Available",
+      450, 840, 1260, 1000,
+      "Wide-Angle Lens, Battery Handle, Protective Cover, Wrist Strap, Type-C Cable",
+      Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
+    ],
+    [
+      "PNF-G7X-01", "Canon PowerShot G7 X Mark III Creator Vlogging Kit", "G7X398201", "Available",
+      500, 900, 1350, 1000,
+      "2x NB-13L Batteries, Dedicated Charger, 32GB SD, OTG Reader, Wrist Strap, Padded Bag",
+      Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
+    ],
+    [
+      "PNF-FZ55-01", "KODAK PIXPRO FZ55 Digital Camera", "TBA", "Coming Soon",
+      0, 0, 0, 0,
+      "LB-012 Battery, AC Adapter, USB Cable, Wrist Strap, Padded Drawstring Pouch",
+      Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
+    ]
+  ];
+
+  let addedCount = 0;
+  fleetUnits.forEach(unit => {
+    if (!existingUnitIds.includes(unit[0])) {
+      fSheet.appendRow(unit);
+      addedCount++;
+    }
+  });
+
+  const maxFRows = Math.max(1, fSheet.getMaxRows() - 1);
+  fSheet.getRange(2, 1, maxFRows, 1).setFontFamily("Poppins").setFontWeight("bold").setHorizontalAlignment("center");
+  fSheet.getRange(2, 2, maxFRows, 1).setHorizontalAlignment("left");
+  fSheet.getRange(2, 3, maxFRows, 1).setHorizontalAlignment("center");
+  fSheet.getRange(2, 4, maxFRows, 1).setFontFamily("Poppins").setFontWeight("bold").setFontSize(9).setHorizontalAlignment("center");
+  fSheet.getRange(2, 5, maxFRows, 4).setNumberFormat('"₱"#,##0').setHorizontalAlignment("right");
+  fSheet.getRange(2, 9, maxFRows, 1).setFontSize(9).setHorizontalAlignment("left").setWrap(true);
+  fSheet.getRange(2, 10, maxFRows, 1).setHorizontalAlignment("center").setNumberFormat("yyyy-mm-dd");
+
+  ss.toast("Fleet Inventory synchronized! Added " + addedCount + " new unit(s).", "PackAndFilm System", 4);
 }

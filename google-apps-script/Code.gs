@@ -1426,9 +1426,16 @@ function doPost(e) {
           }
 
           const rowCam = String(bRows[i][checkColMap.cameraRented] || "").toLowerCase();
-          const isSameCamera = reqCamId === "dji-pocket-3"
-            ? (rowCam.includes("pocket") || rowCam.includes("dji") || !rowCam)
-            : rowCam.includes(reqCamId);
+          let isSameCamera = false;
+          if (reqCamId === "dji-pocket-3") {
+            isSameCamera = rowCam.includes("pocket") || rowCam.includes("dji") || !rowCam;
+          } else if (reqCamId.includes("g7x") || reqCamId.includes("canon")) {
+            isSameCamera = rowCam.includes("g7x") || rowCam.includes("g7 x") || rowCam.includes("canon") || rowCam.includes("powershot");
+          } else if (reqCamId.includes("fz55") || reqCamId.includes("kodak")) {
+            isSameCamera = rowCam.includes("fz55") || rowCam.includes("kodak") || rowCam.includes("pixpro");
+          } else {
+            isSameCamera = rowCam.includes(reqCamId) || reqCamId.includes(rowCam);
+          }
 
           if (isSameCamera) {
             const bookedStart = bRows[i][checkColMap.startDate]
