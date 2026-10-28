@@ -697,8 +697,6 @@ export default function App() {
         'selfieWithIdsFile',
         'deliveryReceiptsFile',
         ...(booking.isBillUnderOtherName ? ['billOwnerIdFile'] : []),
-        'selfieVideoConfirmed',
-        'selfieFile',
       ],
       4: [
         'fullName',
@@ -783,14 +781,6 @@ export default function App() {
       }
       if (booking.isBillUnderOtherName && !booking.billOwnerIdFile) {
         errors.billOwnerIdFile = 'Valid government ID of the person named on the bill is required for verification.';
-      }
-
-      // 3. Selfie Video Verification
-      if (!booking.selfieVideoConfirmed) {
-        errors.selfieVideoConfirmed = 'You must confirm the selfie video statement requirement.';
-      }
-      if (!booking.selfieFile) {
-        errors.selfieFile = 'Selfie video holding your 2 valid IDs stating rental details is required.';
       }
     } else if (stepNumber === 4) {
       if (!booking.fullName || booking.fullName.trim().length < 3) {
@@ -1244,7 +1234,7 @@ export default function App() {
     },
     {
       q: 'What documents are required to rent?',
-      a: 'Requirements: 1. Two (2) valid IDs (front & back) with at least one showing current address & signature; 2. Handwritten authorization slip (date, 3 specimen signatures, "For Pack and Film Camera Rental purposes only") and selfie holding your IDs and slip; 3. Proof of billing / 2 online delivery receipts (Shopee/Lazada/TikTok); 4. Main personal social media account; 5. Two emergency contacts with valid ID photos and profile links; 6. 5-second selfie video holding your 2 IDs stating rental details.'
+      a: 'Requirements: 1. Two (2) valid IDs (front & back) with at least one showing current address & signature; 2. Handwritten authorization slip (date, 3 specimen signatures, "For Pack and Film Camera Rental purposes only") and selfie holding your IDs and slip (1D); 3. Proof of billing / 2 online delivery receipts (Shopee/Lazada/TikTok); 4. Main personal social media account; 5. Two emergency contacts with valid ID photos and profile links.'
     },
     {
       q: 'Are students eligible to rent without a secondary government ID?',
@@ -3810,81 +3800,6 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* 5. 5-Second Selfie Video */}
-                  <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-2 transition-colors ${validationErrors.selfieFile || validationErrors.selfieVideoConfirmed ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
-                    }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
-                        <span>5. Selfie Video Stating Rental Details</span>
-                        <span className="text-red-500 font-bold">*</span>
-                        {booking.selfieFile && <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#6B6B8A]">
-                      Submit a short selfie video holding your 2 valid IDs stating your rental details.
-                    </p>
-                    <div data-field-key="selfieVideoConfirmed">
-                      <label className="flex items-center gap-2 pt-1 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={booking.selfieVideoConfirmed}
-                          onChange={(e) => {
-                            setBooking(b => ({ ...b, selfieVideoConfirmed: e.target.checked }));
-                            clearFieldError('selfieVideoConfirmed');
-                          }}
-                          className="rounded text-[#6B46C1] focus:ring-0 w-4 h-4 cursor-pointer"
-                        />
-                        <span className={`text-[11px] font-bold flex items-center gap-1 ${validationErrors.selfieVideoConfirmed ? 'text-red-600' : 'text-[#1A1A2E]'}`}>
-                          <span>I confirm this selfie video is me holding my valid IDs stating rental details</span>
-                          <span className="text-red-500 font-bold">*</span>
-                        </span>
-                      </label>
-                      {validationErrors.selfieVideoConfirmed && (
-                        <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
-                          <span>⚠️</span> {validationErrors.selfieVideoConfirmed}
-                        </p>
-                      )}
-                    </div>
-                    <div data-field-key="selfieFile" className="pt-1">
-                      <label className={`cursor-pointer px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.selfieFile
-                        ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
-                        : 'bg-[#FAFAF7] border-[#A8DBC8] text-[#234E52] hover:bg-[#E8F7F1]'
-                        }`}>
-                        <Video className="w-3.5 h-3.5" />
-                        <span className="flex items-center gap-1">
-                          <span>{booking.selfieFile ? 'Replace Selfie Video' : 'Upload Selfie Video'}</span>
-                          <span className="text-red-500 font-bold">*</span>
-                        </span>
-                        <input
-                          type="file"
-                          accept="video/*,image/*"
-                          className="hidden"
-                          onChange={(e) => handleRealFileUpload(e, 'selfieFile')}
-                        />
-                      </label>
-                      {booking.selfieFile && (
-                        <div className="flex items-center gap-2 text-xs pt-1">
-                          <span className="text-[#38A169] font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Video Attached ✓</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveFile('selfieFile')}
-                            className="text-red-500 hover:text-red-700 text-[11px] underline cursor-pointer"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                      {validationErrors.selfieFile && (
-                        <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
-                          <span>⚠️</span> {validationErrors.selfieFile}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Summary Banner if any KYC fields missing */}
                   {stepAttempted[3] && Object.keys(validationErrors).length > 0 && (
                     <div className="p-3.5 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-xs text-[#9B2C2C] space-y-1 animate-fadeIn">
@@ -3901,8 +3816,6 @@ export default function App() {
                         {validationErrors.selfieWithIdsFile && <li>Selfie holding 2 valid IDs and paper</li>}
                         {validationErrors.deliveryReceiptsFile && <li>Proof of Billing / Delivery Receipts</li>}
                         {validationErrors.billOwnerIdFile && <li>Bill owner valid government ID</li>}
-                        {validationErrors.selfieVideoConfirmed && <li>Selfie video confirmation checkbox</li>}
-                        {validationErrors.selfieFile && <li>Selfie video file</li>}
                       </ul>
                     </div>
                   )}

@@ -145,7 +145,6 @@ export const REQUIREMENTS_DATA = [
     title: 'Other Requirements',
     badge: 'Final Clearance',
     items: [
-      'Submit a selfie video holding your 2 valid IDs stating your rental details (Full Name, rental dates, camera unit, and rental purpose).',
       'Send a friend request to our Facebook admin account ("PackAndFilm Camera Rentals") for verification and security purposes.',
       'If rental application is approved, renter must be willing to sign the rental agreement to be sent by the owner.'
     ]

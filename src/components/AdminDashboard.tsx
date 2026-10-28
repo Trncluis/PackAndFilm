@@ -231,13 +231,13 @@ export function evaluateKycDocuments(booking: AdminBookingItem): KycEvaluationRe
       required: true,
       url: booking.authSlipUrl || booking.authorizationSlipFile || null
     },
-    ...(booking.selfieWithIdsUrl || booking.selfieWithIdsFile ? [{
+    {
       id: 'selfieWithIds',
       name: '3b. Selfie Holding IDs & Slip',
       shortLabel: 'Selfie with IDs',
-      required: false,
-      url: booking.selfieWithIdsUrl || booking.selfieWithIdsFile || null
-    }] : []),
+      required: true,
+      url: booking.selfieWithIdsUrl || booking.selfieWithIdsFile || booking.selfieVideoUrl || null
+    },
     {
       id: 'billing',
       name: '4. Proof of Address / Delivery Receipts',
@@ -252,14 +252,14 @@ export function evaluateKycDocuments(booking: AdminBookingItem): KycEvaluationRe
       required: false,
       url: booking.billOwnerIdUrl || booking.billOwnerIdFile || null
     }] : []),
-    {
+    ...((booking.selfieVideoUrl && (booking.selfieVideoUrl.endsWith('.mp4') || booking.selfieVideoUrl.endsWith('.mov') || booking.selfieVideoUrl.includes('05_Selfie_Verification'))) || (booking.selfieFile && booking.selfieFile.startsWith('data:video/')) ? [{
       id: 'selfie',
-      name: '5. Selfie Video Verification',
+      name: '5. Selfie Video Verification (Legacy)',
       shortLabel: 'Selfie Video',
-      required: true,
+      required: false,
       isVideo: true,
       url: booking.selfieVideoUrl || booking.selfieFile || null
-    },
+    }] : []),
     {
       id: 'receipt',
       name: '6. GCash Payment Receipt',

@@ -128,9 +128,8 @@ graph TD
 3. **Step 3: Identification & KYC Documents** — Customer uploads:
    * Two (2) Valid Government IDs (front & back).
    * Handwritten Authorization Slip with date, 3 specimen signatures, and the exact text: *"For Pack and Film Camera Rental purposes only"*.
-   * Selfie holding IDs and handwritten slip.
+   * Selfie holding IDs and handwritten slip (Requirement 1D).
    * Proof of Billing or two (2) online delivery receipts (Shopee/Lazada/TikTok) matching delivery address.
-   * 5-second Selfie Video holding IDs stating rental details.
    * Active personal social media account (locked/dummy accounts rejected).
    * Two (2) emergency contacts with names, numbers, valid IDs, and relationship.
    * *Student Exemption:* Valid Student ID + Certificate of Registration (COR) + Parent/Guardian Government ID.

@@ -547,7 +547,7 @@ function extractKycUrlsFromFolder(folder) {
         if (!docMap.authSlip) docMap.authSlip = url;
       } else if (name.startsWith("04_") || name.includes("proof") || name.includes("address") || name.includes("billing") || name.includes("delivery")) {
         if (!docMap.billing) docMap.billing = url;
-      } else if (name.startsWith("05_") || (name.includes("selfie") && !name.includes("slip") && !name.includes("ids"))) {
+      } else if (name.startsWith("05_") || name.startsWith("03b_") || name.includes("selfie")) {
         if (!docMap.selfie) docMap.selfie = url;
       } else if (name.startsWith("06_") || name.includes("receipt") || name.includes("payment") || name.includes("gcash")) {
         if (!docMap.receipt) docMap.receipt = url;
@@ -1312,6 +1312,11 @@ function doPost(e) {
         if (colMap.selfieVideoUrl !== undefined && colMap.selfieVideoUrl >= 0) {
           bSheet.getRange(targetRow, colMap.selfieVideoUrl + 1).setValue(url);
         }
+      } else if (body.selfieWithIdsFile) {
+        const url = saveBase64ToDrive(bookingFolder, body.selfieWithIdsFile, "03b_Selfie_Holding_IDs_And_Slip");
+        if (colMap.selfieVideoUrl !== undefined && colMap.selfieVideoUrl >= 0) {
+          bSheet.getRange(targetRow, colMap.selfieVideoUrl + 1).setValue(url);
+        }
       }
       if (body.receiptFile) {
         const url = saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
@@ -1478,10 +1483,10 @@ function doPost(e) {
       const id2Url = saveBase64ToDrive(bookingFolder, body.id2File, body.isStudentExemption ? "02_Student_ID_COR" : "02_Secondary_ID");
       if (body.id2BackFile) saveBase64ToDrive(bookingFolder, body.id2BackFile, "02b_Secondary_ID_Back");
       const authSlipUrl = saveBase64ToDrive(bookingFolder, body.authorizationSlipFile, "03_Handwritten_Auth_Slip");
-      if (body.selfieWithIdsFile) saveBase64ToDrive(bookingFolder, body.selfieWithIdsFile, "03b_Selfie_Holding_IDs_And_Slip");
+      const selfieWithIdsUrl = body.selfieWithIdsFile ? saveBase64ToDrive(bookingFolder, body.selfieWithIdsFile, "03b_Selfie_Holding_IDs_And_Slip") : "";
       const billingUrl = saveBase64ToDrive(bookingFolder, body.deliveryReceiptsFile, "04_Proof_Of_Address");
       if (body.billOwnerIdFile) saveBase64ToDrive(bookingFolder, body.billOwnerIdFile, "04b_Bill_Owner_Gov_ID");
-      const selfieVideoUrl = saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification");
+      const selfieVideoUrl = body.selfieFile ? saveBase64ToDrive(bookingFolder, body.selfieFile, "05_Selfie_Verification") : selfieWithIdsUrl;
       const receiptUrl = saveBase64ToDrive(bookingFolder, body.receiptFile, "06_GCash_Payment_Receipt");
       const guardianIdUrl = body.contact1IdFile ? saveBase64ToDrive(bookingFolder, body.contact1IdFile, "07_Emergency_Contact1_ID") : "";
       if (body.contact2IdFile) saveBase64ToDrive(bookingFolder, body.contact2IdFile, "08_Emergency_Contact2_ID");
