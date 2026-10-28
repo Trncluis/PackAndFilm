@@ -286,3 +286,25 @@ Thank you so much for renting with PackAndFilm! We'd love to see your shots—fe
 | `KYC_ROOT_FOLDER_NAME` | Backend (`Code.gs`) | Target root directory name in Google Drive |
 | `PARTNER1_HASH` | Backend / Config | SHA-256 digest for Partner 1 access |
 | `PARTNER2_HASH` | Backend / Config | SHA-256 digest for Partner 2 access |
+
+---
+
+## 11. Booking Availability & Consecutive Turnover Rules
+
+### 11.1. Core Conflict vs. Turnover Logic
+* **Interval Model:** PackAndFilm bookings operate on daily rental dates (`YYYY-MM-DD`).
+* **Consecutive Booking / Same-Day Turnover:**
+  * When Customer A rents from `Oct 31` to `Nov 1` (returns on `Nov 1`), Customer B is permitted to book `Nov 1` to `Nov 2` (picks up on `Nov 1`).
+  * **Turnover Rule Definition:** A shared boundary date (`booked.endDate === requested.startDate` or `requested.endDate === booked.startDate`) is allowed **only if both reservations span at least 1 night** (`startDate < endDate`).
+  * **Single-Day Booking Exception:** If a booking is single-day (`startDate === endDate`), the camera is reserved for the full operating day, so no same-day turnover is permitted on that date.
+  * **True Overlaps:** Any rental overlapping by multiple days or internal days (e.g. requesting `Oct 31` to `Nov 2` when `Oct 31` to `Nov 1` is booked) remains strictly blocked as a collision.
+
+### 11.2. Operational Schedule & Time-of-Day Handover Coordination
+* **Limitation:** The database and booking forms store calendar dates (`YYYY-MM-DD`), not hourly timestamps.
+* **Operating Window:** 8:00 AM – 8:00 PM strictly.
+* **Turnover Coordination:**
+  * On turnover days, Customer A returns the gear (recommended morning / early afternoon cutoff).
+  * PackAndFilm operations performs a 15–30 minute standard inspection (lens clarity, sensor/optics check, gimbal test, battery recharge, accessory inventory, sanitized wiping).
+  * Customer B receives the unit during afternoon/evening handover.
+  * The frontend displays clear amber status notices informing renters of the same-day turnover schedule.
+

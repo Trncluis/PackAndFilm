@@ -2404,6 +2404,25 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+                ) : calcConflict.isTurnover ? (
+                  <div className="p-3.5 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] text-xs text-[#7B341E] space-y-1.5 animate-fadeIn">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-[#DD6B20] shrink-0" />
+                        <span className="font-bold text-[#9C4221]">{selectedCamera.shortName} Available (Same-Day Turnover)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowScheduleModal(true)}
+                        className="text-[11px] font-bold text-[#C05621] hover:text-[#7B341E] underline cursor-pointer text-left sm:text-right"
+                      >
+                        View Schedule
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-[#9C4221] leading-relaxed">
+                      {calcConflict.turnoverNote || "Consecutive booking allowed: The camera returns from a previous rental on this date and will undergo standard inspection and sanitization before your handover."}
+                    </p>
+                  </div>
                 ) : (
                   <div className="p-3 rounded-2xl bg-[#E8F7F1] border border-[#A8DBC8] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#234E52] gap-2">
                     <div className="flex items-center gap-2">
@@ -3075,6 +3094,25 @@ export default function App() {
                           View Booked Calendar
                         </button>
                       </div>
+                    </div>
+                  ) : modalConflict.isTurnover ? (
+                    <div className="p-3 rounded-xl bg-[#FFF9F2] border border-[#F5C6A8] space-y-1.5 animate-fadeIn">
+                      <div className="flex items-center justify-between text-xs text-[#7B341E]">
+                        <div className="flex items-center gap-1.5 font-bold text-[#9C4221]">
+                          <Clock className="w-4 h-4 text-[#DD6B20] shrink-0" />
+                          <span>Dates Available (Same-Day Turnover Schedule)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowScheduleModal(true)}
+                          className="text-[11px] font-bold text-[#C05621] hover:text-[#7B341E] underline cursor-pointer"
+                        >
+                          Schedule
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-[#9C4221] leading-relaxed">
+                        {modalConflict.turnoverNote || "Consecutive booking: Unit returns from a previous rental on this date. Equipment will be inspected, cleaned, and tested before your handover."}
+                      </p>
                     </div>
                   ) : (
                     <div className="p-2.5 rounded-xl bg-[#E8F7F1] border border-[#A8DBC8] flex items-center justify-between text-xs text-[#234E52]">
@@ -5055,8 +5093,11 @@ export default function App() {
                     ) : (
                       <div className="space-y-3">
                         {filteredBookings.map((bRecord) => {
-                          const afterDate = new Date(new Date(bRecord.endDate).getTime() + 86400000).toISOString().split('T')[0];
-                          const afterEnd = new Date(new Date(bRecord.endDate).getTime() + 86400000 * 3).toISOString().split('T')[0];
+                          const isMultiDay = bRecord.startDate < bRecord.endDate;
+                          const afterDate = isMultiDay
+                            ? bRecord.endDate
+                            : new Date(new Date(bRecord.endDate).getTime() + 86400000).toISOString().split('T')[0];
+                          const afterEnd = new Date(new Date(afterDate).getTime() + 86400000 * 2).toISOString().split('T')[0];
                           const camInfo = CAMERAS.find((c) => c.id === bRecord.cameraId);
 
                           return (

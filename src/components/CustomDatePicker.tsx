@@ -156,8 +156,34 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
     return false;
   };
 
+  const isDateTurnover = (dateStr: string) => {
+    if (!isEndDate) {
+      // Start Date (Pickup): date where a previous multi-day rental returns, and no booking starts
+      const hasEnding = bookedRanges.some(b => b.endDate === dateStr && b.startDate < b.endDate);
+      const hasStarting = bookedRanges.some(b => b.startDate === dateStr);
+      return hasEnding && !hasStarting;
+    } else {
+      // End Date (Return): date where a next multi-day rental starts, and no booking ends
+      const hasStarting = bookedRanges.some(b => b.startDate === dateStr && b.startDate < b.endDate);
+      const hasEnding = bookedRanges.some(b => b.endDate === dateStr);
+      return hasStarting && !hasEnding;
+    }
+  };
+
   const isDateBooked = (dateStr: string) => {
-    return bookedRanges.some(b => dateStr >= b.startDate && dateStr <= b.endDate);
+    if (!isEndDate) {
+      // For pickup input: booked if inside any reservation, unless it is a turnover return day
+      return bookedRanges.some(b => {
+        if (b.startDate === b.endDate) return dateStr === b.startDate;
+        return dateStr >= b.startDate && dateStr < b.endDate;
+      });
+    } else {
+      // For return input: booked if inside any reservation, unless it is a turnover pickup day
+      return bookedRanges.some(b => {
+        if (b.startDate === b.endDate) return dateStr === b.startDate;
+        return dateStr > b.startDate && dateStr <= b.endDate;
+      });
+    }
   };
 
   const getBookedInfo = (dateStr: string) => {
@@ -317,8 +343,9 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
               const disabled = isDateDisabled(item.dateStr);
               const isSelected = value === item.dateStr;
               const isToday = item.dateStr === todayStr;
-              const booked = isDateBooked(item.dateStr);
-              const bookedInfo = booked ? getBookedInfo(item.dateStr) : null;
+              const turnover = isDateTurnover(item.dateStr);
+              const booked = !turnover && isDateBooked(item.dateStr);
+              const bookedInfo = (booked || turnover) ? getBookedInfo(item.dateStr) : null;
 
               // Range calculation if rangeStart and rangeEnd are given
               const inRange =
@@ -334,7 +361,11 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
                   disabled={disabled}
                   onClick={() => !disabled && handleSelectDay(item.dateStr)}
                   title={
-                    booked
+                    turnover
+                      ? (!isEndDate
+                        ? `Turnover Day • Available for Pickup (Previous rental returns on ${bookedInfo?.endDate})`
+                        : `Turnover Day • Available for Return (Next rental picks up on ${bookedInfo?.startDate})`)
+                      : booked
                       ? `Reserved (${bookedInfo?.startDate} to ${bookedInfo?.endDate})`
                       : disabled
                       ? 'Date unavailable'
@@ -347,6 +378,8 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
                       ? 'bg-[#1A1A2E] text-white shadow-sm ring-2 ring-[#C9B8F0]'
                       : inRange
                       ? 'bg-[#EDE8FC] text-[#553C9A]'
+                      : turnover
+                      ? 'bg-[#FFF9F2] text-[#C05621] border border-[#F5C6A8] hover:bg-[#FEF0E7]'
                       : booked
                       ? 'bg-[#FFF5F5] text-[#C53030] border border-[#FEB2B2] hover:bg-[#FED7D7]'
                       : disabled
@@ -361,6 +394,11 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
                     <span
                       className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-red-500"
                       title="Booked Slot"
+                    />
+                  ) : turnover ? (
+                    <span
+                      className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-[#DD6B20]"
+                      title="Turnover Day • Handover Available"
                     />
                   ) : isToday && !isSelected ? (
                     <span
