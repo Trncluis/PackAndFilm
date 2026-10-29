@@ -2031,12 +2031,17 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
   const handoverMethod = String(bookingRow[colMap.handoverMethod] || "Meetup / Pasig Hub");
 
   function buildDescription(type) {
+    const timingNote = type === "pickup"
+      ? "Pickup Schedule: Flexible 8:00 AM – 8:00 PM (or from 2:00 PM if consecutive turnover from prior rental)."
+      : "Return Schedule: Flexible 8:00 AM – 8:00 PM (or by 11:30 AM if consecutive turnover for next rental).";
+
     return [
       "PackAndFilm Equipment Reservation",
       "Booking Ref: " + bookingRef,
       "Camera: " + cameraRented,
       "Handover Method: " + handoverMethod,
-      "Operating Hours: 8:00 AM – 8:00 PM",
+      timingNote,
+      "Operating Window: 8:00 AM – 8:00 PM Daily",
       "Standard Inspection: Check lens, gimbal alignment, battery health, and SD storage.",
       "",
       "[SYSTEM:PackAndFilm | REF:" + bookingRef + " | TYPE:" + type + "]"

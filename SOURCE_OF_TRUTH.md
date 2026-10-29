@@ -298,12 +298,13 @@ Thank you so much for renting with PackAndFilm! We'd love to see your shots—fe
   * **Single-Day Booking Exception:** If a booking is single-day (`startDate === endDate`), the camera is reserved for the full operating day, so no same-day turnover is permitted on that date.
   * **True Overlaps:** Any rental overlapping by multiple days or internal days (e.g. requesting `Oct 31` to `Nov 2` when `Oct 31` to `Nov 1` is booked) remains strictly blocked as a collision.
 
-### 11.2. Operational Schedule & Time-of-Day Handover Coordination
-* **Limitation:** The database and booking forms store calendar dates (`YYYY-MM-DD`), not hourly timestamps.
-* **Operating Window:** 8:00 AM – 8:00 PM strictly.
-* **Turnover Coordination:**
-  * On turnover days, Customer A returns the gear (recommended morning / early afternoon cutoff).
-  * PackAndFilm operations performs a 15–30 minute standard inspection (lens clarity, sensor/optics check, gimbal test, battery recharge, accessory inventory, sanitized wiping).
-  * Customer B receives the unit during afternoon/evening handover.
-  * The frontend displays clear amber status notices informing renters of the same-day turnover schedule.
+### 11.2. Operating Hours & Same-Day Turnover Protocol
+* **Standard Operating Hours:** 8:00 AM – 8:00 PM daily for all meetups and Grab Express dispatches.
+* **Flexible Day-to-Day Coordination:** On normal dates without consecutive bookings, pickup and return times are coordinated directly with the customer to match their shoot schedule.
+* **Consecutive Same-Day Turnover Rule (Zero-Math Protection):**
+  * When a booking shares a turnover boundary date with another rental:
+    * **Outgoing Renter (Returning):** Returns in the morning (by 11:30 AM).
+    * **Turnover Window (11:30 AM – 2:00 PM):** 2.5-hour safe buffer for diagnostics, lens optics check, SD wiping, hospital-grade sanitization, and battery charging.
+    * **Incoming Renter (Picking Up):** Picks up in the afternoon (from 2:00 PM onwards).
+  * The frontend displays a helpful, reassuring amber notice explaining this schedule clearly only when a turnover date is selected.
 

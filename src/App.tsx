@@ -36,7 +36,8 @@ import {
   Video,
   GraduationCap,
   Loader2,
-  Clock
+  Clock,
+  Info
 } from 'lucide-react';
 
 import { CAMERAS, CameraItem } from './data/cameras';
@@ -367,7 +368,24 @@ export default function App() {
     return '';
   };
 
-  // Map Google Sheet row objects to internal BookingRecord structure
+  // Helper to format date into friendly human-readable format
+  const formatFriendlyDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    try {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+    // Map Google Sheet row objects to internal BookingRecord structure
   const mapSheetRowToBooking = (row: any, index: number): BookingRecord | null => {
     if (!row || typeof row !== 'object') return null;
 
@@ -1213,8 +1231,8 @@ export default function App() {
       a: 'Meet-ups are held at SM East Ortigas, Bridgetowne, or Opus Mall between 8:00 AM and 8:00 PM. A ₱200 handling fee is charged for all meet-up transactions. For delivery, we use Grab Express ONLY (owner books the rider for both release and return, and the renter shoulders all delivery fees).'
     },
     {
-      q: 'What are your rental operating hours?',
-      a: 'Our rental operating window is strictly 8:00 AM – 8:00 PM ONLY. All gear pickups, meetups, deliveries, and returns must be scheduled within this period.'
+      q: 'What are your rental operating hours and schedule?',
+      a: 'Our operating hours are 8:00 AM – 8:00 PM daily. Handover and return times are coordinated directly with you to match your shoot schedule. When consecutive bookings share a turnover date, morning return (by 11:30 AM) and afternoon pickup (from 2:00 PM) apply so our team can perform full gear diagnostics, lens cleaning, sanitization, and battery charging for the next creator.'
     },
     {
       q: 'How does the ₱300 downpayment work?',
@@ -2349,6 +2367,16 @@ export default function App() {
                   />
                 </div>
 
+                <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex items-center justify-between text-xs text-[#6B6B8A]">
+                  <div className="flex items-center gap-1.5 font-bold text-[#1A1A2E]">
+                    <Clock className="w-3.5 h-3.5 text-[#553C9A]" />
+                    <span>Operating Hours: 8:00 AM – 8:00 PM</span>
+                  </div>
+                  <span className="text-[11px] font-medium text-[#553C9A]">
+                    Handover time coordinated upon booking
+                  </span>
+                </div>
+
                 {/* Dynamic Conflict Detection Scoped to Camera */}
                 {calcConflict.hasConflict ? (
                   <div className="p-4 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#9B2C2C] space-y-2.5 animate-fadeIn">
@@ -2556,6 +2584,8 @@ export default function App() {
                       </span>
                     </div>
                   </div>
+
+                    
 
                   {/* Payment Schedule Card */}
                   <div className="mt-6 p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2.5">
@@ -2904,7 +2934,7 @@ export default function App() {
                     )}
                   </div>
                   <p className="text-xs text-[#6B6B8A]">
-                    {modalStep === 1 && 'Confirm rental duration & dates (8:00 AM – 8:00 PM)'}
+                    {modalStep === 1 && 'Select dates & review package pricing'}
                     {modalStep === 2 && 'Choose Meetup (₱200 fee) or Grab Express Delivery'}
                     {modalStep === 3 && 'ID verification & document uploads (confidential)'}
                     {modalStep === 4 && 'Renter contact details & refund info'}
@@ -2943,7 +2973,13 @@ export default function App() {
                   {/* Camera Model Banner / Switcher */}
                   <div className="p-3.5 bg-white rounded-2xl border border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <span className="text-[10px] font-bold uppercase text-[#6B6B8A] block">Selected Camera Unit</span>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B8A]">Selected Camera Unit</span>
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8] inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-[#38A169]" />
+                          In Stock & Ready
+                        </span>
+                      </div>
                       <span className="text-sm font-black text-[#1A1A2E]">{modalCamera.name}</span>
                     </div>
                     <div data-field-key="cameraId" className="w-full sm:w-64">
@@ -2971,17 +3007,6 @@ export default function App() {
                         }}
                       />
                     </div>
-                  </div>
-
-                  {/* Camera Stock Reassurance Note */}
-                  <div className="p-3 rounded-2xl bg-[#E8F7F1]/80 border border-[#A8DBC8] flex items-center justify-between gap-3 text-xs text-[#234E52]">
-                    <div className="flex items-center gap-2 font-bold">
-                      <CheckCircle2 className="w-4 h-4 text-[#38A169] shrink-0" />
-                      <span>Selected Rental Unit: {modalCamera.name}</span>
-                    </div>
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white text-[#234E52] border border-[#A8DBC8] shrink-0">
-                      In Stock
-                    </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3036,18 +3061,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Rental Hours Notice Banner */}
-                  <div className="p-3 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-center justify-between gap-3 text-xs text-[#553C9A]">
-                    <div className="flex items-center gap-2 font-bold">
-                      <Clock className="w-4 h-4 text-[#553C9A] shrink-0" />
-                      <span>Rental Period: 8:00 AM – 8:00 PM ONLY</span>
-                    </div>
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white text-[#553C9A] border border-[#C9B8F0] shrink-0">
-                      Standard Schedule
-                    </span>
-                  </div>
-
-                  {/* Modal Conflict Alert or Green Availability Check */}
+                  {/* Unified Handover & Return Schedule Card */}
                   {modalConflict.hasConflict ? (
                     <div data-field-key="dateConflict" className="p-3.5 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#9B2C2C] space-y-2 animate-fadeIn">
                       <div className="flex items-start gap-2.5">
@@ -3056,13 +3070,14 @@ export default function App() {
                         </div>
                         <div>
                           <div className="font-black text-xs text-[#9B2C2C]">
-                            ⚠️ Date Conflict: Selected Dates Are Reserved!
+                            Date Conflict: Selected Dates Are Reserved
                           </div>
                           <p className="text-[11px] text-[#C53030] mt-0.5 leading-relaxed font-medium">
                             {modalConflict.message}
                           </p>
-                          <div className="text-[10px] text-[#9B2C2C] mt-0.5 font-bold">
-                            📍 Assigned: {modalConflict.conflictingBooking?.hub} ({modalConflict.conflictingBooking?.status})
+                          <div className="text-[10px] text-[#9B2C2C] mt-0.5 font-bold flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-[#C53030]" />
+                            <span>Assigned: {modalConflict.conflictingBooking?.hub} ({modalConflict.conflictingBooking?.status})</span>
                           </div>
                         </div>
                       </div>
@@ -3074,7 +3089,8 @@ export default function App() {
                           className="px-3 py-1.5 rounded-xl bg-[#E53E3E] text-white text-xs font-bold hover:bg-[#C53030] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>Auto-Pick Next Available Dates ➔</span>
+                          <span>Auto-Pick Next Available Dates</span>
+                          <ArrowRight className="w-3 h-3" />
                         </button>
                         <button
                           type="button"
@@ -3085,38 +3101,101 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                  ) : modalConflict.isTurnover ? (
-                    <div className="p-3 rounded-xl bg-[#FFF9F2] border border-[#F5C6A8] space-y-1.5 animate-fadeIn">
-                      <div className="flex items-center justify-between text-xs text-[#7B341E]">
-                        <div className="flex items-center gap-1.5 font-bold text-[#9C4221]">
-                          <Clock className="w-4 h-4 text-[#DD6B20] shrink-0" />
-                          <span>Dates Available (Same-Day Turnover Schedule)</span>
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-3 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-[#553C9A]" />
+                          <span className="font-black text-xs text-[#1A1A2E]">Handover & Return Schedule</span>
                         </div>
                         <button
                           type="button"
                           onClick={() => setShowScheduleModal(true)}
-                          className="text-[11px] font-bold text-[#C05621] hover:text-[#7B341E] underline cursor-pointer"
+                          className="text-[11px] font-bold text-[#553C9A] hover:underline cursor-pointer"
                         >
-                          Schedule
+                          View Busy Calendar
                         </button>
                       </div>
-                      <p className="text-[11px] text-[#9C4221] leading-relaxed">
-                        {modalConflict.turnoverNote || "Consecutive booking: Unit returns from a previous rental on this date. Equipment will be inspected, cleaned, and tested before your handover."}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="p-2.5 rounded-xl bg-[#E8F7F1] border border-[#A8DBC8] flex items-center justify-between text-xs text-[#234E52]">
-                      <div className="flex items-center gap-1.5">
-                        <CalendarCheck className="w-4 h-4 text-[#38A169] shrink-0" />
-                        <span className="font-bold">Dates 100% Available! Proceed to Handover.</span>
+
+                      {/* 2-Column Schedule Timeline */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {/* Pickup Box */}
+                        <div className={`p-3 rounded-xl border transition-colors space-y-1.5 ${
+                          modalConflict.isStartTurnover
+                            ? 'bg-[#FFFDFB] border-[#F5C6A8]'
+                            : 'bg-white border-[#E8E4F0]'
+                        }`}>
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
+                            <span className="text-[#6B6B8A]">1. Pickup Date</span>
+                            {modalConflict.isStartTurnover ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                Afternoon Turnover
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                                Standard Schedule
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-bold text-xs text-[#1A1A2E]">
+                            {booking.startDate ? formatFriendlyDate(booking.startDate) : 'Select pickup date'}
+                          </div>
+                          <div>
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EDE8FC] text-[#553C9A] text-xs font-bold">
+                              <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
+                              <span>{modalConflict.pickupWindow || '8:00 AM – 8:00 PM (Flexible)'}</span>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-[#6B6B8A] leading-relaxed">
+                            {modalConflict.isStartTurnover
+                              ? 'Returns from earlier shoot in morning; sanitized & battery charged for afternoon release.'
+                              : 'Schedule your pickup anytime within our 8:00 AM – 8:00 PM daily window.'}
+                          </p>
+                        </div>
+
+                        {/* Return Box */}
+                        <div className={`p-3 rounded-xl border transition-colors space-y-1.5 ${
+                          modalConflict.isEndTurnover
+                            ? 'bg-[#FFFDFB] border-[#F5C6A8]'
+                            : 'bg-white border-[#E8E4F0]'
+                        }`}>
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
+                            <span className="text-[#6B6B8A]">2. Return Date</span>
+                            {modalConflict.isEndTurnover ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                Morning Cutoff
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                                Standard Schedule
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-bold text-xs text-[#1A1A2E]">
+                            {booking.endDate ? formatFriendlyDate(booking.endDate) : 'Select return date'}
+                          </div>
+                          <div>
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EDE8FC] text-[#553C9A] text-xs font-bold">
+                              <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
+                              <span>{modalConflict.returnWindow || '8:00 AM – 8:00 PM (Flexible)'}</span>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-[#6B6B8A] leading-relaxed">
+                            {modalConflict.isEndTurnover
+                              ? 'Unit departs for its next booking in the afternoon; please return by 11:30 AM.'
+                              : 'Return anytime within our 8:00 AM – 8:00 PM daily window.'}
+                          </p>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowScheduleModal(true)}
-                        className="text-[11px] font-bold text-[#234E52] hover:text-[#1A1A2E] underline cursor-pointer"
-                      >
-                        Busy Calendar
-                      </button>
+
+                      {/* Integrated Clean Footer (No Bulky Alert Box) */}
+                      <div className="pt-2.5 border-t border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-[#6B6B8A]">
+                        <div className="flex items-center gap-1.5">
+                          <MessageCircle className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
+                          <span>Exact meet-up or delivery time coordinated via chat upon booking</span>
+                        </div>
+                        <span className="font-bold text-[#1A1A2E]">8:00 AM – 8:00 PM Daily Window</span>
+                      </div>
                     </div>
                   )}
 
@@ -3128,6 +3207,7 @@ export default function App() {
                         {modalQuote.days} {modalQuote.days === 1 ? 'Day' : 'Days'} • {modalQuote.tierLabel}
                       </span>
                     </div>
+                    
 
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-semibold text-[#6B6B8A]">
@@ -3260,7 +3340,7 @@ export default function App() {
                         }}
                       />
                       <p className="mt-1.5 text-[11px] text-[#6B6B8A]">
-                        Available at SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 8:00 PM). Exact landmark verified prior to meet-up.
+                        Available at SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 8:00 PM). Exact landmark & time coordinated prior to meet-up.
                       </p>
                     </div>
                   ) : (
@@ -3288,7 +3368,7 @@ export default function App() {
                         </p>
                       )}
                       <p className="mt-1 text-[11px] text-[#6B6B8A]">
-                        Grab Express ONLY (8:00 AM – 8:00 PM). Owner books the rider for both release and return of the device; renter shoulders all delivery fees.
+                        Grab Express ONLY (8:00 AM – 8:00 PM). Owner books the rider for release & return; renter shoulders delivery fees.
                       </p>
                     </div>
                   )}
@@ -4580,7 +4660,7 @@ export default function App() {
                           of Pack and Film Camera Rental. <span className="text-red-500 font-bold">*</span>
                         </label>
                         <p className="text-[11px] text-[#6B6B8A] mt-1 leading-relaxed">
-                          Includes ₱300 reservation downpayment (credited to rental), ₱{modalQuote.deposit.toLocaleString()} security deposit (refunded within 24h of return), 8:00 AM – 8:00 PM rental period, ₱200 meetup handling fee, and Grab Express delivery rules.
+                          Includes ₱300 reservation downpayment (credited to rental), ₱{modalQuote.deposit.toLocaleString()} security deposit (refunded within 24h of return), 8:00 AM – 8:00 PM operating hours, ₱200 meetup handling fee, and Grab Express delivery rules.
                         </p>
                       </div>
                     </div>
@@ -4667,9 +4747,15 @@ export default function App() {
                         <span className="font-bold text-[#1A1A2E]">₱{modalQuote.meetupFee.toLocaleString()}</span>
                       </div>
                     )}
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">Rental Window:</span>
-                      <span className="font-bold text-[#1A1A2E]">8:00 AM – 8:00 PM ONLY</span>
+                    <div className="bg-[#FAFAF7] p-2.5 rounded-xl border border-[#E8E4F0] flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">Operating Window</span>
+                        <span className="font-bold text-[#1A1A2E]">8:00 AM – 8:00 PM</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">Handover Time</span>
+                        <span className="font-bold text-[#553C9A]">Coordinated via Chat</span>
+                      </div>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#6B6B8A]">Downpayment Paid:</span>
@@ -4711,7 +4797,7 @@ export default function App() {
                     <div className="flex justify-between items-center text-[11px] text-[#234E52] bg-[#E8F7F1] p-2 rounded-xl border border-[#A8DBC8]">
                       <span className="font-bold flex items-center gap-1.5">
                         <CheckCheck className="w-3.5 h-3.5 text-[#38A169]" />
-                        <span>KYC Documents & Video:</span>
+                        <span>KYC Verification Documents:</span>
                       </span>
                       <span className="font-extrabold text-[#2F855A]">
                         {booking.driveFolderUrl ? 'Vaulted in Google Drive ✓' : 'Encrypted & Uploaded ✓'}

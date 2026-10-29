@@ -19,7 +19,9 @@ export const RENTAL_CONFIG = {
   facebookAdminAccount: 'Pack and Film',
 
   // Operating Hours
-  operatingHours: '8:00 AM – 8:00 PM ONLY',
+  operatingHours: '8:00 AM – 8:00 PM',
+  turnoverBufferHours: 2.5,
+  scheduleNote: 'Standard operating hours: 8:00 AM – 8:00 PM daily. Handovers are coordinated upon booking. On same-day turnover dates, morning return (by 11:30 AM) and afternoon pickup (from 2:00 PM) apply to ensure full gear inspection and 100% battery recharge.',
   startHourStr: '8:00 AM',
   endHourStr: '8:00 PM',
 
@@ -89,7 +91,7 @@ export const HOW_TO_BOOK_STEPS = [
     step: '05',
     title: 'Meet-up or delivery',
     badge: 'Gear Handover',
-    desc: 'Settle remaining balance + ₱1,000 refundable security deposit before release (8:00 AM – 8:00 PM). Unit may be claimed via Meetup at SM East Ortigas, Bridgetowne, or Opus Mall with ₱200 handling fee or via Grab Express ONLY. Security Deposit will refunded within 24 hours after inspection.'
+    desc: 'Settle remaining balance + ₱1,000 refundable security deposit before release. Operating hours: 8:00 AM – 8:00 PM daily. Handover time is coordinated with your schedule upon booking confirmation. Unit may be claimed via Meetup at SM East Ortigas, Bridgetowne, or Opus Mall with ₱200 handling fee or via Grab Express ONLY. Security Deposit will refunded within 24 hours after inspection.'
   }
 ];
 
@@ -188,9 +190,11 @@ export const TERMS_AND_CONDITIONS_DATA = [
   {
     number: '04',
     title: 'Rental Period & Shipping',
-    highlight: '8:00 AM – 8:00 PM ONLY • ₱200 Meetup Fee • Grab Express ONLY',
+    highlight: '8:00 AM – 8:00 PM Daily • Coordinated Schedule • ₱200 Meetup Fee • Grab Express ONLY',
     content: [
-      'Rental Period: 8:00 AM - 8:00 PM ONLY.',
+      'Operating Hours: 8:00 AM – 8:00 PM daily. All gear handovers, meetups, deliveries, and returns are scheduled within this window.',
+      'Flexible Scheduling: Handover and return times are coordinated directly with you to match your shoot schedule.',
+      'Same-Day Turnover Buffer: When consecutive bookings share a turnover date, morning return (by 11:30 AM) and afternoon pickup (from 2:00 PM) apply to allow mandatory gear diagnostics, sanitization, and battery charging.',
       'Unit can be claimed via Grab Express delivery or through meet-up at SM East, Bridgetowne, or Opus.',
       'However, a ₱200 handling fee will be charged for all meet-up transactions.',
       'The owner shall be responsible for booking the rider for both the release and return of the device and the renter will shoulder all delivery fees.',
