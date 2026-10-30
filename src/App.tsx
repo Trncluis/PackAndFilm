@@ -122,6 +122,10 @@ interface BookingState {
   termsAcceptedAt?: string;
   bookingRef: string;
   driveFolderUrl?: string | null;
+  pickupTimeSlot: string;
+  returnTimeSlot: string;
+  isFlightOrTrip: boolean;
+  flightOrTripDetails: string;
 }
 
 export default function App() {
@@ -186,6 +190,17 @@ export default function App() {
     }
     return 1;
   });
+
+  // Prevent background scroll-chaining and repaint cycles when modal is open
+  useEffect(() => {
+    if (isModalOpen) {
+      const originalOverflow = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isModalOpen]);
   const [copiedGcash, setCopiedGcash] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
   const [inclusionsModalCamera, setInclusionsModalCamera] = useState<CameraItem | null>(null);
@@ -254,6 +269,10 @@ export default function App() {
       termsAcceptedAt: '',
       bookingRef: '',
       driveFolderUrl: null,
+      pickupTimeSlot: 'Morning (9:00 AM – 12:00 PM)',
+      returnTimeSlot: 'Evening (6:00 PM – 9:00 PM)',
+      isFlightOrTrip: false,
+      flightOrTripDetails: '',
     };
   });
 
@@ -1357,62 +1376,9 @@ export default function App() {
     }
   ];
 
-  // ─────────────────────────────────────────────────────────────
-  // OPERATIONAL / ADMIN DASHBOARD VIEW
-  // ─────────────────────────────────────────────────────────────
-  if (isAdminView) {
-    return (
-      <AdminDashboard
-        appsScriptUrl={APPS_SCRIPT_URL}
-        onExit={() => {
-          setIsAdminView(false);
-          if (typeof window !== 'undefined') {
-            if (window.location.hash) {
-              window.history.pushState(null, '', window.location.pathname);
-            }
-            if (window.location.pathname.startsWith('/admin')) {
-              window.history.pushState(null, '', '/');
-            }
-          }
-        }}
-        localBookings={bookings}
-        onBookingsUpdated={(updated) => setBookings(updated)}
-      />
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[#FAFAF7] text-[#1A1A2E] flex flex-col font-sans selection:bg-[#C9B8F0] selection:text-[#1A1A2E]">
-
-      {/* Toast Notification for Google Sheets Sync & Network Alerts */}
-      {toast && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-md w-[92%] sm:w-full animate-fadeIn pointer-events-auto">
-          <div
-            className={`p-4 rounded-2xl border-2 shadow-[6px_6px_0px_#1A1A2E] flex items-center justify-between gap-3 ${toast.type === 'error'
-              ? 'bg-[#FFF5F5] border-[#E53E3E] text-[#9B2C2C]'
-              : toast.type === 'success'
-                ? 'bg-[#F0FFF4] border-[#38A169] text-[#22543D]'
-                : 'bg-[#EDE8FC] border-[#6B46C1] text-[#44337A]'
-              }`}
-          >
-            <div className="flex items-center gap-2.5 text-xs font-bold leading-snug">
-              {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
-              {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />}
-              {toast.type === 'info' && <Sparkles className="w-4 h-4 text-[#6B46C1] shrink-0" />}
-              <span>{toast.message}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setToast(null)}
-              className="text-gray-400 hover:text-gray-700 p-1 rounded-lg shrink-0 cursor-pointer"
-              aria-label="Dismiss notification"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
+  // Memoized landing page content to prevent 1,500+ DOM nodes from re-rendering on every modal keystroke
+  const landingPageContent = useMemo(() => (
+    <>
       {/* ─────────────────────────────────────────────────────────────
           1. NAVIGATION BAR
       ───────────────────────────────────────────────────────────── */}
@@ -2990,20 +2956,98 @@ export default function App() {
           </div>
         </div>
       </footer>
+    </>
+  ), [
+    selectedCameraId,
+    selectedCamera,
+    calcStartDate,
+    calcEndDate,
+    calcHandover,
+    currentQuote,
+    calcConflict,
+    openFaq,
+    mobileMenuOpen,
+    inclusionsModalCamera,
+    inclusionsTipId,
+    sheetLastSynced,
+    isSyncingSheet,
+    bookings,
+    todayStr
+  ]);
+
+  // ─────────────────────────────────────────────────────────────
+  // OPERATIONAL / ADMIN DASHBOARD VIEW
+  // ─────────────────────────────────────────────────────────────
+  if (isAdminView) {
+    return (
+      <AdminDashboard
+        appsScriptUrl={APPS_SCRIPT_URL}
+        onExit={() => {
+          setIsAdminView(false);
+          if (typeof window !== 'undefined') {
+            if (window.location.hash) {
+              window.history.pushState(null, '', window.location.pathname);
+            }
+            if (window.location.pathname.startsWith('/admin')) {
+              window.history.pushState(null, '', '/');
+            }
+          }
+        }}
+        localBookings={bookings}
+        onBookingsUpdated={(updated) => setBookings(updated)}
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#FAFAF7] text-[#1A1A2E] flex flex-col font-sans selection:bg-[#C9B8F0] selection:text-[#1A1A2E]">
+
+      {/* Toast Notification for Google Sheets Sync & Network Alerts */}
+      {toast && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-md w-[92%] sm:w-full animate-fadeIn pointer-events-auto">
+          <div
+            className={`p-4 rounded-2xl border-2 shadow-[6px_6px_0px_#1A1A2E] flex items-center justify-between gap-3 ${toast.type === 'error'
+              ? 'bg-[#FFF5F5] border-[#E53E3E] text-[#9B2C2C]'
+              : toast.type === 'success'
+                ? 'bg-[#F0FFF4] border-[#38A169] text-[#22543D]'
+                : 'bg-[#EDE8FC] border-[#6B46C1] text-[#44337A]'
+              }`}
+          >
+            <div className="flex items-center gap-2.5 text-xs font-bold leading-snug">
+              {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
+              {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />}
+              {toast.type === 'info' && <Sparkles className="w-4 h-4 text-[#6B46C1] shrink-0" />}
+              <span>{toast.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="text-gray-400 hover:text-gray-700 p-1 rounded-lg shrink-0 cursor-pointer"
+              aria-label="Dismiss notification"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Memoized Landing Page Sections */}
+      {landingPageContent}
+
 
       {/* ─────────────────────────────────────────────────────────────
           7. MULTI-STEP BOOKING MODAL (STATE MACHINE: 6 STEPS)
       ───────────────────────────────────────────────────────────── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-          {/* Hardware-accelerated static backdrop layer */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 overflow-hidden animate-fadeIn">
+          {/* Hardware-accelerated static backdrop layer (no blur GPU rasterization overhead) */}
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-[2px] transition-opacity will-change-[opacity]"
+            className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
             onClick={() => setIsModalOpen(false)}
             aria-hidden="true"
           />
 
-          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[92vh] z-10 isolate transform-gpu">
+          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[90vh] z-10 isolate">
 
             {/* Modal Header */}
             <div className="px-6 py-4 bg-white border-b border-[#E8E4F0] flex items-center justify-between">
@@ -3058,7 +3102,7 @@ export default function App() {
             )}
 
             {/* Modal Scrollable Body */}
-            <div ref={modalBodyRef} className="p-6 overflow-y-auto space-y-6 flex-1">
+            <div ref={modalBodyRef} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1">
 
               {/* ───────────────── STEP 1: DATES & PRICING BREAKDOWN ───────────────── */}
               {modalStep === 1 && (

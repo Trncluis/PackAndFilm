@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, Sparkles } from 'lucide-react';
 
 interface BookedRange {
@@ -92,42 +92,46 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
 
   const daysOfWeek = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-  // Days calculation
-  const firstDayOfMonth = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
+    // Days calculation: Only compute when calendar popup is open to preserve 60 FPS typing speed
+  const allCalendarDays = useMemo(() => {
+    if (!isOpen) return [];
 
-  const prevMonthDays = Array.from({ length: firstDayOfMonth }, (_, i) => ({
-    day: daysInPrevMonth - firstDayOfMonth + i + 1,
-    isCurrentMonth: false,
-    dateStr: `${year}-${String(month).padStart(2, '0')}-${String(daysInPrevMonth - firstDayOfMonth + i + 1).padStart(2, '0')}`
-  }));
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
 
-  const currentMonthDays = Array.from({ length: daysInMonth }, (_, i) => {
-    const d = i + 1;
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    return {
-      day: d,
-      isCurrentMonth: true,
-      dateStr
-    };
-  });
-
-  const totalGridCount = 42;
-  const remainingDays = totalGridCount - (prevMonthDays.length + currentMonthDays.length);
-  const nextMonthDays = Array.from({ length: remainingDays }, (_, i) => {
-    const d = i + 1;
-    const nextY = month === 11 ? year + 1 : year;
-    const nextM = month === 11 ? 1 : month + 2;
-    const dateStr = `${nextY}-${String(nextM).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    return {
-      day: d,
+    const prevMonthDays = Array.from({ length: firstDayOfMonth }, (_, i) => ({
+      day: daysInPrevMonth - firstDayOfMonth + i + 1,
       isCurrentMonth: false,
-      dateStr
-    };
-  });
+      dateStr: `${year}-${String(month).padStart(2, '0')}-${String(daysInPrevMonth - firstDayOfMonth + i + 1).padStart(2, '0')}`
+    }));
 
-  const allCalendarDays = [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
+    const currentMonthDays = Array.from({ length: daysInMonth }, (_, i) => {
+      const d = i + 1;
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      return {
+        day: d,
+        isCurrentMonth: true,
+        dateStr
+      };
+    });
+
+    const totalGridCount = 42;
+    const remainingDays = totalGridCount - (prevMonthDays.length + currentMonthDays.length);
+    const nextMonthDays = Array.from({ length: remainingDays }, (_, i) => {
+      const d = i + 1;
+      const nextY = month === 11 ? year + 1 : year;
+      const nextM = month === 11 ? 1 : month + 2;
+      const dateStr = `${nextY}-${String(nextM).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      return {
+        day: d,
+        isCurrentMonth: false,
+        dateStr
+      };
+    });
+
+    return [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
+  }, [isOpen, year, month]);
 
   // Helper date string formatter
   const formatFriendlyDate = (dateStr: string) => {

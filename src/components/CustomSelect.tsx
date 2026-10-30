@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 
 export interface SelectOption {
@@ -40,15 +40,19 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Normalize options to SelectOption format
-  const normalizedOptions: SelectOption[] = options.map((opt) => {
-    if (typeof opt === 'string') {
-      return { value: opt, label: opt };
-    }
-    return opt;
-  });
+    // Normalize options to SelectOption format (memoized to avoid re-mapping on every keystroke)
+  const normalizedOptions: SelectOption[] = useMemo(() => {
+    return options.map((opt) => {
+      if (typeof opt === 'string') {
+        return { value: opt, label: opt };
+      }
+      return opt;
+    });
+  }, [options]);
 
-  const selectedOption = normalizedOptions.find((opt) => opt.value === value);
+  const selectedOption = useMemo(() => {
+    return normalizedOptions.find((opt) => opt.value === value);
+  }, [normalizedOptions, value]);
 
   // Click outside to close
   useEffect(() => {
