@@ -37,7 +37,8 @@ import {
   GraduationCap,
   Loader2,
   Clock,
-  Info
+  Info,
+  Plane
 } from 'lucide-react';
 
 import { CAMERAS, CameraItem } from './data/cameras';
@@ -60,7 +61,7 @@ import {
 } from './data/rentalConfig';
 
 import { CustomDatePicker } from './components/CustomDatePicker';
-import { CustomSelect } from './components/CustomSelect';
+import { CustomSelect, SelectOption } from './components/CustomSelect';
 import { AdminDashboard } from './components/AdminDashboard';
 
 const DOWNPAYMENT_FEE = RENTAL_CONFIG.reservationFee;
@@ -643,6 +644,98 @@ export default function App() {
     () => checkCameraDateConflict(booking.cameraId, booking.startDate, booking.endDate, bookings),
     [booking.cameraId, booking.startDate, booking.endDate, bookings]
   );
+
+  // Dynamic Dropdown Options for Pickup and Return Time Windows
+  const pickupTimeOptions = useMemo<SelectOption[]>(() => {
+    if (modalConflict.isStartTurnover) {
+      return [
+        {
+          value: 'Afternoon (2:00 PM – 5:00 PM)',
+          label: 'Afternoon (2:00 PM – 5:00 PM)',
+          badge: 'Recommended',
+          sublabel: 'Earliest release after full inspection & 100% battery charging'
+        },
+        {
+          value: 'Evening (5:00 PM – 8:00 PM)',
+          label: 'Evening (5:00 PM – 8:00 PM)',
+          sublabel: 'Flexible late afternoon / evening meetup or delivery'
+        },
+        {
+          value: 'Morning (8:00 AM – 12:00 PM)',
+          label: 'Morning (Unavailable on Turnover Day)',
+          disabled: true,
+          badge: 'In Use',
+          sublabel: 'Camera returns from prior shoot in the morning'
+        }
+      ];
+    }
+    return [
+      {
+        value: 'Morning (8:00 AM – 12:00 PM)',
+        label: 'Morning (8:00 AM – 12:00 PM)',
+        badge: 'Early Bird',
+        sublabel: 'Best for early travel or full-day production'
+      },
+      {
+        value: 'Afternoon (12:00 PM – 5:00 PM)',
+        label: 'Afternoon (12:00 PM – 5:00 PM)',
+        badge: 'Popular',
+        sublabel: 'Standard midday meetup or Grab Express dispatch'
+      },
+      {
+        value: 'Evening (5:00 PM – 8:00 PM)',
+        label: 'Evening (5:00 PM – 8:00 PM)',
+        sublabel: 'After-work / late afternoon pickup'
+      }
+    ];
+  }, [modalConflict.isStartTurnover]);
+
+  const returnTimeOptions = useMemo<SelectOption[]>(() => {
+    if (modalConflict.isEndTurnover) {
+      return [
+        {
+          value: 'Morning Cutoff (by 11:30 AM)',
+          label: 'Morning Cutoff (By 11:30 AM)',
+          badge: 'Required',
+          sublabel: 'Gear departs for its next creator in the afternoon'
+        }
+      ];
+    }
+    return [
+      {
+        value: 'Evening (5:00 PM – 8:00 PM)',
+        label: 'Evening (5:00 PM – 8:00 PM)',
+        badge: 'Standard',
+        sublabel: 'Maximize your last shoot day until 8:00 PM'
+      },
+      {
+        value: 'Afternoon (12:00 PM – 5:00 PM)',
+        label: 'Afternoon (12:00 PM – 5:00 PM)',
+        sublabel: 'Post-shoot midday drop-off'
+      },
+      {
+        value: 'Morning (8:00 AM – 12:00 PM)',
+        label: 'Morning (8:00 AM – 12:00 PM)',
+        sublabel: 'Early morning drop-off'
+      }
+    ];
+  }, [modalConflict.isEndTurnover]);
+
+  // Synchronize preferred pickup/return time slots with turnover status
+  useEffect(() => {
+    if (modalConflict.isStartTurnover) {
+      setBooking(b => {
+        if (!b.pickupTimeSlot || b.pickupTimeSlot.includes('Morning')) {
+          return { ...b, pickupTimeSlot: 'Afternoon (2:00 PM – 5:00 PM)' };
+        }
+        return b;
+      });
+    }
+    if (modalConflict.isEndTurnover) {
+      setBooking(b => ({ ...b, returnTimeSlot: 'Morning Cutoff (by 11:30 AM)' }));
+    }
+  }, [modalConflict.isStartTurnover, modalConflict.isEndTurnover]);
+
 
   // Jump to next available window for Calculator
   const handleAutoPickNextAvailable = () => {
@@ -3009,59 +3102,118 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div data-field-key="startDate">
-                      <CustomDatePicker
-                        label="Start Date (Pickup / Delivery)"
-                        isRequired={true}
-                        placeholder="Select pickup date"
-                        value={booking.startDate}
-                        minDate={todayStr}
-                        rangeStart={booking.startDate}
-                        rangeEnd={booking.endDate}
-                        bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
-                        hasConflict={modalConflict.hasConflict}
-                        conflictMessage={modalConflict.message}
-                        hasError={!!validationErrors.startDate}
-                        errorMessage={validationErrors.startDate}
-                        onChange={(val) => {
-                          setBooking(b => ({
-                            ...b,
-                            startDate: val,
-                            endDate: val > b.endDate ? val : b.endDate,
-                          }));
-                          clearFieldError('startDate');
-                          clearFieldError('endDate');
-                          clearFieldError('dateConflict');
-                        }}
-                      />
+                  {/* 2-Column Integrated Date & Time Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Column 1: Pickup Date & Preferred Time Dropdown */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                      <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                          1. Pickup Schedule
+                        </span>
+                        {modalConflict.isStartTurnover ? (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                            Afternoon Turnover
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                            Flexible Window
+                          </span>
+                        )}
+                      </div>
+
+                      <div data-field-key="startDate">
+                        <CustomDatePicker
+                          label="Pickup / Delivery Date"
+                          isRequired={true}
+                          placeholder="Select pickup date"
+                          value={booking.startDate}
+                          minDate={todayStr}
+                          rangeStart={booking.startDate}
+                          rangeEnd={booking.endDate}
+                          bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                          hasConflict={modalConflict.hasConflict}
+                          conflictMessage={modalConflict.message}
+                          hasError={!!validationErrors.startDate}
+                          errorMessage={validationErrors.startDate}
+                          onChange={(val) => {
+                            setBooking(b => ({
+                              ...b,
+                              startDate: val,
+                              endDate: val > b.endDate ? val : b.endDate,
+                            }));
+                            clearFieldError('startDate');
+                            clearFieldError('endDate');
+                            clearFieldError('dateConflict');
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <CustomSelect
+                          label="Preferred Pickup Time Window"
+                          isRequired={true}
+                          size="sm"
+                          value={booking.pickupTimeSlot}
+                          options={pickupTimeOptions}
+                          onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                        />
+                      </div>
                     </div>
 
-                    <div data-field-key="endDate">
-                      <CustomDatePicker
-                        label="End Date (Return Date)"
-                        isRequired={true}
-                        placeholder="Select return date"
-                        value={booking.endDate}
-                        minDate={booking.startDate || todayStr}
-                        rangeStart={booking.startDate}
-                        rangeEnd={booking.endDate}
-                        isEndDate={true}
-                        bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
-                        hasConflict={modalConflict.hasConflict}
-                        conflictMessage={modalConflict.message}
-                        hasError={!!validationErrors.endDate}
-                        errorMessage={validationErrors.endDate}
-                        onChange={(val) => {
-                          setBooking(b => ({ ...b, endDate: val }));
-                          clearFieldError('endDate');
-                          clearFieldError('dateConflict');
-                        }}
-                      />
+                    {/* Column 2: Return Date & Preferred Time Dropdown */}
+                    <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                      <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                          2. Return Schedule
+                        </span>
+                        {modalConflict.isEndTurnover ? (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                            Morning Cutoff
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                            Flexible Window
+                          </span>
+                        )}
+                      </div>
+
+                      <div data-field-key="endDate">
+                        <CustomDatePicker
+                          label="Return Date"
+                          isRequired={true}
+                          placeholder="Select return date"
+                          value={booking.endDate}
+                          minDate={booking.startDate || todayStr}
+                          rangeStart={booking.startDate}
+                          rangeEnd={booking.endDate}
+                          isEndDate={true}
+                          bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                          hasConflict={modalConflict.hasConflict}
+                          conflictMessage={modalConflict.message}
+                          hasError={!!validationErrors.endDate}
+                          errorMessage={validationErrors.endDate}
+                          onChange={(val) => {
+                            setBooking(b => ({ ...b, endDate: val }));
+                            clearFieldError('endDate');
+                            clearFieldError('dateConflict');
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <CustomSelect
+                          label="Preferred Return Time Window"
+                          isRequired={true}
+                          size="sm"
+                          value={booking.returnTimeSlot}
+                          options={returnTimeOptions}
+                          onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Unified Handover & Return Schedule Card */}
+                  {/* Schedule Conflict or Operating Hours Status Banner */}
                   {modalConflict.hasConflict ? (
                     <div data-field-key="dateConflict" className="p-3.5 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#9B2C2C] space-y-2 animate-fadeIn">
                       <div className="flex items-start gap-2.5">
@@ -3101,101 +3253,34 @@ export default function App() {
                         </button>
                       </div>
                     </div>
+                  ) : modalConflict.isTurnover ? (
+                    <div className="p-3 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] flex items-start gap-2.5 text-xs text-[#7B341E] animate-fadeIn">
+                      <Clock className="w-4 h-4 text-[#DD6B20] shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#9C4221]">Same-Day Turnover Schedule Active</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowScheduleModal(true)}
+                            className="text-[11px] font-bold text-[#C05621] hover:underline cursor-pointer"
+                          >
+                            View Calendar
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-[#9C4221] mt-0.5 leading-relaxed">
+                          {modalConflict.turnoverNote || "Consecutive booking: Unit returns from a prior shoot and will be cleaned & fast-charged before your afternoon handover."}
+                        </p>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="p-4 rounded-2xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-3 animate-fadeIn">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-[#553C9A]" />
-                          <span className="font-black text-xs text-[#1A1A2E]">Handover & Return Schedule</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowScheduleModal(true)}
-                          className="text-[11px] font-bold text-[#553C9A] hover:underline cursor-pointer"
-                        >
-                          View Busy Calendar
-                        </button>
+                    <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#6B6B8A] gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
+                        <span className="font-semibold text-[#1A1A2E]">Operating Hours: 8:00 AM – 8:00 PM Daily</span>
                       </div>
-
-                      {/* 2-Column Schedule Timeline */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {/* Pickup Box */}
-                        <div className={`p-3 rounded-xl border transition-colors space-y-1.5 ${
-                          modalConflict.isStartTurnover
-                            ? 'bg-[#FFFDFB] border-[#F5C6A8]'
-                            : 'bg-white border-[#E8E4F0]'
-                        }`}>
-                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
-                            <span className="text-[#6B6B8A]">1. Pickup Date</span>
-                            {modalConflict.isStartTurnover ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                                Afternoon Turnover
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                                Standard Schedule
-                              </span>
-                            )}
-                          </div>
-                          <div className="font-bold text-xs text-[#1A1A2E]">
-                            {booking.startDate ? formatFriendlyDate(booking.startDate) : 'Select pickup date'}
-                          </div>
-                          <div>
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EDE8FC] text-[#553C9A] text-xs font-bold">
-                              <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
-                              <span>{modalConflict.pickupWindow || '8:00 AM – 8:00 PM (Flexible)'}</span>
-                            </div>
-                          </div>
-                          <p className="text-[10px] text-[#6B6B8A] leading-relaxed">
-                            {modalConflict.isStartTurnover
-                              ? 'Returns from earlier shoot in morning; sanitized & battery charged for afternoon release.'
-                              : 'Schedule your pickup anytime within our 8:00 AM – 8:00 PM daily window.'}
-                          </p>
-                        </div>
-
-                        {/* Return Box */}
-                        <div className={`p-3 rounded-xl border transition-colors space-y-1.5 ${
-                          modalConflict.isEndTurnover
-                            ? 'bg-[#FFFDFB] border-[#F5C6A8]'
-                            : 'bg-white border-[#E8E4F0]'
-                        }`}>
-                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
-                            <span className="text-[#6B6B8A]">2. Return Date</span>
-                            {modalConflict.isEndTurnover ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                                Morning Cutoff
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                                Standard Schedule
-                              </span>
-                            )}
-                          </div>
-                          <div className="font-bold text-xs text-[#1A1A2E]">
-                            {booking.endDate ? formatFriendlyDate(booking.endDate) : 'Select return date'}
-                          </div>
-                          <div>
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EDE8FC] text-[#553C9A] text-xs font-bold">
-                              <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
-                              <span>{modalConflict.returnWindow || '8:00 AM – 8:00 PM (Flexible)'}</span>
-                            </div>
-                          </div>
-                          <p className="text-[10px] text-[#6B6B8A] leading-relaxed">
-                            {modalConflict.isEndTurnover
-                              ? 'Unit departs for its next booking in the afternoon; please return by 11:30 AM.'
-                              : 'Return anytime within our 8:00 AM – 8:00 PM daily window.'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Integrated Clean Footer (No Bulky Alert Box) */}
-                      <div className="pt-2.5 border-t border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-[#6B6B8A]">
-                        <div className="flex items-center gap-1.5">
-                          <MessageCircle className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
-                          <span>Exact meet-up or delivery time coordinated via chat upon booking</span>
-                        </div>
-                        <span className="font-bold text-[#1A1A2E]">8:00 AM – 8:00 PM Daily Window</span>
-                      </div>
+                      <span className="text-[11px] font-medium text-[#553C9A]">
+                        Exact meetup / rider dispatch coordinated via chat
+                      </span>
                     </div>
                   )}
 
@@ -4264,6 +4349,45 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Flight & Out-of-Town Trip Departure Priority */}
+                  <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Plane className="w-4 h-4 text-[#553C9A]" />
+                        <span className="text-xs font-bold text-[#1A1A2E]">
+                          Are you catching a flight or traveling out of town?
+                        </span>
+                      </div>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={booking.isFlightOrTrip}
+                          onChange={(e) => setBooking(b => ({ ...b, isFlightOrTrip: e.target.checked }))}
+                          className="w-4 h-4 text-[#553C9A] rounded border-[#C9B8F0] focus:ring-[#553C9A]"
+                        />
+                        <span className="text-xs font-bold text-[#553C9A]">Yes</span>
+                      </label>
+                    </div>
+
+                    {booking.isFlightOrTrip && (
+                      <div className="space-y-1.5 pt-2 border-t border-[#E8E4F0] animate-fadeIn">
+                        <label className="block text-[11px] font-semibold text-[#1A1A2E]">
+                          Flight / Travel Departure Time & Destination (Optional but Recommended)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. NAIA Terminal 3 flight at 1:00 PM to Vietnam / Leaving Manila at 6:00 AM"
+                          value={booking.flightOrTripDetails}
+                          onChange={(e) => setBooking(b => ({ ...b, flightOrTripDetails: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
+                        />
+                        <p className="text-[10px] text-[#6B6B8A] leading-snug">
+                          Sharing this allows our team to pre-pack, 100% fast-charge, and prioritize dispatching your gear well before you head to the airport.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* GCash details for security deposit return */}
