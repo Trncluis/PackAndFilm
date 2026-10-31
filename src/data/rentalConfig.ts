@@ -21,7 +21,7 @@ export const RENTAL_CONFIG = {
   // Operating Hours
   operatingHours: '8:00 AM – 12:00 AM (Midnight)',
   turnoverBufferHours: 2,
-  scheduleNote: 'Standard operating hours: 8:00 AM – 12:00 AM (Midnight) daily. Handovers are coordinated upon booking. On same-day turnover dates, a 2-hour recharge, sanitization, and diagnostics buffer applies between consecutive bookings.',
+  scheduleNote: 'Standard operating hours: 8:00 AM – 12:00 AM (Midnight) daily. Handovers are coordinated upon booking. On same-day transition dates, pickup begins from 2:00 PM and return is by 12:00 PM.',
   startHourStr: '8:00 AM',
   endHourStr: '12:00 AM',
 
@@ -194,7 +194,7 @@ export const TERMS_AND_CONDITIONS_DATA = [
     content: [
       'Operating Hours: 8:00 AM – 12:00 AM (Midnight) daily. All gear handovers, meetups, deliveries, and returns are scheduled within this window.',
       'Flexible Scheduling: Handover and return times are coordinated directly with you to match your shoot schedule.',
-      'Same-Day 2-Hour Turnover Buffer: When consecutive bookings share a turnover date, an automated 2-hour buffer applies between return and next pickup to allow mandatory gear diagnostics, sanitization, and 100% fast charging.',
+      'Same-Day Transition Schedule: When consecutive bookings occur on the same date, pickup begins from 2:00 PM and return is scheduled by 12:00 PM to ensure full gear inspection and 100% charging.',
       'Unit can be claimed via Grab Express delivery or through meet-up at SM East, Bridgetowne, or Opus.',
       'However, a ₱200 handling fee will be charged for all meet-up transactions.',
       'The owner shall be responsible for booking the rider for both the release and return of the device and the renter will shoulder all delivery fees.',

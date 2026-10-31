@@ -88,11 +88,11 @@ export const checkCameraDateConflict = (
   if (isTurnover) {
     let turnoverNote = '';
     if (isStartTurnover && isEndTurnover) {
-      turnoverNote = `Same-Day Turnover: Unit returns from an earlier shoot on ${startStr} and enters an automated 2-hour turnover buffer (pickup from 2:00 PM) and departs for its next booking on ${endStr} (morning return by 11:30 AM).`;
+      turnoverNote = `Scheduled transition: Pickup begins from 2:00 PM on ${startStr}, and return is scheduled by 12:00 PM on ${endStr}.`;
     } else if (isStartTurnover) {
-      turnoverNote = `Same-Day Turnover: Unit returns from another shoot on ${startStr}. Available for pickup after the 2-hour turnover buffer (from 2:00 PM) once inspected, sanitized, and charged!`;
+      turnoverNote = `Scheduled transition: Pickup is available starting from 2:00 PM on ${startStr}.`;
     } else {
-      turnoverNote = `Same-Day Turnover: Unit is booked for its next shoot on ${endStr}. Morning return (by 11:30 AM) applies so our team can inspect and prep it.`;
+      turnoverNote = `Scheduled transition: Return is scheduled by 12:00 PM on ${endStr}.`;
     }
 
     return {
@@ -102,8 +102,8 @@ export const checkCameraDateConflict = (
       isStartTurnover,
       isEndTurnover,
       turnoverNote,
-      pickupWindow: isStartTurnover ? '2:00 PM – 12:00 AM (Afternoon Turnover)' : '8:00 AM – 12:00 AM (Flexible)',
-      returnWindow: isEndTurnover ? 'By 11:30 AM (Morning Cutoff)' : '8:00 AM – 12:00 AM (Flexible)',
+      pickupWindow: isStartTurnover ? '2:00 PM – 12:00 AM (Afternoon Pickup)' : '8:00 AM – 12:00 AM (Flexible)',
+      returnWindow: isEndTurnover ? '8:00 AM – 12:00 PM (Morning Return)' : '8:00 AM – 12:00 AM (Flexible)',
       message: ''
     };
   }

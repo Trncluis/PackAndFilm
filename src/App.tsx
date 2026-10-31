@@ -235,8 +235,9 @@ export default function App() {
     const hasMockFiles = params?.get('mock_files') === 'true';
     const paramStart = params?.get('startDate');
     const paramEnd = params?.get('endDate');
+    const paramCam = params?.get('camera');
     return {
-      cameraId: 'dji-pocket-3',
+      cameraId: paramCam || '',
       startDate: paramStart || todayStr,
       endDate: paramEnd || nextDay,
       handoverMode: 'meetup',
@@ -1047,29 +1048,34 @@ export default function App() {
   // Open Modal with prefilled calculator dates (blocking if conflict)
   const handleOpenBookingModal = (targetCameraId?: string) => {
     const requestedCam = CAMERAS.find(c => c.id === targetCameraId);
-    let activeCamId = (requestedCam && requestedCam.isAvailable) ? requestedCam.id : selectedCameraId;
-    if (!CAMERAS.find(c => c.id === activeCamId)?.isAvailable) {
-      activeCamId = 'dji-pocket-3';
-    }
-    if (activeCamId !== selectedCameraId) {
+    const activeCamId = (requestedCam && requestedCam.isAvailable) ? requestedCam.id : (targetCameraId ? 'dji-pocket-3' : '');
+    if (activeCamId) {
       setSelectedCameraId(activeCamId);
-    }
-    const activeConflict = checkCameraDateConflict(activeCamId, calcStartDate, calcEndDate, bookings);
-    if (activeConflict.hasConflict) {
-      const nextWindow = findNextFreeWindowForCamera(activeCamId, calcStartDate, currentQuote.days, bookings);
-      setCalcStartDate(nextWindow.start);
-      setCalcEndDate(nextWindow.end);
-      setBooking(prev => ({
-        ...prev,
-        cameraId: activeCamId,
-        startDate: nextWindow.start,
-        endDate: nextWindow.end,
-        handoverMode: calcHandover,
-      }));
+      const activeConflict = checkCameraDateConflict(activeCamId, calcStartDate, calcEndDate, bookings);
+      if (activeConflict.hasConflict) {
+        const nextWindow = findNextFreeWindowForCamera(activeCamId, calcStartDate, currentQuote.days, bookings);
+        setCalcStartDate(nextWindow.start);
+        setCalcEndDate(nextWindow.end);
+        setBooking(prev => ({
+          ...prev,
+          cameraId: activeCamId,
+          startDate: nextWindow.start,
+          endDate: nextWindow.end,
+          handoverMode: calcHandover,
+        }));
+      } else {
+        setBooking(prev => ({
+          ...prev,
+          cameraId: activeCamId,
+          startDate: calcStartDate,
+          endDate: calcEndDate,
+          handoverMode: calcHandover,
+        }));
+      }
     } else {
       setBooking(prev => ({
         ...prev,
-        cameraId: activeCamId,
+        cameraId: '',
         startDate: calcStartDate,
         endDate: calcEndDate,
         handoverMode: calcHandover,
@@ -1381,7 +1387,7 @@ export default function App() {
     },
     {
       q: 'What are your rental operating hours and schedule?',
-      a: 'Our operating hours are 8:00 AM – 12:00 AM (Midnight) daily. Handover and return times are coordinated directly with you to match your shoot schedule. When consecutive bookings share a turnover date, morning return (by 11:30 AM) and afternoon pickup (from 2:00 PM) apply so our team can perform full gear diagnostics, lens cleaning, sanitization, and battery charging for the next creator.'
+      a: 'Our operating hours are 8:00 AM – 12:00 AM (Midnight) daily. Handover and return times are coordinated directly with you to match your shoot schedule. When consecutive bookings occur on the same date, pickup begins from 2:00 PM and return is by 12:00 PM to ensure all gear is fully inspected, sanitized, and charged.'
     },
     {
       q: 'How does the ₱300 downpayment work?',
@@ -2523,7 +2529,7 @@ export default function App() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-[#DD6B20] shrink-0" />
-                        <span className="font-bold text-[#9C4221]">{selectedCamera.shortName} Available (Same-Day Turnover)</span>
+                        <span className="font-bold text-[#9C4221]">{selectedCamera.shortName} Available (Transition Schedule)</span>
                       </div>
                       <button
                         type="button"
@@ -2534,7 +2540,7 @@ export default function App() {
                       </button>
                     </div>
                     <p className="text-[11px] text-[#9C4221] leading-relaxed">
-                      {calcConflict.turnoverNote || "Consecutive booking allowed: The camera returns from a previous rental on this date and will undergo standard inspection and sanitization before your handover."}
+                      {calcConflict.turnoverNote || "Consecutive schedule: The camera returns from a previous rental on this date and is ready for afternoon pickup."}
                     </p>
                   </div>
                 ) : (
@@ -3099,7 +3105,7 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-black text-lg text-[#1A1A2E]">
-                      {modalStep === 6 ? 'Booking Confirmed' : `Book Your ${modalCamera.shortName}`}
+                      {modalStep === 6 ? 'Booking Confirmed' : booking.cameraId ? `Book Your ${modalCamera.shortName}` : 'Select Your Camera'}
                     </span>
                     {modalStep < 6 && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A]">
@@ -3108,7 +3114,7 @@ export default function App() {
                     )}
                   </div>
                   <p className="text-xs text-[#6B6B8A]">
-                    {modalStep === 1 && 'Select dates & review package pricing'}
+                    {modalStep === 1 && (booking.cameraId ? 'Select dates & review package pricing' : 'Choose your camera to view available dates & times')}
                     {modalStep === 2 && 'Choose Meetup (₱200 fee) or Grab Express Delivery'}
                     {modalStep === 3 && 'ID verification & document uploads (confidential)'}
                     {modalStep === 4 && 'Renter contact details & refund info'}
@@ -3141,320 +3147,427 @@ export default function App() {
             {/* Modal Scrollable Body */}
             <div ref={modalBodyRef} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1">
 
-              {/* ───────────────── STEP 1: DATES & PRICING BREAKDOWN ───────────────── */}
+              {/* ───────────────── STEP 1: CAMERA SELECTION, DATES & PRICING BREAKDOWN ───────────────── */}
               {modalStep === 1 && (
                 <div className="space-y-5 animate-fadeIn">
-                  {/* Camera Model Banner / Switcher */}
-                  <div className="p-3.5 bg-white rounded-2xl border border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6B8A]">Selected Camera Unit</span>
-                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8] inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-[#38A169]" />
-                          In Stock & Ready
+                  {/* 📸 1. CAMERA SELECTION CARDS (Shown First) */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-[#1A1A2E] text-white text-[11px] font-bold flex items-center justify-center">1</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-[#1A1A2E]">
+                          Select Camera Unit
                         </span>
                       </div>
-                      <span className="text-sm font-black text-[#1A1A2E]">{modalCamera.name}</span>
-                    </div>
-                    <div data-field-key="cameraId" className="w-full sm:w-64">
-                      <CustomSelect
-                        value={booking.cameraId}
-                        options={CAMERAS.map(c => ({
-                          value: c.id,
-                          label: c.shortName,
-                          badge: c.isAvailable ? `₱${c.standardRate}/d` : 'Coming Soon',
-                          sublabel: c.isAvailable ? c.name : `${c.name} (Upcoming Lineup)`,
-                          disabled: !c.isAvailable,
-                        }))}
-                        size="sm"
-                        hasError={!!validationErrors.cameraId}
-                        errorMessage={validationErrors.cameraId}
-                        onChange={(newId) => {
-                          const targetCam = CAMERAS.find(c => c.id === newId);
-                          if (!targetCam || !targetCam.isAvailable) {
-                            showToast(`✨ ${targetCam?.name || 'This camera'} is coming soon and cannot be booked yet.`, 'info');
-                            return;
-                          }
-                          setBooking(b => ({ ...b, cameraId: newId }));
-                          setSelectedCameraId(newId);
-                          clearFieldError('cameraId');
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* 2-Column Integrated Date & Time Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* Column 1: Pickup Date & Preferred Time Dropdown */}
-                    <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
-                      <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
-                          1. Pickup Schedule
+                      {booking.cameraId ? (
+                        <span className="text-[11px] font-bold text-[#6B46C1] bg-[#EDE8FC] px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                          <Check className="w-3 h-3 text-[#6B46C1]" />
+                          {modalCamera.shortName} Selected
                         </span>
-                        {modalConflict.isStartTurnover ? (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                            Afternoon Turnover
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                            Flexible Window
-                          </span>
-                        )}
-                      </div>
-
-                      <div data-field-key="startDate">
-                        <CustomDatePicker
-                          label="Pickup / Delivery Date"
-                          isRequired={true}
-                          placeholder="Select pickup date"
-                          value={booking.startDate}
-                          minDate={todayStr}
-                          rangeStart={booking.startDate}
-                          rangeEnd={booking.endDate}
-                          bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
-                          hasConflict={modalConflict.hasConflict}
-                          conflictMessage={modalConflict.message}
-                          hasError={!!validationErrors.startDate}
-                          errorMessage={validationErrors.startDate}
-                          onChange={(val) => {
-                            setBooking(b => ({
-                              ...b,
-                              startDate: val,
-                              endDate: val > b.endDate ? val : b.endDate,
-                            }));
-                            clearFieldError('startDate');
-                            clearFieldError('endDate');
-                            clearFieldError('dateConflict');
-                          }}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <CustomSelect
-                          label="Preferred Pickup Time"
-                          isRequired={true}
-                          size="sm"
-                          value={booking.pickupTimeSlot}
-                          options={pickupTimeOptions}
-                          headerNotice={
-                            modalConflict.isStartTurnover
-                              ? "Unit returns from earlier shoot at 12:00 PM. Available from 2:00 PM after 2-hour buffer."
-                              : undefined
-                          }
-                          onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
-                        />
-
-                        {/* Interactive Hourly Timeline Selector */}
-                        <HourlyTimelineSelector
-                          label="Quick Select Hour"
-                          value={booking.pickupTimeSlot}
-                          hours={pickupQuickHours}
-                          earliestBadge={modalConflict.isStartTurnover ? "2 PM Earliest" : undefined}
-                          onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Column 2: Return Date & Preferred Time Dropdown */}
-                    <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
-                      <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
-                          2. Return Schedule
+                      ) : (
+                        <span className="text-[11px] font-bold text-[#DD6B20] bg-[#FFF9F2] border border-[#F5C6A8] px-2 py-0.5 rounded-full">
+                          Step 1 of 2: Choose Camera
                         </span>
-                        {modalConflict.isEndTurnover ? (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                            Morning Cutoff
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                            Flexible Window
-                          </span>
-                        )}
-                      </div>
-
-                      <div data-field-key="endDate">
-                        <CustomDatePicker
-                          label="Return Date"
-                          isRequired={true}
-                          placeholder="Select return date"
-                          value={booking.endDate}
-                          minDate={booking.startDate || todayStr}
-                          rangeStart={booking.startDate}
-                          rangeEnd={booking.endDate}
-                          isEndDate={true}
-                          bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
-                          hasConflict={modalConflict.hasConflict}
-                          conflictMessage={modalConflict.message}
-                          hasError={!!validationErrors.endDate}
-                          errorMessage={validationErrors.endDate}
-                          onChange={(val) => {
-                            setBooking(b => ({ ...b, endDate: val }));
-                            clearFieldError('endDate');
-                            clearFieldError('dateConflict');
-                          }}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <CustomSelect
-                          label="Preferred Return Time"
-                          isRequired={true}
-                          size="sm"
-                          value={booking.returnTimeSlot}
-                          options={returnTimeOptions}
-                          headerNotice={
-                            modalConflict.isEndTurnover
-                              ? "Afternoon shoot scheduled. Please return by 12:00 PM for 2-hour turnover prep."
-                              : undefined
-                          }
-                          onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
-                        />
-
-                        {/* Interactive Hourly Timeline Selector */}
-                        <HourlyTimelineSelector
-                          label="Quick Select Hour"
-                          value={booking.returnTimeSlot}
-                          hours={returnQuickHours}
-                          earliestBadge={modalConflict.isEndTurnover ? "12 PM Cutoff" : undefined}
-                          onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
-                        />
-                      </div>
+                      )}
                     </div>
-                  </div>
 
-                  {/* Schedule Conflict or Operating Hours Status Banner */}
-                  {modalConflict.hasConflict ? (
-                    <div data-field-key="dateConflict" className="p-3.5 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#9B2C2C] space-y-2 animate-fadeIn">
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-[#FED7D7] flex items-center justify-center shrink-0 mt-0.5">
-                          <CalendarX className="w-4 h-4 text-[#C53030]" />
-                        </div>
-                        <div>
-                          <div className="font-black text-xs text-[#9B2C2C]">
-                            Date Conflict: Selected Dates Are Reserved
-                          </div>
-                          <p className="text-[11px] text-[#C53030] mt-0.5 leading-relaxed font-medium">
-                            {modalConflict.message}
-                          </p>
-                          <div className="text-[10px] text-[#9B2C2C] mt-0.5 font-bold flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-[#C53030]" />
-                            <span>Assigned: {modalConflict.conflictingBooking?.hub} ({modalConflict.conflictingBooking?.status})</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="pt-1.5 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={handleModalAutoPickNextAvailable}
-                          className="px-3 py-1.5 rounded-xl bg-[#E53E3E] text-white text-xs font-bold hover:bg-[#C53030] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Auto-Pick Next Available Dates</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowScheduleModal(true)}
-                          className="px-3 py-1.5 rounded-xl bg-white border border-[#FEB2B2] text-xs font-bold text-[#9B2C2C] hover:bg-[#FED7D7] transition-colors cursor-pointer"
-                        >
-                          View Booked Calendar
-                        </button>
-                      </div>
-                    </div>
-                  ) : modalConflict.isTurnover ? (
-                    <div className="p-3 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] flex items-start gap-2.5 text-xs text-[#7B341E] animate-fadeIn">
-                      <Clock className="w-4 h-4 text-[#DD6B20] shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-[#9C4221]">Same-Day Turnover Schedule Active</span>
+                    {/* Visual Camera Cards Grid (Active Fleet Units) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-field-key="cameraId">
+                      {CAMERAS.filter(c => c.isAvailable).map((cam) => {
+                        const isSelected = booking.cameraId === cam.id;
+                        return (
                           <button
+                            key={cam.id}
                             type="button"
-                            onClick={() => setShowScheduleModal(true)}
-                            className="text-[11px] font-bold text-[#C05621] hover:underline cursor-pointer"
+                            onClick={() => {
+                              setBooking(b => ({ ...b, cameraId: cam.id }));
+                              setSelectedCameraId(cam.id);
+                              clearFieldError('cameraId');
+                            }}
+                            className={`relative p-3.5 rounded-2xl text-left transition-all cursor-pointer group flex flex-col justify-between ${
+                              isSelected
+                                ? 'bg-white border-2 border-[#1A1A2E] shadow-[4px_4px_0px_0px_#1A1A2E] ring-2 ring-[#C9B8F0]/60'
+                                : 'bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-white hover:shadow-[2px_2px_0px_0px_#1A1A2E]'
+                            }`}
                           >
-                            View Calendar
+                            <div className="w-full">
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                                    isSelected
+                                      ? 'bg-[#1A1A2E] text-white border-[#1A1A2E]'
+                                      : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
+                                  }`}>
+                                    {cam.id === 'dji-pocket-3' ? 'CREATOR COMBO' : 'VLOGGER BUNDLE'}
+                                  </span>
+                                  <span className="text-[10px] font-extrabold text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded-full border border-[#A8DBC8] inline-flex items-center gap-0.5">
+                                    <CheckCircle2 className="w-2.5 h-2.5 text-[#38A169]" />
+                                    In Stock
+                                  </span>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="text-sm font-black text-[#1A1A2E]">
+                                    ₱{cam.standardRate}<span className="text-[10px] font-bold text-[#6B6B8A]">/day</span>
+                                  </div>
+                                  <div className="text-[9px] font-semibold text-[#8B8BA7]">
+                                    ₱{cam.bulkRate}/d on 6+ days
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 my-1.5">
+                                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-[#E8E4F0] p-1.5 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform overflow-hidden shadow-xs">
+                                  <img
+                                    src={cam.image}
+                                    alt={cam.name}
+                                    className="w-full h-full object-contain"
+                                    loading="lazy"
+                                  />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-xs sm:text-sm font-black text-[#1A1A2E] leading-snug line-clamp-1">
+                                    {cam.shortName}
+                                  </h4>
+                                  <p className="text-[10px] text-[#6B6B8A] mt-0.5 line-clamp-1 leading-tight">
+                                    {cam.tagline}
+                                  </p>
+                                  <div className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-[#553C9A]">
+                                    <Sparkles className="w-3 h-3 text-[#6B46C1]" />
+                                    <span className="truncate">{cam.specs[0]} • {cam.specs[1]}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-2 pt-2 border-t border-[#E8E4F0] flex items-center justify-between w-full">
+                              <span className="text-[10px] text-[#6B6B8A] font-semibold">
+                                Deposit: ₱1,000 (Refundable)
+                              </span>
+                              <span className={`text-[11px] font-bold px-3 py-1 rounded-xl transition-all ${
+                                isSelected
+                                  ? 'bg-[#1A1A2E] text-white shadow-xs inline-flex items-center gap-1'
+                                  : 'bg-white border border-[#E8E4F0] text-[#1A1A2E] group-hover:border-[#1A1A2E] group-hover:bg-[#EDE8FC]'
+                              }`}>
+                                {isSelected ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-[#A8DBC8]" />
+                                    <span>Selected</span>
+                                  </>
+                                ) : (
+                                  'Select Camera'
+                                )}
+                              </span>
+                            </div>
                           </button>
+                        );
+                      })}
+                    </div>
+                    {validationErrors.cameraId && (
+                      <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+                        <span>⚠️</span> {validationErrors.cameraId}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 📅 2. DATES & HANDOVER SCHEDULE (Progressively disclosed ONLY after camera is selected) */}
+                  {booking.cameraId ? (
+                    <div className="space-y-4 animate-fadeIn">
+                      <div className="flex items-center justify-between pt-2 border-t border-[#E8E4F0]">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-[#1A1A2E] text-white text-[11px] font-bold flex items-center justify-center">2</span>
+                          <span className="text-xs font-black uppercase tracking-wider text-[#1A1A2E]">
+                            Choose Rental Dates & Handover Schedule
+                          </span>
                         </div>
-                        <p className="text-[11px] text-[#9C4221] mt-0.5 leading-relaxed">
-                          {modalConflict.turnoverNote || "Consecutive booking: Unit returns from a prior shoot and will be cleaned & fast-charged before your afternoon handover."}
-                        </p>
+                        <span className="text-[11px] font-bold text-[#6B46C1] bg-[#EDE8FC] px-2 py-0.5 rounded-full">
+                          Unit: {modalCamera.shortName}
+                        </span>
+                      </div>
+
+                      {/* 2-Column Integrated Date & Time Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {/* Column 1: Pickup Date & Preferred Time Dropdown */}
+                        <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                              1. Pickup Schedule
+                            </span>
+                            {modalConflict.isStartTurnover ? (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                Afternoon Pickup (2:00 PM)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                                Flexible Window
+                              </span>
+                            )}
+                          </div>
+
+                          <div data-field-key="startDate">
+                            <CustomDatePicker
+                              label="Pickup / Delivery Date"
+                              isRequired={true}
+                              placeholder="Select pickup date"
+                              value={booking.startDate}
+                              minDate={todayStr}
+                              rangeStart={booking.startDate}
+                              rangeEnd={booking.endDate}
+                              bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                              hasConflict={modalConflict.hasConflict}
+                              conflictMessage={modalConflict.message}
+                              hasError={!!validationErrors.startDate}
+                              errorMessage={validationErrors.startDate}
+                              onChange={(val) => {
+                                setBooking(b => ({
+                                  ...b,
+                                  startDate: val,
+                                  endDate: val > b.endDate ? val : b.endDate,
+                                }));
+                                clearFieldError('startDate');
+                                clearFieldError('endDate');
+                                clearFieldError('dateConflict');
+                              }}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <CustomSelect
+                              label="Preferred Pickup Time"
+                              isRequired={true}
+                              size="sm"
+                              value={booking.pickupTimeSlot}
+                              options={pickupTimeOptions}
+                              headerNotice={
+                                modalConflict.isStartTurnover
+                                  ? "Available from 2:00 PM for afternoon pickup."
+                                  : undefined
+                              }
+                              onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                            />
+
+                            {/* Interactive Hourly Timeline Selector */}
+                            <HourlyTimelineSelector
+                              label="Quick Select Hour"
+                              value={booking.pickupTimeSlot}
+                              hours={pickupQuickHours}
+                              earliestBadge={modalConflict.isStartTurnover ? "2 PM Earliest" : undefined}
+                              onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Column 2: Return Date & Preferred Time Dropdown */}
+                        <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                          <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                              2. Return Schedule
+                            </span>
+                            {modalConflict.isEndTurnover ? (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                Morning Return (by 12:00 PM)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                                Flexible Window
+                              </span>
+                            )}
+                          </div>
+
+                          <div data-field-key="endDate">
+                            <CustomDatePicker
+                              label="Return Date"
+                              isRequired={true}
+                              placeholder="Select return date"
+                              value={booking.endDate}
+                              minDate={booking.startDate || todayStr}
+                              rangeStart={booking.startDate}
+                              rangeEnd={booking.endDate}
+                              isEndDate={true}
+                              bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                              hasConflict={modalConflict.hasConflict}
+                              conflictMessage={modalConflict.message}
+                              hasError={!!validationErrors.endDate}
+                              errorMessage={validationErrors.endDate}
+                              onChange={(val) => {
+                                setBooking(b => ({ ...b, endDate: val }));
+                                clearFieldError('endDate');
+                                clearFieldError('dateConflict');
+                              }}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <CustomSelect
+                              label="Preferred Return Time"
+                              isRequired={true}
+                              size="sm"
+                              value={booking.returnTimeSlot}
+                              options={returnTimeOptions}
+                              headerNotice={
+                                modalConflict.isEndTurnover
+                                  ? "Morning return by 12:00 PM applies for this date."
+                                  : undefined
+                              }
+                              onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                            />
+
+                            {/* Interactive Hourly Timeline Selector */}
+                            <HourlyTimelineSelector
+                              label="Quick Select Hour"
+                              value={booking.returnTimeSlot}
+                              hours={returnQuickHours}
+                              earliestBadge={modalConflict.isEndTurnover ? "12 PM Return" : undefined}
+                              onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Schedule Conflict or Operating Hours Status Banner */}
+                      {modalConflict.hasConflict ? (
+                        <div data-field-key="dateConflict" className="p-3.5 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#9B2C2C] space-y-2 animate-fadeIn">
+                          <div className="flex items-start gap-2.5">
+                            <div className="w-7 h-7 rounded-lg bg-[#FED7D7] flex items-center justify-center shrink-0 mt-0.5">
+                              <CalendarX className="w-4 h-4 text-[#C53030]" />
+                            </div>
+                            <div>
+                              <div className="font-black text-xs text-[#9B2C2C]">
+                                Date Conflict: Selected Dates Are Reserved
+                              </div>
+                              <p className="text-[11px] text-[#C53030] mt-0.5 leading-relaxed font-medium">
+                                {modalConflict.message}
+                              </p>
+                              <div className="text-[10px] text-[#9B2C2C] mt-0.5 font-bold flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-[#C53030]" />
+                                <span>Assigned: {modalConflict.conflictingBooking?.hub} ({modalConflict.conflictingBooking?.status})</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleModalAutoPickNextAvailable}
+                              className="px-3 py-1.5 rounded-xl bg-[#E53E3E] text-white text-xs font-bold hover:bg-[#C53030] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Auto-Pick Next Available Dates</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowScheduleModal(true)}
+                              className="px-3 py-1.5 rounded-xl bg-white border border-[#FEB2B2] text-xs font-bold text-[#9B2C2C] hover:bg-[#FED7D7] transition-colors cursor-pointer"
+                            >
+                              View Booked Calendar
+                            </button>
+                          </div>
+                        </div>
+                      ) : modalConflict.isTurnover ? (
+                        <div className="p-3 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] flex items-start gap-2.5 text-xs text-[#7B341E] animate-fadeIn">
+                          <Clock className="w-4 h-4 text-[#DD6B20] shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[#9C4221]">Coordinated Handover Schedule</span>
+                              <button
+                                type="button"
+                                onClick={() => setShowScheduleModal(true)}
+                                className="text-[11px] font-bold text-[#C05621] hover:underline cursor-pointer"
+                              >
+                                View Calendar
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-[#9C4221] mt-0.5 leading-relaxed">
+                              {modalConflict.turnoverNote || "Pickup is available starting from 2:00 PM on your selected start date."}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#6B6B8A] gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
+                            <span className="font-semibold text-[#1A1A2E]">Operating Hours: 8:00 AM – 12:00 AM (Midnight) Daily</span>
+                          </div>
+                          <span className="text-[11px] font-medium text-[#553C9A]">
+                            Exact meetup / rider dispatch coordinated via chat
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Summary Card */}
+                      <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-[#6B6B8A]">Rental Duration</span>
+                          <span className="font-bold text-[#1A1A2E]">
+                            {modalQuote.days} {modalQuote.days === 1 ? 'Day' : 'Days'} • {modalQuote.tierLabel}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-[#6B6B8A]">
+                            Rental Rate {modalQuote.isBulk && '(Tier Discount Active!)'}
+                          </span>
+                          <span className="font-bold text-[#1A1A2E]">₱{modalQuote.rate}/day</span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-[#6B6B8A]">Base Rental Cost</span>
+                          <span className="font-bold text-[#1A1A2E]">₱{modalQuote.rentalTotal.toLocaleString()}</span>
+                        </div>
+
+                        {booking.handoverMode === 'meetup' && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-[#6B6B8A]">Meet-up Handling Fee</span>
+                            <span className="font-bold text-[#553C9A]">₱200</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-[#6B6B8A]">Refundable Security Deposit</span>
+                            <span className="text-[10px] text-[#2F855A] font-extrabold bg-[#E8F7F1] px-1.5 py-0.2 rounded border border-[#A8DBC8]">
+                              100% Refundable
+                            </span>
+                          </div>
+                          <span className="font-bold text-[#2F855A]">
+                            ₱{modalQuote.deposit.toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div className="pt-2 border-t border-[#E8E4F0] flex items-center justify-between text-xs font-black">
+                          <span className="text-[#1A1A2E]">Total Package Value</span>
+                          <span className="text-sm text-[#1A1A2E]">₱{modalQuote.total.toLocaleString()}</span>
+                        </div>
+
+                        {/* Step 1 Clear Payment Breakdown */}
+                        <div className="pt-2 border-t border-dashed border-[#E8E4F0] grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="p-2.5 rounded-xl bg-[#007DFE]/10 border border-[#007DFE]/20">
+                            <span className="block font-black text-xs text-[#007DFE]">1. Pay Now via GCash</span>
+                            <span className="block font-black text-sm text-[#007DFE] mt-0.5">₱{DOWNPAYMENT_FEE}</span>
+                            <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">Credited toward rental fee</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#1A1A2E]/20">
+                            <span className="block font-black text-xs text-[#1A1A2E]">2. Pay on Handover</span>
+                            <span className="block font-black text-sm text-[#1A1A2E] mt-0.5">₱{modalQuote.paymentOnHandover.toLocaleString()}</span>
+                            <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">
+                              ₱{modalQuote.remainingRentalBalance.toLocaleString()} bal + ₱{modalQuote.deposit.toLocaleString()} dep{modalQuote.meetupFee > 0 ? ' + ₱200 meetup' : ''}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#6B6B8A] gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
-                        <span className="font-semibold text-[#1A1A2E]">Operating Hours: 8:00 AM – 12:00 AM (Midnight) Daily</span>
+                    /* Empty State Prompt: When camera is not yet selected */
+                    <div className="p-6 rounded-2xl bg-[#FAFAF7] border-2 border-dashed border-[#E8E4F0] text-center space-y-1.5 animate-fadeIn">
+                      <Camera className="w-8 h-8 text-[#A0AEC0] mx-auto mb-1" />
+                      <div className="font-bold text-xs sm:text-sm text-[#1A1A2E]">
+                        Select a camera above to choose your rental dates & times
                       </div>
-                      <span className="text-[11px] font-medium text-[#553C9A]">
-                        Exact meetup / rider dispatch coordinated via chat
-                      </span>
+                      <p className="text-[11px] text-[#6B6B8A] max-w-md mx-auto">
+                        Choose either the DJI Osmo Pocket 3 or Canon G7 X Mark III to reveal the booking calendar, pickup/return time slots, and package pricing.
+                      </p>
                     </div>
                   )}
-
-                  {/* Summary Card */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-[#6B6B8A]">Rental Duration</span>
-                      <span className="font-bold text-[#1A1A2E]">
-                        {modalQuote.days} {modalQuote.days === 1 ? 'Day' : 'Days'} • {modalQuote.tierLabel}
-                      </span>
-                    </div>
-                    
-
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-[#6B6B8A]">
-                        Rental Rate {modalQuote.isBulk && '(Tier Discount Active!)'}
-                      </span>
-                      <span className="font-bold text-[#1A1A2E]">₱{modalQuote.rate}/day</span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-[#6B6B8A]">Base Rental Cost</span>
-                      <span className="font-bold text-[#1A1A2E]">₱{modalQuote.rentalTotal.toLocaleString()}</span>
-                    </div>
-
-                    {booking.handoverMode === 'meetup' && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-[#6B6B8A]">Meet-up Handling Fee</span>
-                        <span className="font-bold text-[#553C9A]">₱200</span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-[#6B6B8A]">Refundable Security Deposit</span>
-                        <span className="text-[10px] text-[#2F855A] font-extrabold bg-[#E8F7F1] px-1.5 py-0.2 rounded border border-[#A8DBC8]">
-                          100% Refundable
-                        </span>
-                      </div>
-                      <span className="font-bold text-[#2F855A]">
-                        ₱{modalQuote.deposit.toLocaleString()}
-                      </span>
-                    </div>
-
-                    <div className="pt-2 border-t border-[#E8E4F0] flex items-center justify-between text-xs font-black">
-                      <span className="text-[#1A1A2E]">Total Package Value</span>
-                      <span className="text-sm text-[#1A1A2E]">₱{modalQuote.total.toLocaleString()}</span>
-                    </div>
-
-                    {/* Step 1 Clear Payment Breakdown */}
-                    <div className="pt-2 border-t border-dashed border-[#E8E4F0] grid grid-cols-2 gap-2 text-[11px]">
-                      <div className="p-2.5 rounded-xl bg-[#007DFE]/10 border border-[#007DFE]/20">
-                        <span className="block font-black text-xs text-[#007DFE]">1. Pay Now via GCash</span>
-                        <span className="block font-black text-sm text-[#007DFE] mt-0.5">₱{DOWNPAYMENT_FEE}</span>
-                        <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">Credited toward rental fee</span>
-                      </div>
-                      <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#1A1A2E]/20">
-                        <span className="block font-black text-xs text-[#1A1A2E]">2. Pay on Handover</span>
-                        <span className="block font-black text-sm text-[#1A1A2E] mt-0.5">₱{modalQuote.paymentOnHandover.toLocaleString()}</span>
-                        <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">
-                          ₱{modalQuote.remainingRentalBalance.toLocaleString()} bal + ₱{modalQuote.deposit.toLocaleString()} dep{modalQuote.meetupFee > 0 ? ' + ₱200 meetup' : ''}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
 
@@ -5015,19 +5128,25 @@ export default function App() {
                 <div>
                   {modalStep === 1 && (
                     <button
-                      disabled={modalConflict.hasConflict}
+                      disabled={!booking.cameraId || modalConflict.hasConflict}
                       type="button"
                       onClick={() => {
                         if (validateStep(1)) {
                           setModalStep(2);
                         }
                       }}
-                      className={`px-6 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${modalConflict.hasConflict
-                        ? 'bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none'
-                        : 'bg-[#1A1A2E] text-white hover:bg-[#6B46C1] cursor-pointer'
-                        }`}
+                      className={`px-6 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        !booking.cameraId || modalConflict.hasConflict
+                          ? 'bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed shadow-none'
+                          : 'bg-[#1A1A2E] text-white hover:bg-[#6B46C1] cursor-pointer'
+                      }`}
                     >
-                      {modalConflict.hasConflict ? (
+                      {!booking.cameraId ? (
+                        <>
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Select Camera to Proceed</span>
+                        </>
+                      ) : modalConflict.hasConflict ? (
                         <>
                           <CalendarX className="w-3.5 h-3.5 text-red-500" />
                           <span>Dates Booked — Cannot Proceed</span>
