@@ -36,8 +36,8 @@ export const checkCameraDateConflict = (
       hasConflict: false,
       conflictingBooking: null,
       message: '',
-      pickupWindow: '8:00 AM – 8:00 PM (Flexible)',
-      returnWindow: '8:00 AM – 8:00 PM (Flexible)'
+      pickupWindow: '8:00 AM – 12:00 AM (Flexible)',
+      returnWindow: '8:00 AM – 12:00 AM (Flexible)'
     };
   }
 
@@ -88,9 +88,9 @@ export const checkCameraDateConflict = (
   if (isTurnover) {
     let turnoverNote = '';
     if (isStartTurnover && isEndTurnover) {
-      turnoverNote = `Same-Day Turnover: Unit returns from an earlier shoot on ${startStr} (afternoon pickup from 2:00 PM) and departs for its next booking on ${endStr} (morning return by 11:30 AM).`;
+      turnoverNote = `Same-Day Turnover: Unit returns from an earlier shoot on ${startStr} and enters an automated 2-hour turnover buffer (pickup from 2:00 PM) and departs for its next booking on ${endStr} (morning return by 11:30 AM).`;
     } else if (isStartTurnover) {
-      turnoverNote = `Same-Day Turnover: Unit returns from another shoot on ${startStr}. Available for afternoon pickup (from 2:00 PM) once inspected, sanitized, and charged!`;
+      turnoverNote = `Same-Day Turnover: Unit returns from another shoot on ${startStr}. Available for pickup after the 2-hour turnover buffer (from 2:00 PM) once inspected, sanitized, and charged!`;
     } else {
       turnoverNote = `Same-Day Turnover: Unit is booked for its next shoot on ${endStr}. Morning return (by 11:30 AM) applies so our team can inspect and prep it.`;
     }
@@ -102,8 +102,8 @@ export const checkCameraDateConflict = (
       isStartTurnover,
       isEndTurnover,
       turnoverNote,
-      pickupWindow: isStartTurnover ? '2:00 PM – 8:00 PM (Afternoon)' : '8:00 AM – 8:00 PM (Flexible)',
-      returnWindow: isEndTurnover ? 'By 11:30 AM (Morning Cutoff)' : '8:00 AM – 8:00 PM (Flexible)',
+      pickupWindow: isStartTurnover ? '2:00 PM – 12:00 AM (Afternoon Turnover)' : '8:00 AM – 12:00 AM (Flexible)',
+      returnWindow: isEndTurnover ? 'By 11:30 AM (Morning Cutoff)' : '8:00 AM – 12:00 AM (Flexible)',
       message: ''
     };
   }
@@ -114,8 +114,8 @@ export const checkCameraDateConflict = (
     isTurnover: false,
     isStartTurnover: false,
     isEndTurnover: false,
-    pickupWindow: '8:00 AM – 8:00 PM (Flexible)',
-    returnWindow: '8:00 AM – 8:00 PM (Flexible)',
+    pickupWindow: '8:00 AM – 12:00 AM (Flexible)',
+    returnWindow: '8:00 AM – 12:00 AM (Flexible)',
     message: ''
   };
 };

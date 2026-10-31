@@ -664,27 +664,32 @@ export default function App() {
     [booking.cameraId, booking.startDate, booking.endDate, bookings]
   );
 
-  // Dynamic Dropdown Options for Pickup and Return Time Windows
+  // Dynamic Dropdown Options for Pickup and Return Time Windows (8:00 AM - 12:00 AM Midnight)
   const pickupTimeOptions = useMemo<SelectOption[]>(() => {
     if (modalConflict.isStartTurnover) {
       return [
         {
           value: 'Afternoon (2:00 PM – 5:00 PM)',
           label: 'Afternoon (2:00 PM – 5:00 PM)',
-          badge: 'Recommended',
-          sublabel: 'Earliest release after full inspection & 100% battery charging'
+          badge: 'Turnover Ready',
+          sublabel: 'Earliest release after 2-hour buffer & 100% fast charging'
         },
         {
-          value: 'Evening (5:00 PM – 8:00 PM)',
-          label: 'Evening (5:00 PM – 8:00 PM)',
-          sublabel: 'Flexible late afternoon / evening meetup or delivery'
+          value: 'Evening (5:00 PM – 9:00 PM)',
+          label: 'Evening (5:00 PM – 9:00 PM)',
+          sublabel: 'Standard evening meetup or Grab Express dispatch'
+        },
+        {
+          value: 'Night (9:00 PM – 12:00 AM)',
+          label: 'Night (9:00 PM – 12:00 AM Midnight)',
+          sublabel: 'Late night handover before next day trip'
         },
         {
           value: 'Morning (8:00 AM – 12:00 PM)',
           label: 'Morning (Unavailable on Turnover Day)',
           disabled: true,
-          badge: 'In Use',
-          sublabel: 'Camera returns from prior shoot in the morning'
+          badge: '2-Hr Buffer',
+          sublabel: 'Unit returns from earlier shoot and enters 2-hour recharge buffer'
         }
       ];
     }
@@ -702,9 +707,15 @@ export default function App() {
         sublabel: 'Standard midday meetup or Grab Express dispatch'
       },
       {
-        value: 'Evening (5:00 PM – 8:00 PM)',
-        label: 'Evening (5:00 PM – 8:00 PM)',
-        sublabel: 'After-work / late afternoon pickup'
+        value: 'Evening (5:00 PM – 9:00 PM)',
+        label: 'Evening (5:00 PM – 9:00 PM)',
+        sublabel: 'After-work / prime evening pickup'
+      },
+      {
+        value: 'Night (9:00 PM – 12:00 AM)',
+        label: 'Night (9:00 PM – 12:00 AM Midnight)',
+        badge: 'Extended',
+        sublabel: 'Late night handover up to Midnight'
       }
     ];
   }, [modalConflict.isStartTurnover]);
@@ -716,21 +727,26 @@ export default function App() {
           value: 'Morning Cutoff (by 11:30 AM)',
           label: 'Morning Cutoff (By 11:30 AM)',
           badge: 'Required',
-          sublabel: 'Gear departs for its next creator in the afternoon'
+          sublabel: 'Allows 2-hour prep & charging buffer before afternoon handover'
         }
       ];
     }
     return [
       {
-        value: 'Evening (5:00 PM – 8:00 PM)',
-        label: 'Evening (5:00 PM – 8:00 PM)',
-        badge: 'Standard',
-        sublabel: 'Maximize your last shoot day until 8:00 PM'
+        value: 'Night (9:00 PM – 12:00 AM)',
+        label: 'Night (9:00 PM – 12:00 AM Midnight)',
+        badge: 'Maximum Shoot Time',
+        sublabel: 'Maximize your full shoot day until 12:00 AM Midnight'
+      },
+      {
+        value: 'Evening (5:00 PM – 9:00 PM)',
+        label: 'Evening (5:00 PM – 9:00 PM)',
+        sublabel: 'Post-shoot evening drop-off'
       },
       {
         value: 'Afternoon (12:00 PM – 5:00 PM)',
         label: 'Afternoon (12:00 PM – 5:00 PM)',
-        sublabel: 'Post-shoot midday drop-off'
+        sublabel: 'Midday return after morning shoot'
       },
       {
         value: 'Morning (8:00 AM – 12:00 PM)',
@@ -1329,11 +1345,11 @@ export default function App() {
   const faqs = [
     {
       q: 'Where are your meetup locations and what are the fees?',
-      a: 'Meet-ups are held at SM East Ortigas, Bridgetowne, or Opus Mall between 8:00 AM and 8:00 PM. A ₱200 handling fee is charged for all meet-up transactions. For delivery, we use Grab Express ONLY (owner books the rider for both release and return, and the renter shoulders all delivery fees).'
+      a: 'Meet-ups are held at SM East Ortigas, Bridgetowne, or Opus Mall between 8:00 AM and 12:00 AM (Midnight). A ₱200 handling fee is charged for all meet-up transactions. For delivery, we use Grab Express ONLY (owner books the rider for both release and return, and the renter shoulders all delivery fees).'
     },
     {
       q: 'What are your rental operating hours and schedule?',
-      a: 'Our operating hours are 8:00 AM – 8:00 PM daily. Handover and return times are coordinated directly with you to match your shoot schedule. When consecutive bookings share a turnover date, morning return (by 11:30 AM) and afternoon pickup (from 2:00 PM) apply so our team can perform full gear diagnostics, lens cleaning, sanitization, and battery charging for the next creator.'
+      a: 'Our operating hours are 8:00 AM – 12:00 AM (Midnight) daily. Handover and return times are coordinated directly with you to match your shoot schedule. When consecutive bookings share a turnover date, morning return (by 11:30 AM) and afternoon pickup (from 2:00 PM) apply so our team can perform full gear diagnostics, lens cleaning, sanitization, and battery charging for the next creator.'
     },
     {
       q: 'How does the ₱300 downpayment work?',
@@ -1551,7 +1567,7 @@ export default function App() {
             {/* Trust Badges Strip */}
             <div className="w-full pt-4 border-t border-[#E8E4F0]/80">
               <p className="text-xs uppercase font-extrabold text-[#6B6B8A] tracking-wider mb-3">
-                Metro Manila • 8:00 AM – 8:00 PM
+                Metro Manila • 8:00 AM – 12:00 AM (Midnight)
               </p>
               <div className="flex flex-wrap gap-2.5">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white border border-[#E8E4F0] text-[#1A1A2E] shadow-sm">
@@ -1560,7 +1576,7 @@ export default function App() {
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white border border-[#E8E4F0] text-[#1A1A2E] shadow-sm">
                   <Clock className="w-3.5 h-3.5 text-[#319795]" />
-                  8:00 AM – 8:00 PM
+                  8:00 AM – 12:00 AM (Midnight)
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white border border-[#E8E4F0] text-[#1A1A2E] shadow-sm">
                   <CreditCard className="w-3.5 h-3.5 text-[#6B46C1]" />
@@ -2418,7 +2434,7 @@ export default function App() {
                 <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex items-center justify-between text-xs text-[#6B6B8A]">
                   <div className="flex items-center gap-1.5 font-bold text-[#1A1A2E]">
                     <Clock className="w-3.5 h-3.5 text-[#553C9A]" />
-                    <span>Operating Hours: 8:00 AM – 8:00 PM</span>
+                    <span>Operating Hours: 8:00 AM – 12:00 AM (Midnight)</span>
                   </div>
                   <span className="text-[11px] font-medium text-[#553C9A]">
                     Handover time coordinated upon booking
@@ -2525,7 +2541,7 @@ export default function App() {
                         {calcHandover === 'meetup' && <Check className="w-4 h-4 text-[#553C9A]" />}
                       </div>
                       <p className="mt-1 text-xs text-[#6B6B8A] leading-tight">
-                        SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 8:00 PM).
+                        SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 12:00 AM (Midnight)).
                       </p>
                       <div className="mt-2 text-[11px] font-bold text-[#553C9A] flex items-center justify-between">
                         <span>Handling Fee: +₱200</span>
@@ -2549,7 +2565,7 @@ export default function App() {
                         Owner books rider for release &amp; return. Renter shoulders delivery fee.
                       </p>
                       <div className="mt-2 text-[11px] font-bold text-[#C05621] flex items-center justify-between">
-                        <span>8:00 AM – 8:00 PM ONLY</span>
+                        <span>8:00 AM – 12:00 AM (Midnight) ONLY</span>
                         <span>Deposit: ₱{currentQuote.deposit.toLocaleString()}</span>
                       </div>
                     </button>
@@ -2886,7 +2902,7 @@ export default function App() {
               Metro Manila’s favorite pastel aesthetic camera rental for DJI Osmo Pocket 3, Canon PowerShot G7 X Mark III &amp; KODAK PIXPRO FZ55. Designed for creators, concert-goers, and vloggers. Mag-vlog na, wag nang mag-ipon.
             </p>
             <div className="pt-2 text-xs text-gray-500 font-mono">
-              Meetups at SM East Ortigas, Bridgetowne &amp; Opus Mall (₱200 fee) • Grab Express Delivery ONLY across Metro Manila (8:00 AM – 8:00 PM).
+              Meetups at SM East Ortigas, Bridgetowne &amp; Opus Mall (₱200 fee) • Grab Express Delivery ONLY across Metro Manila (8:00 AM – 12:00 AM (Midnight)).
             </div>
           </div>
 
@@ -3309,7 +3325,7 @@ export default function App() {
                     <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#6B6B8A] gap-1">
                       <div className="flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
-                        <span className="font-semibold text-[#1A1A2E]">Operating Hours: 8:00 AM – 8:00 PM Daily</span>
+                        <span className="font-semibold text-[#1A1A2E]">Operating Hours: 8:00 AM – 12:00 AM (Midnight) Daily</span>
                       </div>
                       <span className="text-[11px] font-medium text-[#553C9A]">
                         Exact meetup / rider dispatch coordinated via chat
@@ -3390,7 +3406,7 @@ export default function App() {
                       Select Your Preferred Handover Option
                     </span>
                     <span className="text-[11px] font-extrabold text-[#553C9A] bg-[#EDE8FC] px-2 py-0.5 rounded-full">
-                      8:00 AM – 8:00 PM ONLY
+                      8:00 AM – 12:00 AM (Midnight) ONLY
                     </span>
                   </div>
 
@@ -3458,7 +3474,7 @@ export default function App() {
                         }}
                       />
                       <p className="mt-1.5 text-[11px] text-[#6B6B8A]">
-                        Available at SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 8:00 PM). Exact landmark & time coordinated prior to meet-up.
+                        Available at SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 12:00 AM (Midnight)). Exact landmark & time coordinated prior to meet-up.
                       </p>
                     </div>
                   ) : (
@@ -3486,7 +3502,7 @@ export default function App() {
                         </p>
                       )}
                       <p className="mt-1 text-[11px] text-[#6B6B8A]">
-                        Grab Express ONLY (8:00 AM – 8:00 PM). Owner books the rider for release & return; renter shoulders delivery fees.
+                        Grab Express ONLY (8:00 AM – 12:00 AM (Midnight)). Owner books the rider for release & return; renter shoulders delivery fees.
                       </p>
                     </div>
                   )}
@@ -4740,7 +4756,7 @@ export default function App() {
                           of Pack and Film Camera Rental. <span className="text-red-500 font-bold">*</span>
                         </label>
                         <p className="text-[11px] text-[#6B6B8A] mt-1 leading-relaxed">
-                          Includes ₱300 reservation downpayment (credited to rental), ₱{modalQuote.deposit.toLocaleString()} security deposit (refunded within 24h of return), 8:00 AM – 8:00 PM operating hours, ₱200 meetup handling fee, and Grab Express delivery rules.
+                          Includes ₱300 reservation downpayment (credited to rental), ₱{modalQuote.deposit.toLocaleString()} security deposit (refunded within 24h of return), 8:00 AM – 12:00 AM (Midnight) operating hours, ₱200 meetup handling fee, and Grab Express delivery rules.
                         </p>
                       </div>
                     </div>
@@ -4830,7 +4846,7 @@ export default function App() {
                     <div className="bg-[#FAFAF7] p-2.5 rounded-xl border border-[#E8E4F0] flex items-center justify-between text-xs">
                       <div>
                         <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">Operating Window</span>
-                        <span className="font-bold text-[#1A1A2E]">8:00 AM – 8:00 PM</span>
+                        <span className="font-bold text-[#1A1A2E]">8:00 AM – 12:00 AM (Midnight)</span>
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">Handover Time</span>
