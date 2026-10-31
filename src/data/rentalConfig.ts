@@ -135,11 +135,11 @@ export const REQUIREMENTS_DATA = [
   },
   {
     step: '04',
-    title: 'Emergency Contact Persons',
-    badge: 'Two Reachable Contacts',
+    title: 'Primary Emergency Contact',
+    badge: '1 Reachable Contact',
     items: [
-      'Kindly provide the full name, active contact number, photo of valid ID, and FB/IG profile link for two (2) emergency contacts in case we cannot reach you during the rental period.',
-      'Once booking is confirmed, we’ll contact these persons and inform them that they are your emergency contacts. Please inform them to respond to our message or call.'
+      'Kindly provide the full name, active contact number, relationship, and FB/IG profile link for one (1) primary emergency reference (family member, relative, or guardian) in case we cannot reach you during the rental period.',
+      'Once booking is confirmed, we’ll contact this person to inform them that they are your emergency contact. Please inform them to respond to our message or call.'
     ]
   },
   {

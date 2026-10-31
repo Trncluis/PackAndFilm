@@ -55,12 +55,12 @@ export const FIVE_STEP_REQUIREMENTS: RentalRequirementStep[] = [
   },
   {
     step: 4,
-    title: 'Emergency Contact Persons',
-    badge: 'Two Reachable Contacts',
-    desc: 'Provide two emergency contacts in case we cannot reach you during the rental period.',
+    title: 'Primary Emergency Contact',
+    badge: '1 Reachable Contact',
+    desc: 'Provide one emergency contact (family member or guardian) in case we cannot reach you during the rental period.',
     details: [
-      'Kindly provide the full name, active contact number, and FB/IG profile link in case we cannot reach you during the rental period.',
-      'Once booking is confirmed, we\'ll contact these persons and inform them that they are your emergency contacts. Please inform them to respond to our message or call.'
+      'Kindly provide the full name, active contact number, relationship, and FB/IG profile link for your primary emergency reference in case we cannot reach you during the rental period.',
+      'Once booking is confirmed, we\'ll contact this person to inform them that they are your emergency contact. Please inform them to respond to our message or call.'
     ],
     mandatoryText: 'Required contact network for equipment security'
   },

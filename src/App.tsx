@@ -838,8 +838,6 @@ export default function App() {
         'emergencyContact1Phone',
         'emergencyContact1Social',
         ...(booking.isStudentExemption ? ['contact1IdFile'] : []),
-        'emergencyContact2Name',
-        'emergencyContact2Phone',
         'gcashAccountName',
         'gcashAccountNumber',
       ],
@@ -948,15 +946,6 @@ export default function App() {
       // Parent/Guardian Government ID Upload: Required ONLY when Student Exemption applies
       if (booking.isStudentExemption && !booking.contact1IdFile) {
         errors.contact1IdFile = 'Parent / Guardian Valid Government ID upload is required for Student Exemption.';
-      }
-
-      // Emergency Contact 2: Friend, colleague, or travel companion (No ID upload required)
-      if (!booking.emergencyContact2Name || !booking.emergencyContact2Name.trim()) {
-        errors.emergencyContact2Name = 'Emergency Contact 2 full legal name is required.';
-      }
-      const c2PhoneDigits = (booking.emergencyContact2Phone || '').replace(/\D/g, '');
-      if (!c2PhoneDigits || c2PhoneDigits.length < 10) {
-        errors.emergencyContact2Phone = 'Emergency Contact 2 active contact number is required.';
       }
 
       // Security Deposit Refund GCash
@@ -1539,7 +1528,7 @@ export default function App() {
 
             {/* Subheading */}
             <p className="text-lg sm:text-xl text-[#6B6B8A] font-medium max-w-xl leading-relaxed">
-              Rent creator cameras including the <strong className="text-[#1A1A2E] font-bold">DJI Osmo Pocket 3</strong> &amp; <strong className="text-[#1A1A2E] font-bold">Canon PowerShot G7 X Mark III</strong> starting at just <span className="underline decoration-[#C9B8F0] decoration-4 font-bold text-[#1A1A2E]">₱450/day</span> (as low as ₱350/day on extended rentals). Meet-up at SM East, Bridgetowne, or Opus &amp; Grab Express Delivery across Metro Manila (8:00 AM – 8:00 PM).
+              Rent creator cameras including the <strong className="text-[#1A1A2E] font-bold">DJI Osmo Pocket 3</strong> &amp; <strong className="text-[#1A1A2E] font-bold">Canon PowerShot G7 X Mark III</strong> with complete kit inclusions and tiered duration discounts. Meet-up at SM East, Bridgetowne, or Opus &amp; Grab Express Delivery across Metro Manila.
             </p>
 
             {/* CTAs */}
@@ -4161,237 +4150,160 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Emergency Contacts */}
-                  <div className={`p-4 rounded-2xl bg-white border-2 space-y-3 transition-colors ${validationErrors.emergencyContact1Name || validationErrors.emergencyContact1Phone || validationErrors.emergencyContact1Social || validationErrors.contact1IdFile || validationErrors.emergencyContact2Name || validationErrors.emergencyContact2Phone
+                  {/* Emergency Contact: Streamlined to 1 Primary Reference */}
+                  <div className={`p-4 rounded-2xl bg-white border-2 space-y-3 transition-colors ${validationErrors.emergencyContact1Name || validationErrors.emergencyContact1Phone || validationErrors.emergencyContact1Social || validationErrors.contact1IdFile
                     ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm'
                     : 'border-[#E8E4F0]'
                     }`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="text-xs font-black text-[#1A1A2E] block">
-                          Emergency Contact Persons (2 Required) <span className="text-red-500 font-bold">*</span>
+                          Emergency Contact Person (1 Primary Reference) <span className="text-red-500 font-bold">*</span>
                         </span>
                         <p className="text-[11px] text-[#6B6B8A] mt-0.5 leading-snug">
-                          Kindly provide full name and active contact details. Contact 1 is your primary family or guardian reference{booking.isStudentExemption ? ' (parent/guardian valid ID required for student exemption)' : ''}. Contact 2 is a second reference (friend, colleague, or travel companion — no ID required).
+                          Kindly provide full name and active contact details for your primary emergency reference (family member, guardian, or close relative){booking.isStudentExemption ? ' (parent/guardian valid ID required for student exemption)' : ''}.
                         </p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
-                      {/* Contact 1: Family Member / Guardian */}
-                      <div className="flex flex-col justify-between p-3.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-2.5">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="block text-[11px] font-bold text-[#1A1A2E]">
-                              {booking.isStudentExemption ? 'Contact 1: Parent or Legal Guardian' : 'Contact 1: Family Member / Relative'} <span className="text-red-500 font-bold">*</span>
-                            </label>
-                            <span className="text-[10px] text-[#553C9A] font-bold bg-[#EDE8FC] px-1.5 py-0.5 rounded">
-                              {booking.isStudentExemption ? 'Parent / Guardian' : 'Primary Reference'}
-                            </span>
-                          </div>
+                    <div className="p-3.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[11px] font-bold text-[#1A1A2E]">
+                          {booking.isStudentExemption ? 'Parent or Legal Guardian Reference' : 'Primary Family / Relative Reference'} <span className="text-red-500 font-bold">*</span>
+                        </label>
+                        <span className="text-[10px] text-[#553C9A] font-bold bg-[#EDE8FC] px-1.5 py-0.5 rounded">
+                          {booking.isStudentExemption ? 'Parent / Guardian' : 'Primary Reference'}
+                        </span>
+                      </div>
 
-                          {booking.isStudentExemption && (
-                            <p className="text-[10px] text-[#DD6B20] font-semibold bg-[#FEF0E7] p-2 rounded-lg border border-[#F5C6A8]">
-                              For Student Exemption: Please provide your parent or legal guardian details and active social handle below, along with their valid government ID.
-                            </p>
+                      {booking.isStudentExemption && (
+                        <p className="text-[10px] text-[#DD6B20] font-semibold bg-[#FEF0E7] p-2 rounded-lg border border-[#F5C6A8]">
+                          For Student Exemption: Please provide your parent or legal guardian details and active social handle below, along with their valid government ID.
+                        </p>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div data-field-key="emergencyContact1Name">
+                          <label className="block text-[10px] font-bold text-[#6B6B8A] mb-1">Full Legal Name *</label>
+                          <input
+                            type="text"
+                            placeholder={booking.isStudentExemption ? "Parent / Guardian Full Legal Name *" : "Full Legal Name (e.g. Maria Santos) *"}
+                            value={booking.emergencyContact1Name}
+                            onChange={(e) => {
+                              setBooking(b => ({ ...b, emergencyContact1Name: e.target.value }));
+                              clearFieldError('emergencyContact1Name');
+                            }}
+                            className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Name
+                              ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                              : 'border-[#E8E4F0]'
+                              }`}
+                          />
+                          {validationErrors.emergencyContact1Name && (
+                            <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Name}</p>
                           )}
-
-                          <div data-field-key="emergencyContact1Name">
-                            <input
-                              type="text"
-                              placeholder={booking.isStudentExemption ? "Parent / Guardian Full Legal Name *" : "Full Legal Name (e.g. Maria Santos) *"}
-                              value={booking.emergencyContact1Name}
-                              onChange={(e) => {
-                                setBooking(b => ({ ...b, emergencyContact1Name: e.target.value }));
-                                clearFieldError('emergencyContact1Name');
-                              }}
-                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Name
-                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
-                                : 'border-[#E8E4F0]'
-                                }`}
-                            />
-                            {validationErrors.emergencyContact1Name && (
-                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Name}</p>
-                            )}
-                          </div>
-
-                          <div data-field-key="emergencyContact1Phone">
-                            <input
-                              type="tel"
-                              placeholder={booking.isStudentExemption ? "Parent / Guardian Contact Number (09XX-XXX-XXXX) *" : "Active Contact Number (09XX-XXX-XXXX) *"}
-                              value={booking.emergencyContact1Phone}
-                              onChange={(e) => {
-                                setBooking(b => ({ ...b, emergencyContact1Phone: e.target.value }));
-                                clearFieldError('emergencyContact1Phone');
-                              }}
-                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Phone
-                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
-                                : 'border-[#E8E4F0]'
-                                }`}
-                            />
-                            {validationErrors.emergencyContact1Phone && (
-                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Phone}</p>
-                            )}
-                          </div>
-
-                          <div data-field-key="emergencyContact1Rel">
-                            <input
-                              type="text"
-                              placeholder={booking.isStudentExemption ? "Relationship (e.g. Mother, Father, Legal Guardian) *" : "Relationship (e.g. Mother, Father, Sister) *"}
-                              value={booking.emergencyContact1Rel}
-                              onChange={(e) => {
-                                setBooking(b => ({ ...b, emergencyContact1Rel: e.target.value }));
-                                clearFieldError('emergencyContact1Rel');
-                              }}
-                              className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
-                            />
-                          </div>
-
-                          <div data-field-key="emergencyContact1Social">
-                            <input
-                              type="text"
-                              placeholder={booking.isStudentExemption ? "Parent / Guardian FB / IG Link or Handle *" : "FB / IG Profile Link or Handle *"}
-                              value={booking.emergencyContact1Social}
-                              onChange={(e) => {
-                                setBooking(b => ({ ...b, emergencyContact1Social: e.target.value }));
-                                clearFieldError('emergencyContact1Social');
-                              }}
-                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Social
-                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
-                                : 'border-[#E8E4F0]'
-                                }`}
-                            />
-                            {validationErrors.emergencyContact1Social && (
-                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Social}</p>
-                            )}
-                          </div>
                         </div>
 
-                        {/* Contact 1 ID Upload — REQUIRED ONLY FOR STUDENT EXEMPTION */}
-                        {booking.isStudentExemption && (
-                          <div data-field-key="contact1IdFile" className="pt-2 border-t border-[#E8E4F0] space-y-1.5 animate-fadeIn">
-                            <div className="flex items-center justify-between text-[11px] font-bold text-[#1A1A2E]">
-                              <span className="flex items-center gap-1">
-                                <span>Parent / Guardian Valid Government ID</span>
-                                <span className="text-red-500 font-bold">*</span>
-                              </span>
-                              {booking.contact1IdFile && <span className="text-[10px] text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
-                            </div>
-                            <p className="text-[10px] text-[#6B6B8A]">
-                              Required for Student Exemption: Photo of parent or legal guardian&apos;s valid government-issued ID.
-                            </p>
-                            <label className={`cursor-pointer w-full py-2 px-3 rounded-xl bg-white border-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs ${validationErrors.contact1IdFile
-                              ? 'border-red-400 text-red-600 bg-red-50 ring-2 ring-red-100'
-                              : 'border-[#C9B8F0] text-[#6B46C1] hover:bg-[#EDE8FC]'
-                              }`}>
-                              <Upload className="w-3.5 h-3.5" />
-                              <span>{booking.contact1IdFile ? 'Change Parent / Guardian ID' : 'Upload Parent / Guardian ID *'}</span>
-                              <input
-                                type="file"
-                                accept="image/*,application/pdf"
-                                className="hidden"
-                                onChange={(e) => {
-                                  handleRealFileUpload(e, 'contact1IdFile', 'contact1IdName');
-                                  clearFieldError('contact1IdFile');
-                                }}
-                              />
-                            </label>
-                            {booking.contact1IdFile && (
-                              <div className="flex items-center justify-between text-[11px] px-1">
-                                <span className="text-[#38A169] font-bold truncate max-w-[150px]">{booking.contact1IdName || 'ID Attached'}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveFile('contact1IdFile', 'contact1IdName')}
-                                  className="text-red-500 hover:text-red-700 underline text-[10px]"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            )}
-                            {validationErrors.contact1IdFile && (
-                              <p className="text-xs text-red-600 font-bold">⚠️ {validationErrors.contact1IdFile}</p>
-                            )}
-                          </div>
-                        )}
+                        <div data-field-key="emergencyContact1Phone">
+                          <label className="block text-[10px] font-bold text-[#6B6B8A] mb-1">Active Contact Number *</label>
+                          <input
+                            type="tel"
+                            placeholder={booking.isStudentExemption ? "Parent / Guardian Contact Number (09XX-XXX-XXXX) *" : "Active Contact Number (09XX-XXX-XXXX) *"}
+                            value={booking.emergencyContact1Phone}
+                            onChange={(e) => {
+                              setBooking(b => ({ ...b, emergencyContact1Phone: e.target.value }));
+                              clearFieldError('emergencyContact1Phone');
+                            }}
+                            className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Phone
+                              ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                              : 'border-[#E8E4F0]'
+                              }`}
+                          />
+                          {validationErrors.emergencyContact1Phone && (
+                            <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Phone}</p>
+                          )}
+                        </div>
+
+                        <div data-field-key="emergencyContact1Rel">
+                          <label className="block text-[10px] font-bold text-[#6B6B8A] mb-1">Relationship to Renter *</label>
+                          <input
+                            type="text"
+                            placeholder={booking.isStudentExemption ? "Relationship (e.g. Mother, Father, Legal Guardian) *" : "Relationship (e.g. Mother, Father, Sister) *"}
+                            value={booking.emergencyContact1Rel}
+                            onChange={(e) => {
+                              setBooking(b => ({ ...b, emergencyContact1Rel: e.target.value }));
+                              clearFieldError('emergencyContact1Rel');
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
+                          />
+                        </div>
+
+                        <div data-field-key="emergencyContact1Social">
+                          <label className="block text-[10px] font-bold text-[#6B6B8A] mb-1">Social Profile Link or Handle *</label>
+                          <input
+                            type="text"
+                            placeholder={booking.isStudentExemption ? "Parent / Guardian FB / IG Link or Handle *" : "FB / IG Profile Link or Handle *"}
+                            value={booking.emergencyContact1Social}
+                            onChange={(e) => {
+                              setBooking(b => ({ ...b, emergencyContact1Social: e.target.value }));
+                              clearFieldError('emergencyContact1Social');
+                            }}
+                            className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Social
+                              ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                              : 'border-[#E8E4F0]'
+                              }`}
+                          />
+                          {validationErrors.emergencyContact1Social && (
+                            <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Social}</p>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Contact 2: Second Emergency Contact (Friend / Colleague — No ID upload required) */}
-                      <div className="flex flex-col justify-between p-3.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] space-y-2.5">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="block text-[11px] font-bold text-[#1A1A2E]">
-                              Contact 2: Second Reference <span className="text-red-500 font-bold">*</span>
-                            </label>
-                            <span className="text-[10px] text-[#6B6B8A] font-semibold">
-                              Friend / Colleague / Companion
+                      {/* Contact 1 ID Upload — REQUIRED ONLY FOR STUDENT EXEMPTION */}
+                      {booking.isStudentExemption && (
+                        <div data-field-key="contact1IdFile" className="pt-2 border-t border-[#E8E4F0] space-y-1.5 animate-fadeIn">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-[#1A1A2E]">
+                            <span className="flex items-center gap-1">
+                              <span>Parent / Guardian Valid Government ID</span>
+                              <span className="text-red-500 font-bold">*</span>
                             </span>
+                            {booking.contact1IdFile && <span className="text-[10px] text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
                           </div>
-
-                          <div data-field-key="emergencyContact2Name">
-                            <input
-                              type="text"
-                              placeholder="Full Legal Name (e.g. Juan Cruz) *"
-                              value={booking.emergencyContact2Name}
-                              onChange={(e) => {
-                                setBooking(b => ({ ...b, emergencyContact2Name: e.target.value }));
-                                clearFieldError('emergencyContact2Name');
-                              }}
-                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact2Name
-                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
-                                : 'border-[#E8E4F0]'
-                                }`}
-                            />
-                            {validationErrors.emergencyContact2Name && (
-                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact2Name}</p>
-                            )}
-                          </div>
-
-                          <div data-field-key="emergencyContact2Phone">
-                            <input
-                              type="tel"
-                              placeholder="Active Contact Number (09XX-XXX-XXXX) *"
-                              value={booking.emergencyContact2Phone}
-                              onChange={(e) => {
-                                setBooking(b => ({ ...b, emergencyContact2Phone: e.target.value }));
-                                clearFieldError('emergencyContact2Phone');
-                              }}
-                              className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact2Phone
-                                ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
-                                : 'border-[#E8E4F0]'
-                                }`}
-                            />
-                            {validationErrors.emergencyContact2Phone && (
-                              <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact2Phone}</p>
-                            )}
-                          </div>
-
-                          <div>
-                            <input
-                              type="text"
-                              placeholder="Relationship / Context (Optional, e.g. Travel Companion)"
-                              value={booking.emergencyContact2Rel}
-                              onChange={(e) => setBooking(b => ({ ...b, emergencyContact2Rel: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
-                            />
-                          </div>
-
-                          <div>
-                            <input
-                              type="text"
-                              placeholder="FB / IG Profile Link or Handle (Optional)"
-                              value={booking.emergencyContact2Social}
-                              onChange={(e) => setBooking(b => ({ ...b, emergencyContact2Social: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="pt-2 border-t border-[#E8E4F0]">
-                          <p className="text-[10px] text-[#6B6B8A] leading-tight">
-                            Note: ID upload is not required for Emergency Contact 2.
+                          <p className="text-[10px] text-[#6B6B8A]">
+                            Required for Student Exemption: Photo of parent or legal guardian&apos;s valid government-issued ID.
                           </p>
+                          <label className={`cursor-pointer w-full py-2 px-3 rounded-xl bg-white border-2 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs ${validationErrors.contact1IdFile
+                            ? 'border-red-400 text-red-600 bg-red-50 ring-2 ring-red-100'
+                            : 'border-[#C9B8F0] text-[#6B46C1] hover:bg-[#EDE8FC]'
+                            }`}>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>{booking.contact1IdFile ? 'Change Parent / Guardian ID' : 'Upload Parent / Guardian ID *'}</span>
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                handleRealFileUpload(e, 'contact1IdFile', 'contact1IdName');
+                                clearFieldError('contact1IdFile');
+                              }}
+                            />
+                          </label>
+                          {booking.contact1IdFile && (
+                            <div className="flex items-center justify-between text-[11px] px-1">
+                              <span className="text-[#38A169] font-bold truncate max-w-[150px]">{booking.contact1IdName || 'ID Attached'}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFile('contact1IdFile', 'contact1IdName')}
+                                className="text-red-500 hover:text-red-700 underline text-[10px]"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                          {validationErrors.contact1IdFile && (
+                            <p className="text-xs text-red-600 font-bold">⚠️ {validationErrors.contact1IdFile}</p>
+                          )}
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
 
