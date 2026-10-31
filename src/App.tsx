@@ -269,8 +269,8 @@ export default function App() {
       termsAcceptedAt: '',
       bookingRef: '',
       driveFolderUrl: null,
-      pickupTimeSlot: 'Morning (9:00 AM – 12:00 PM)',
-      returnTimeSlot: 'Evening (6:00 PM – 9:00 PM)',
+      pickupTimeSlot: '10:00 AM',
+      returnTimeSlot: '8:00 PM',
       isFlightOrTrip: false,
       flightOrTripDetails: '',
     };
@@ -664,112 +664,113 @@ export default function App() {
     [booking.cameraId, booking.startDate, booking.endDate, bookings]
   );
 
-  // Dynamic Dropdown Options for Pickup and Return Time Windows (8:00 AM - 12:00 AM Midnight)
+    // 17 Hourly Time Slots (8:00 AM to 12:00 AM Midnight)
+  const ALL_HOURS = useMemo(() => [
+    { value: '8:00 AM', label: '8:00 AM', shortLabel: '8 AM', h: 8 },
+    { value: '9:00 AM', label: '9:00 AM', shortLabel: '9 AM', h: 9 },
+    { value: '10:00 AM', label: '10:00 AM', shortLabel: '10 AM', h: 10 },
+    { value: '11:00 AM', label: '11:00 AM', shortLabel: '11 AM', h: 11 },
+    { value: '12:00 PM', label: '12:00 PM (Noon)', shortLabel: '12 PM', h: 12 },
+    { value: '1:00 PM', label: '1:00 PM', shortLabel: '1 PM', h: 13 },
+    { value: '2:00 PM', label: '2:00 PM', shortLabel: '2 PM', h: 14 },
+    { value: '3:00 PM', label: '3:00 PM', shortLabel: '3 PM', h: 15 },
+    { value: '4:00 PM', label: '4:00 PM', shortLabel: '4 PM', h: 16 },
+    { value: '5:00 PM', label: '5:00 PM', shortLabel: '5 PM', h: 17 },
+    { value: '6:00 PM', label: '6:00 PM', shortLabel: '6 PM', h: 18 },
+    { value: '7:00 PM', label: '7:00 PM', shortLabel: '7 PM', h: 19 },
+    { value: '8:00 PM', label: '8:00 PM', shortLabel: '8 PM', h: 20 },
+    { value: '9:00 PM', label: '9:00 PM', shortLabel: '9 PM', h: 21 },
+    { value: '10:00 PM', label: '10:00 PM', shortLabel: '10 PM', h: 22 },
+    { value: '11:00 PM', label: '11:00 PM', shortLabel: '11 PM', h: 23 },
+    { value: '12:00 AM', label: '12:00 AM (Midnight)', shortLabel: '12 AM', h: 24 },
+  ], []);
+
+  // Dynamic Hourly Dropdown Options with 2-Hour Turnover Buffer Engine
   const pickupTimeOptions = useMemo<SelectOption[]>(() => {
-    if (modalConflict.isStartTurnover) {
-      return [
-        {
-          value: 'Afternoon (2:00 PM – 5:00 PM)',
-          label: 'Afternoon (2:00 PM – 5:00 PM)',
-          badge: 'Turnover Ready',
-          sublabel: 'Earliest release after 2-hour buffer & 100% fast charging'
-        },
-        {
-          value: 'Evening (5:00 PM – 9:00 PM)',
-          label: 'Evening (5:00 PM – 9:00 PM)',
-          sublabel: 'Standard evening meetup or Grab Express dispatch'
-        },
-        {
-          value: 'Night (9:00 PM – 12:00 AM)',
-          label: 'Night (9:00 PM – 12:00 AM Midnight)',
-          sublabel: 'Late night handover before next day trip'
-        },
-        {
-          value: 'Morning (8:00 AM – 12:00 PM)',
-          label: 'Morning (Unavailable on Turnover Day)',
+    return ALL_HOURS.map((item) => {
+      if (modalConflict.isStartTurnover && item.h < 14) {
+        return {
+          value: item.value,
+          label: item.label,
           disabled: true,
           badge: '2-Hr Buffer',
-          sublabel: 'Unit returns from earlier shoot and enters 2-hour recharge buffer'
-        }
-      ];
-    }
-    return [
-      {
-        value: 'Morning (8:00 AM – 12:00 PM)',
-        label: 'Morning (8:00 AM – 12:00 PM)',
-        badge: 'Early Bird',
-        sublabel: 'Best for early travel or full-day production'
-      },
-      {
-        value: 'Afternoon (12:00 PM – 5:00 PM)',
-        label: 'Afternoon (12:00 PM – 5:00 PM)',
-        badge: 'Popular',
-        sublabel: 'Standard midday meetup or Grab Express dispatch'
-      },
-      {
-        value: 'Evening (5:00 PM – 9:00 PM)',
-        label: 'Evening (5:00 PM – 9:00 PM)',
-        sublabel: 'After-work / prime evening pickup'
-      },
-      {
-        value: 'Night (9:00 PM – 12:00 AM)',
-        label: 'Night (9:00 PM – 12:00 AM Midnight)',
-        badge: 'Extended',
-        sublabel: 'Late night handover up to Midnight'
+          sublabel: 'Unit returns from earlier shoot; ready from 2:00 PM after fast charging'
+        };
       }
-    ];
-  }, [modalConflict.isStartTurnover]);
+      return {
+        value: item.value,
+        label: item.label,
+        badge: item.h === 8 ? 'Opening' : item.h === 14 && modalConflict.isStartTurnover ? 'Earliest Ready' : item.h === 10 ? 'Popular' : undefined,
+        sublabel: item.h === 14 && modalConflict.isStartTurnover ? 'Turnover recharge & prep complete' : undefined
+      };
+    });
+  }, [ALL_HOURS, modalConflict.isStartTurnover]);
 
   const returnTimeOptions = useMemo<SelectOption[]>(() => {
-    if (modalConflict.isEndTurnover) {
-      return [
-        {
-          value: 'Morning Cutoff (by 11:30 AM)',
-          label: 'Morning Cutoff (By 11:30 AM)',
-          badge: 'Required',
-          sublabel: 'Allows 2-hour prep & charging buffer before afternoon handover'
-        }
-      ];
-    }
-    return [
-      {
-        value: 'Night (9:00 PM – 12:00 AM)',
-        label: 'Night (9:00 PM – 12:00 AM Midnight)',
-        badge: 'Maximum Shoot Time',
-        sublabel: 'Maximize your full shoot day until 12:00 AM Midnight'
-      },
-      {
-        value: 'Evening (5:00 PM – 9:00 PM)',
-        label: 'Evening (5:00 PM – 9:00 PM)',
-        sublabel: 'Post-shoot evening drop-off'
-      },
-      {
-        value: 'Afternoon (12:00 PM – 5:00 PM)',
-        label: 'Afternoon (12:00 PM – 5:00 PM)',
-        sublabel: 'Midday return after morning shoot'
-      },
-      {
-        value: 'Morning (8:00 AM – 12:00 PM)',
-        label: 'Morning (8:00 AM – 12:00 PM)',
-        sublabel: 'Early morning drop-off'
+    const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
+    const selectedPickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
+
+    return ALL_HOURS.map((item) => {
+      if (modalConflict.isEndTurnover && item.h > 12) {
+        return {
+          value: item.value,
+          label: item.label,
+          disabled: true,
+          badge: 'Cutoff',
+          sublabel: 'Must return by 12:00 PM for 2-hour prep before afternoon booking'
+        };
       }
-    ];
-  }, [modalConflict.isEndTurnover]);
+      if (isSameDay && item.h <= selectedPickupH) {
+        return {
+          value: item.value,
+          label: item.label,
+          disabled: true,
+          badge: 'Unavailable',
+          sublabel: 'Return time must be after pickup time'
+        };
+      }
+      return {
+        value: item.value,
+        label: item.label,
+        badge: item.h === 24 ? 'Midnight Cutoff' : item.h === 12 && modalConflict.isEndTurnover ? 'Latest Return' : item.h === 20 ? 'Popular' : undefined,
+        sublabel: item.h === 24 ? 'Maximize full shoot day until 12:00 AM Midnight' : undefined
+      };
+    });
+  }, [ALL_HOURS, modalConflict.isEndTurnover, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
+
+  // Hourly Quick Pick Lists for the visual selection line
+  const pickupQuickHours = useMemo(() => {
+    return ALL_HOURS.map(item => ({
+      ...item,
+      disabled: modalConflict.isStartTurnover && item.h < 14
+    }));
+  }, [ALL_HOURS, modalConflict.isStartTurnover]);
+
+  const returnQuickHours = useMemo(() => {
+    const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
+    const selectedPickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
+
+    return ALL_HOURS.map(item => ({
+      ...item,
+      disabled: Boolean((modalConflict.isEndTurnover && item.h > 12) || (isSameDay && item.h <= selectedPickupH))
+    }));
+  }, [ALL_HOURS, modalConflict.isEndTurnover, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
 
   // Synchronize preferred pickup/return time slots with turnover status
   useEffect(() => {
     if (modalConflict.isStartTurnover) {
-      setBooking(b => {
-        if (!b.pickupTimeSlot || b.pickupTimeSlot.includes('Morning')) {
-          return { ...b, pickupTimeSlot: 'Afternoon (2:00 PM – 5:00 PM)' };
-        }
-        return b;
-      });
+      const currentH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
+      if (currentH < 14) {
+        setBooking(b => ({ ...b, pickupTimeSlot: '2:00 PM' }));
+      }
     }
     if (modalConflict.isEndTurnover) {
-      setBooking(b => ({ ...b, returnTimeSlot: 'Morning Cutoff (by 11:30 AM)' }));
+      const currentH = ALL_HOURS.find(x => x.value === booking.returnTimeSlot)?.h || 20;
+      if (currentH > 12) {
+        setBooking(b => ({ ...b, returnTimeSlot: '12:00 PM' }));
+      }
     }
-  }, [modalConflict.isStartTurnover, modalConflict.isEndTurnover]);
+  }, [ALL_HOURS, modalConflict.isStartTurnover, modalConflict.isEndTurnover, booking.pickupTimeSlot, booking.returnTimeSlot]);
 
 
   // Jump to next available window for Calculator
@@ -3197,15 +3198,45 @@ export default function App() {
                         />
                       </div>
 
-                      <div>
+                      <div className="space-y-2">
                         <CustomSelect
-                          label="Preferred Pickup Time Window"
+                          label="Preferred Pickup Time"
                           isRequired={true}
                           size="sm"
                           value={booking.pickupTimeSlot}
                           options={pickupTimeOptions}
                           onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
                         />
+
+                        {/* Visual Time Selection Line (8 AM to 12 AM) */}
+                        <div>
+                          <span className="block text-[10px] font-bold text-[#6B6B8A] mb-1">
+                            Quick Select Hour:
+                          </span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                            {pickupQuickHours.map((hour) => {
+                              const isSelected = booking.pickupTimeSlot === hour.value;
+                              const isDisabled = hour.disabled;
+                              return (
+                                <button
+                                  key={hour.value}
+                                  type="button"
+                                  disabled={isDisabled}
+                                  onClick={() => setBooking(b => ({ ...b, pickupTimeSlot: hour.value }))}
+                                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                                    isDisabled
+                                      ? 'opacity-40 bg-[#FAFAF7] text-[#A0AEC0] cursor-not-allowed line-through'
+                                      : isSelected
+                                      ? 'bg-[#1A1A2E] text-white shadow-xs'
+                                      : 'bg-[#FAFAF7] border border-[#E8E4F0] text-[#1A1A2E] hover:bg-[#EDE8FC] hover:border-[#C9B8F0] cursor-pointer'
+                                  }`}
+                                >
+                                  {hour.shortLabel}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -3249,15 +3280,45 @@ export default function App() {
                         />
                       </div>
 
-                      <div>
+                      <div className="space-y-2">
                         <CustomSelect
-                          label="Preferred Return Time Window"
+                          label="Preferred Return Time"
                           isRequired={true}
                           size="sm"
                           value={booking.returnTimeSlot}
                           options={returnTimeOptions}
                           onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
                         />
+
+                        {/* Visual Time Selection Line (8 AM to 12 AM) */}
+                        <div>
+                          <span className="block text-[10px] font-bold text-[#6B6B8A] mb-1">
+                            Quick Select Hour:
+                          </span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                            {returnQuickHours.map((hour) => {
+                              const isSelected = booking.returnTimeSlot === hour.value;
+                              const isDisabled = hour.disabled;
+                              return (
+                                <button
+                                  key={hour.value}
+                                  type="button"
+                                  disabled={isDisabled}
+                                  onClick={() => setBooking(b => ({ ...b, returnTimeSlot: hour.value }))}
+                                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                                    isDisabled
+                                      ? 'opacity-40 bg-[#FAFAF7] text-[#A0AEC0] cursor-not-allowed line-through'
+                                      : isSelected
+                                      ? 'bg-[#1A1A2E] text-white shadow-xs'
+                                      : 'bg-[#FAFAF7] border border-[#E8E4F0] text-[#1A1A2E] hover:bg-[#EDE8FC] hover:border-[#C9B8F0] cursor-pointer'
+                                  }`}
+                                >
+                                  {hour.shortLabel}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
