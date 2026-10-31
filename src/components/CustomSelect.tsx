@@ -22,6 +22,7 @@ interface CustomSelectProps {
   errorMessage?: string;
   className?: string;
   size?: 'sm' | 'md';
+  headerNotice?: React.ReactNode;
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
@@ -36,6 +37,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
   errorMessage,
   className = '',
   size = 'md',
+  headerNotice,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -139,6 +141,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
       {/* Dropdown Popover */}
       {isOpen && (
         <div className="absolute top-[calc(100%+6px)] left-0 z-50 w-full max-h-64 overflow-y-auto bg-white rounded-2xl border-2 border-[#1A1A2E] shadow-[6px_6px_0px_0px_#1A1A2E] p-1.5 animate-fadeIn">
+          {headerNotice && (
+            <div className="px-3 py-2 mb-1.5 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[11px] text-[#92400E] font-medium flex items-center gap-1.5 leading-snug">
+              <span className="shrink-0 text-xs">⚡</span>
+              <span>{headerNotice}</span>
+            </div>
+          )}
           {normalizedOptions.map((opt) => {
             const isSelected = opt.value === value;
             const isDisabled = !!opt.disabled;

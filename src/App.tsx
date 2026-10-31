@@ -62,6 +62,7 @@ import {
 
 import { CustomDatePicker } from './components/CustomDatePicker';
 import { CustomSelect, SelectOption } from './components/CustomSelect';
+import { HourlyTimelineSelector } from './components/HourlyTimelineSelector';
 import { AdminDashboard } from './components/AdminDashboard';
 
 const DOWNPAYMENT_FEE = RENTAL_CONFIG.reservationFee;
@@ -166,9 +167,24 @@ export default function App() {
   const [selectedCameraId, setSelectedCameraId] = useState<string>('dji-pocket-3');
   const selectedCamera = CAMERAS.find(c => c.id === selectedCameraId && c.isAvailable) || CAMERAS.find(c => c.isAvailable) || CAMERAS[0];
 
-  // Pricing Calculator State
-  const todayStr = new Date().toISOString().split('T')[0];
-  const nextDay = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
+  // Pricing Calculator State (Asia/Manila Metro Manila Timezone)
+  const todayStr = useMemo(() => {
+    try {
+      return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    } catch {
+      return new Date().toISOString().split('T')[0];
+    }
+  }, []);
+
+  const nextDay = useMemo(() => {
+    try {
+      const nowManila = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+      nowManila.setDate(nowManila.getDate() + 2);
+      return nowManila.toLocaleDateString('en-CA');
+    } catch {
+      return new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
+    }
+  }, []);
 
   const [calcStartDate, setCalcStartDate] = useState(todayStr);
   const [calcEndDate, setCalcEndDate] = useState(nextDay);
@@ -215,11 +231,14 @@ export default function App() {
 
   // Form State for Booking
   const [booking, setBooking] = useState<BookingState>(() => {
-    const hasMockFiles = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mock_files') === 'true';
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const hasMockFiles = params?.get('mock_files') === 'true';
+    const paramStart = params?.get('startDate');
+    const paramEnd = params?.get('endDate');
     return {
       cameraId: 'dji-pocket-3',
-      startDate: todayStr,
-      endDate: nextDay,
+      startDate: paramStart || todayStr,
+      endDate: paramEnd || nextDay,
       handoverMode: 'meetup',
       meetupLocation: PASIG_MEETUP_HUBS[0],
       fullName: '',
@@ -687,76 +706,77 @@ export default function App() {
 
   // Dynamic Hourly Dropdown Options with 2-Hour Turnover Buffer Engine
   const pickupTimeOptions = useMemo<SelectOption[]>(() => {
-    return ALL_HOURS.map((item) => {
-      if (modalConflict.isStartTurnover && item.h < 14) {
-        return {
-          value: item.value,
-          label: item.label,
-          disabled: true,
-          badge: '2-Hr Buffer',
-          sublabel: 'Unit returns from earlier shoot; ready from 2:00 PM after fast charging'
-        };
-      }
-      return {
-        value: item.value,
-        label: item.label,
-        badge: item.h === 8 ? 'Opening' : item.h === 14 && modalConflict.isStartTurnover ? 'Earliest Ready' : item.h === 10 ? 'Popular' : undefined,
-        sublabel: item.h === 14 && modalConflict.isStartTurnover ? 'Turnover recharge & prep complete' : undefined
-      };
-    });
+    // When start date has turnover, earlier shoot returns at 12:00 PM; available from 2:00 PM
+    const available = modalConflict.isStartTurnover
+      ? ALL_HOURS.filter(item => item.h >= 14)
+      : ALL_HOURS;
+
+    return available.map((item) => ({
+      value: item.value,
+      label: item.label,
+      badge:
+        item.h === 14 && modalConflict.isStartTurnover
+          ? '⚡ Earliest Ready'
+          : item.h === 8
+          ? 'Opening'
+          : item.h === 10
+          ? 'Popular'
+          : item.h === 24
+          ? 'Midnight Cutoff'
+          : undefined,
+    }));
   }, [ALL_HOURS, modalConflict.isStartTurnover]);
 
   const returnTimeOptions = useMemo<SelectOption[]>(() => {
     const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
     const selectedPickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
 
-    return ALL_HOURS.map((item) => {
-      if (modalConflict.isEndTurnover && item.h > 12) {
-        return {
-          value: item.value,
-          label: item.label,
-          disabled: true,
-          badge: 'Cutoff',
-          sublabel: 'Must return by 12:00 PM for 2-hour prep before afternoon booking'
-        };
-      }
-      if (isSameDay && item.h <= selectedPickupH) {
-        return {
-          value: item.value,
-          label: item.label,
-          disabled: true,
-          badge: 'Unavailable',
-          sublabel: 'Return time must be after pickup time'
-        };
-      }
-      return {
-        value: item.value,
-        label: item.label,
-        badge: item.h === 24 ? 'Midnight Cutoff' : item.h === 12 && modalConflict.isEndTurnover ? 'Latest Return' : item.h === 20 ? 'Popular' : undefined,
-        sublabel: item.h === 24 ? 'Maximize full shoot day until 12:00 AM Midnight' : undefined
-      };
-    });
+    let available = ALL_HOURS;
+    // When end date has turnover, unit must be returned by 12:00 PM for afternoon shoot prep
+    if (modalConflict.isEndTurnover) {
+      available = available.filter(item => item.h <= 12);
+    }
+    // On same-day rentals, return time must be strictly after pickup time
+    if (isSameDay) {
+      available = available.filter(item => item.h > selectedPickupH);
+    }
+
+    return available.map((item) => ({
+      value: item.value,
+      label: item.label,
+      badge:
+        item.h === 12 && modalConflict.isEndTurnover
+          ? 'Latest Return'
+          : item.h === 24
+          ? 'Midnight Cutoff'
+          : item.h === 20
+          ? 'Popular'
+          : undefined,
+    }));
   }, [ALL_HOURS, modalConflict.isEndTurnover, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
 
-  // Hourly Quick Pick Lists for the visual selection line
+  // Filtered Hourly Lists for the visual timeline selector
   const pickupQuickHours = useMemo(() => {
-    return ALL_HOURS.map(item => ({
-      ...item,
-      disabled: modalConflict.isStartTurnover && item.h < 14
-    }));
+    return modalConflict.isStartTurnover
+      ? ALL_HOURS.filter(item => item.h >= 14)
+      : ALL_HOURS;
   }, [ALL_HOURS, modalConflict.isStartTurnover]);
 
   const returnQuickHours = useMemo(() => {
     const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
     const selectedPickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
 
-    return ALL_HOURS.map(item => ({
-      ...item,
-      disabled: Boolean((modalConflict.isEndTurnover && item.h > 12) || (isSameDay && item.h <= selectedPickupH))
-    }));
+    let available = ALL_HOURS;
+    if (modalConflict.isEndTurnover) {
+      available = available.filter(item => item.h <= 12);
+    }
+    if (isSameDay) {
+      available = available.filter(item => item.h > selectedPickupH);
+    }
+    return available;
   }, [ALL_HOURS, modalConflict.isEndTurnover, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
 
-  // Synchronize preferred pickup/return time slots with turnover status
+  // Synchronize preferred pickup/return time slots with turnover status & same-day ordering
   useEffect(() => {
     if (modalConflict.isStartTurnover) {
       const currentH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
@@ -770,7 +790,18 @@ export default function App() {
         setBooking(b => ({ ...b, returnTimeSlot: '12:00 PM' }));
       }
     }
-  }, [ALL_HOURS, modalConflict.isStartTurnover, modalConflict.isEndTurnover, booking.pickupTimeSlot, booking.returnTimeSlot]);
+    const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
+    if (isSameDay) {
+      const pickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
+      const returnH = ALL_HOURS.find(x => x.value === booking.returnTimeSlot)?.h || 20;
+      if (returnH <= pickupH) {
+        const nextValidReturn = ALL_HOURS.find(x => x.h > pickupH);
+        if (nextValidReturn) {
+          setBooking(b => ({ ...b, returnTimeSlot: nextValidReturn.value }));
+        }
+      }
+    }
+  }, [ALL_HOURS, modalConflict.isStartTurnover, modalConflict.isEndTurnover, booking.startDate, booking.endDate, booking.pickupTimeSlot, booking.returnTimeSlot]);
 
 
   // Jump to next available window for Calculator
@@ -3205,38 +3236,22 @@ export default function App() {
                           size="sm"
                           value={booking.pickupTimeSlot}
                           options={pickupTimeOptions}
+                          headerNotice={
+                            modalConflict.isStartTurnover
+                              ? "Unit returns from earlier shoot at 12:00 PM. Available from 2:00 PM after 2-hour buffer."
+                              : undefined
+                          }
                           onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
                         />
 
-                        {/* Visual Time Selection Line (8 AM to 12 AM) */}
-                        <div>
-                          <span className="block text-[10px] font-bold text-[#6B6B8A] mb-1">
-                            Quick Select Hour:
-                          </span>
-                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                            {pickupQuickHours.map((hour) => {
-                              const isSelected = booking.pickupTimeSlot === hour.value;
-                              const isDisabled = hour.disabled;
-                              return (
-                                <button
-                                  key={hour.value}
-                                  type="button"
-                                  disabled={isDisabled}
-                                  onClick={() => setBooking(b => ({ ...b, pickupTimeSlot: hour.value }))}
-                                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                                    isDisabled
-                                      ? 'opacity-40 bg-[#FAFAF7] text-[#A0AEC0] cursor-not-allowed line-through'
-                                      : isSelected
-                                      ? 'bg-[#1A1A2E] text-white shadow-xs'
-                                      : 'bg-[#FAFAF7] border border-[#E8E4F0] text-[#1A1A2E] hover:bg-[#EDE8FC] hover:border-[#C9B8F0] cursor-pointer'
-                                  }`}
-                                >
-                                  {hour.shortLabel}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                        {/* Interactive Hourly Timeline Selector */}
+                        <HourlyTimelineSelector
+                          label="Quick Select Hour"
+                          value={booking.pickupTimeSlot}
+                          hours={pickupQuickHours}
+                          earliestBadge={modalConflict.isStartTurnover ? "2 PM Earliest" : undefined}
+                          onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                        />
                       </div>
                     </div>
 
@@ -3287,38 +3302,22 @@ export default function App() {
                           size="sm"
                           value={booking.returnTimeSlot}
                           options={returnTimeOptions}
+                          headerNotice={
+                            modalConflict.isEndTurnover
+                              ? "Afternoon shoot scheduled. Please return by 12:00 PM for 2-hour turnover prep."
+                              : undefined
+                          }
                           onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
                         />
 
-                        {/* Visual Time Selection Line (8 AM to 12 AM) */}
-                        <div>
-                          <span className="block text-[10px] font-bold text-[#6B6B8A] mb-1">
-                            Quick Select Hour:
-                          </span>
-                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                            {returnQuickHours.map((hour) => {
-                              const isSelected = booking.returnTimeSlot === hour.value;
-                              const isDisabled = hour.disabled;
-                              return (
-                                <button
-                                  key={hour.value}
-                                  type="button"
-                                  disabled={isDisabled}
-                                  onClick={() => setBooking(b => ({ ...b, returnTimeSlot: hour.value }))}
-                                  className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                                    isDisabled
-                                      ? 'opacity-40 bg-[#FAFAF7] text-[#A0AEC0] cursor-not-allowed line-through'
-                                      : isSelected
-                                      ? 'bg-[#1A1A2E] text-white shadow-xs'
-                                      : 'bg-[#FAFAF7] border border-[#E8E4F0] text-[#1A1A2E] hover:bg-[#EDE8FC] hover:border-[#C9B8F0] cursor-pointer'
-                                  }`}
-                                >
-                                  {hour.shortLabel}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                        {/* Interactive Hourly Timeline Selector */}
+                        <HourlyTimelineSelector
+                          label="Quick Select Hour"
+                          value={booking.returnTimeSlot}
+                          hours={returnQuickHours}
+                          earliestBadge={modalConflict.isEndTurnover ? "12 PM Cutoff" : undefined}
+                          onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                        />
                       </div>
                     </div>
                   </div>
