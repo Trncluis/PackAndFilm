@@ -375,18 +375,9 @@ export const LiveCameraSnapshotModal: React.FC<LiveCameraSnapshotModalProps> = (
           <span className="flex items-center gap-1">
             🔒 <span>End-to-End Encrypted Verification</span>
           </span>
-          {onFallbackUpload && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onFallbackUpload();
-              }}
-              className="font-bold text-[#553C9A] hover:underline cursor-pointer"
-            >
-              Upload file instead
-            </button>
-          )}
+          <span className="text-[10px] text-[#805AD5] font-semibold">
+            Live Liveness Check
+          </span>
         </div>
       </div>
     </div>

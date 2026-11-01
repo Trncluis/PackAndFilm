@@ -4439,20 +4439,17 @@ export default function App() {
                         </span>
                       </button>
 
-                      <label className="cursor-pointer px-3.5 py-2 rounded-xl border-2 border-[#E8E4F0] bg-[#FAFAF7] hover:bg-[#EDE8FC] hover:border-[#C9B8F0] text-xs font-bold text-[#553C9A] transition-colors inline-flex items-center gap-1.5 shadow-xs">
-                        <Upload className="w-3.5 h-3.5 text-[#6B46C1]" />
-                        <span>Upload Photo from Device</span>
-                        <input
-                          id="file-input-selfieWithIdsFile"
-                          type="file"
-                          accept="image/*,application/pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            handleRealFileUpload(e, 'selfieWithIdsFile');
-                            clearFieldError('selfieWithIdsFile');
-                          }}
-                        />
-                      </label>
+                      {/* Hidden fallback file input (triggered strictly from modal when camera is unavailable) */}
+                      <input
+                        id="file-input-selfieWithIdsFile"
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          handleRealFileUpload(e, 'selfieWithIdsFile');
+                          clearFieldError('selfieWithIdsFile');
+                        }}
+                      />
 
                       {booking.selfieWithIdsFile && (
                         <div className="flex items-center gap-2 text-xs">
