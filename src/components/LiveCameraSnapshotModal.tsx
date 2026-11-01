@@ -162,7 +162,7 @@ export const LiveCameraSnapshotModal: React.FC<LiveCameraSnapshotModalProps> = (
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
       <div className="relative w-full max-w-xl bg-white rounded-3xl border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-[#E8E4F0] bg-[#FAFAF7] flex items-center justify-between">
@@ -224,7 +224,7 @@ export const LiveCameraSnapshotModal: React.FC<LiveCameraSnapshotModalProps> = (
 
             {/* State: Camera Error */}
             {cameraState === 'error' && (
-              <div className="text-center p-6 text-white space-y-3 max-w-sm">
+              <div className="relative z-20 text-center p-6 text-white space-y-3 max-w-sm pointer-events-auto">
                 <div className="w-12 h-12 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto">
                   <AlertCircle className="w-6 h-6" />
                 </div>
@@ -234,11 +234,11 @@ export const LiveCameraSnapshotModal: React.FC<LiveCameraSnapshotModalProps> = (
                     {errorMessage}
                   </p>
                 </div>
-                <div className="pt-2 flex flex-col gap-2">
+                <div className="pt-2 flex flex-col gap-2 relative z-30 pointer-events-auto">
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="px-4 py-2 rounded-xl bg-white text-[#1A1A2E] text-xs font-bold hover:bg-gray-100 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    className="relative z-30 px-4 py-2.5 rounded-xl bg-white text-[#1A1A2E] text-xs font-bold hover:bg-gray-100 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Try Again</span>
@@ -250,7 +250,7 @@ export const LiveCameraSnapshotModal: React.FC<LiveCameraSnapshotModalProps> = (
                         onClose();
                         onFallbackUpload();
                       }}
-                      className="px-4 py-2 rounded-xl bg-[#EDE8FC] text-[#553C9A] text-xs font-bold hover:bg-[#D6BCFA] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      className="relative z-30 px-4 py-2.5 rounded-xl bg-[#EDE8FC] text-[#553C9A] text-xs font-bold hover:bg-[#D6BCFA] transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
                     >
                       <Upload className="w-3.5 h-3.5" />
                       <span>Upload Photo from Device Instead</span>
@@ -266,8 +266,8 @@ export const LiveCameraSnapshotModal: React.FC<LiveCameraSnapshotModalProps> = (
               autoPlay
               playsInline
               muted
-              className={`w-full h-full object-cover transform -scale-x-100 transition-opacity duration-300 ${
-                cameraState === 'ready' ? 'opacity-100' : 'opacity-0 absolute'
+              className={`w-full h-full object-cover transform -scale-x-100 transition-opacity duration-300 pointer-events-none ${
+                cameraState === 'ready' ? 'opacity-100 relative z-10' : 'opacity-0 absolute hidden'
               }`}
             />
 

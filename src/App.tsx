@@ -323,6 +323,9 @@ export default function App() {
   // Full-Month Fleet Availability Calendar Modal State
   const [calendarModalCamera, setCalendarModalCamera] = useState<CameraItem | null>(null);
 
+  // Operating Hours Schedule Matrix Modal State
+  const [showScheduleModal, setShowScheduleModal] = useState<boolean>(false);
+
   // Live Camera Snapshot State (Desktop WebRTC Viewfinder & Mobile Native Capture)
   const [liveCameraTarget, setLiveCameraTarget] = useState<{
     fieldKey: keyof BookingState;
@@ -333,17 +336,19 @@ export default function App() {
   } | null>(null);
   const mobileSelfieCameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Prevent background scroll-chaining and repaint cycles when any modal is open
+  // Prevent background scroll-chaining and repaint cycles when any popup overlay is open
   useEffect(() => {
-    const isAnyModalActive = isModalOpen || !!inclusionsModalCamera || !!liveCameraTarget || showTermsModal || showKycModal || !!calendarModalCamera;
-    if (isAnyModalActive) {
+    const isAnyOverlayActive = !!inclusionsModalCamera || !!liveCameraTarget || showTermsModal || showKycModal || !!calendarModalCamera || showScheduleModal;
+    if (isAnyOverlayActive) {
       const originalOverflow = window.getComputedStyle(document.body).overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = originalOverflow;
       };
+    } else {
+      document.body.style.overflow = '';
     }
-  }, [isModalOpen, inclusionsModalCamera, liveCameraTarget, showTermsModal, showKycModal, calendarModalCamera]);
+  }, [inclusionsModalCamera, liveCameraTarget, showTermsModal, showKycModal, calendarModalCamera, showScheduleModal]);
 
   // Form State for Booking
   const [booking, setBooking] = useState<BookingState>(() => {
@@ -791,7 +796,6 @@ export default function App() {
   }, []);
 
   // Date Conflict State specifically scoped to selected camera and actual bookings
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleFilterCameraId, setScheduleFilterCameraId] = useState<string>('all');
   const calcConflict = useMemo(
     () => checkCameraDateConflict(selectedCameraId, calcStartDate, calcEndDate, bookings),
@@ -4435,6 +4439,21 @@ export default function App() {
                         </span>
                       </button>
 
+                      <label className="cursor-pointer px-3.5 py-2 rounded-xl border-2 border-[#E8E4F0] bg-[#FAFAF7] hover:bg-[#EDE8FC] hover:border-[#C9B8F0] text-xs font-bold text-[#553C9A] transition-colors inline-flex items-center gap-1.5 shadow-xs">
+                        <Upload className="w-3.5 h-3.5 text-[#6B46C1]" />
+                        <span>Upload Photo from Device</span>
+                        <input
+                          id="file-input-selfieWithIdsFile"
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            handleRealFileUpload(e, 'selfieWithIdsFile');
+                            clearFieldError('selfieWithIdsFile');
+                          }}
+                        />
+                      </label>
+
                       {booking.selfieWithIdsFile && (
                         <div className="flex items-center gap-2 text-xs">
                           <span className="text-[#38A169] font-bold flex items-center gap-1">
@@ -6470,8 +6489,11 @@ export default function App() {
         onFallbackUpload={() => {
           if (liveCameraTarget) {
             const fieldKey = String(liveCameraTarget.fieldKey);
-            const input = document.querySelector<HTMLInputElement>(`[data-field-key="${fieldKey}"] input[type="file"]`);
-            if (input) input.click();
+            const input = document.getElementById(`file-input-${fieldKey}`) as HTMLInputElement
+              || document.querySelector<HTMLInputElement>(`[data-field-key="${fieldKey}"] input[type="file"]`);
+            if (input) {
+              input.click();
+            }
           }
         }}
       />
