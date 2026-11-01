@@ -226,9 +226,13 @@ export default function App() {
   // FAQ Accordion State
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  // Terms and Conditions State
-  const [openTermsClause, setOpenTermsClause] = useState<number | null>(null);
+  // Terms and Conditions State (default clause 0 open for immediate transparency)
+  const [openTermsClause, setOpenTermsClause] = useState<number | null>(0);
+  const [modalOpenTermsClause, setModalOpenTermsClause] = useState<number | null>(0);
   const [showTermsModal, setShowTermsModal] = useState<boolean>(false);
+
+  // Dedicated Requirements & KYC Modal State
+  const [showKycModal, setShowKycModal] = useState<boolean>(false);
 
   // Full-Month Fleet Availability Calendar Modal State
   const [calendarModalCamera, setCalendarModalCamera] = useState<CameraItem | null>(null);
@@ -245,7 +249,7 @@ export default function App() {
 
   // Prevent background scroll-chaining and repaint cycles when any modal is open
   useEffect(() => {
-    const isAnyModalActive = isModalOpen || !!inclusionsModalCamera || !!liveCameraTarget || showTermsModal || !!calendarModalCamera;
+    const isAnyModalActive = isModalOpen || !!inclusionsModalCamera || !!liveCameraTarget || showTermsModal || showKycModal || !!calendarModalCamera;
     if (isAnyModalActive) {
       const originalOverflow = window.getComputedStyle(document.body).overflow;
       document.body.style.overflow = 'hidden';
@@ -253,7 +257,7 @@ export default function App() {
         document.body.style.overflow = originalOverflow;
       };
     }
-  }, [isModalOpen, inclusionsModalCamera, liveCameraTarget, showTermsModal, calendarModalCamera]);
+  }, [isModalOpen, inclusionsModalCamera, liveCameraTarget, showTermsModal, showKycModal, calendarModalCamera]);
 
   // Form State for Booking
   const [booking, setBooking] = useState<BookingState>(() => {
@@ -1572,10 +1576,10 @@ export default function App() {
           {/* Desktop Nav Links (Spacious for xl and up) */}
           <nav className="hidden xl:flex items-center gap-5 2xl:gap-6 text-sm font-semibold text-[#1A1A2E] whitespace-nowrap">
             <a href="#catalog" className="hover:text-[#6B46C1] transition-colors">Camera Catalog</a>
-            <a href="#kyc-requirements" className="hover:text-[#6B46C1] transition-colors">Requirements</a>
+            <button type="button" onClick={() => setShowKycModal(true)} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">Requirements</button>
             <a href="#how" className="hover:text-[#6B46C1] transition-colors">How to Book</a>
             <a href="#pricing" className="hover:text-[#6B46C1] transition-colors">Pricing & Calculator</a>
-            <a href="#terms" className="hover:text-[#6B46C1] transition-colors">Terms</a>
+            <button type="button" onClick={() => setShowTermsModal(true)} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">Terms</button>
             <a href="#faq" className="hover:text-[#6B46C1] transition-colors">FAQ</a>
           </nav>
 
@@ -3129,6 +3133,7 @@ export default function App() {
     currentQuote,
     calcConflict,
     openFaq,
+    openTermsClause,
     mobileMenuOpen,
     sheetLastSynced,
     isSyncingSheet,
@@ -5807,6 +5812,123 @@ export default function App() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          DEDICATED RENTAL REQUIREMENTS & KYC VERIFICATION MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {showKycModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-2.5 sm:p-6 overflow-hidden animate-fadeIn">
+          {/* Static backdrop layer */}
+          <div
+            className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
+            onClick={() => setShowKycModal(false)}
+            aria-hidden="true"
+          />
+
+          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[90vh] z-10 isolate">
+            {/* Header */}
+            <div className="px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-center justify-center text-[#553C9A]">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-[#1A1A2E]">
+                    Rental Requirements &amp; Verification
+                  </h3>
+                  <p className="text-xs text-[#6B6B8A] font-medium">
+                    Guidelines for smooth approvals • 100% Confidential
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowKycModal(false)}
+                className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#FEF0E7] flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer"
+                aria-label="Close requirements modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 text-xs">
+              <div className="p-3.5 rounded-2xl bg-[#E8F7F1] border border-[#A8DBC8] text-[11px] text-[#234E52] leading-relaxed flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#2F855A] shrink-0" />
+                <span><strong>Fast Digital Verification:</strong> Submit your requirements online directly from your phone. Documents are encrypted and safely stored in Google Drive.</span>
+              </div>
+
+              <div className="space-y-3">
+                {FIVE_STEP_REQUIREMENTS.map((req) => (
+                  <div
+                    key={req.step}
+                    className="p-4 rounded-2xl border-2 border-[#E8E4F0] bg-white hover:border-[#1A1A2E] transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-[#1A1A2E] text-white flex items-center justify-center font-black text-[11px]">
+                          0{req.step}
+                        </span>
+                        <h4 className="font-black text-sm text-[#1A1A2E]">{req.title}</h4>
+                      </div>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A]">
+                        {req.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#6B6B8A] mb-3">{req.desc}</p>
+                    <ul className="space-y-1.5 text-[11px] text-[#1A1A2E] border-t border-[#E8E4F0]/60 pt-2">
+                      {req.details.map((d, dIdx) => (
+                        <li key={dIdx} className="flex items-start gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#38A169] shrink-0 mt-0.5" />
+                          <span>{d}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+
+                {/* Student Exemption Box */}
+                <div className="p-4 rounded-2xl bg-[#E8F7F1] border-2 border-[#A8DBC8]">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GraduationCap className="w-5 h-5 text-[#234E52]" />
+                    <h4 className="font-black text-sm text-[#234E52]">{STUDENT_EXEMPTION_NOTICE.title}</h4>
+                  </div>
+                  <p className="text-xs text-[#234E52] mb-2">{STUDENT_EXEMPTION_NOTICE.desc}</p>
+                  <div className="p-2.5 bg-white/80 rounded-xl text-[11px] text-[#234E52] font-semibold space-y-1">
+                    <div>✓ Valid Student ID (front &amp; back)</div>
+                    <div>✓ Current Certificate of Registration (COR)</div>
+                    <div>✓ Parent / Guardian Government ID (front &amp; back)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-white border-t border-[#E8E4F0] flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setShowKycModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-[#E8E4F0] text-xs font-bold text-[#6B6B8A] hover:bg-[#FAFAF7] transition-all cursor-pointer"
+              >
+                Close
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowKycModal(false);
+                  handleOpenBookingModal();
+                }}
+                className="px-5 py-2.5 rounded-xl bg-[#1A1A2E] text-white text-xs font-black hover:bg-[#553C9A] transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              >
+                <span>Ready to Rent? Book Now</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       )}
