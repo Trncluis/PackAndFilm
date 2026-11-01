@@ -40,7 +40,9 @@ import {
   Info,
   Plane,
   Sun,
-  CalendarRange
+  CalendarRange,
+  Home,
+  Scale
 } from 'lucide-react';
 
 import { CAMERAS, CameraItem } from './data/cameras';
@@ -74,6 +76,8 @@ import {
   CameraWeekAvailabilityStrip,
   CameraMonthCalendarModal
 } from './components/CameraCatalogAvailability';
+import { DedicatedRequirementsPage } from './components/DedicatedRequirementsPage';
+import { DedicatedTermsPage } from './components/DedicatedTermsPage';
 
 const DOWNPAYMENT_FEE = RENTAL_CONFIG.reservationFee;
 
@@ -140,28 +144,110 @@ interface BookingState {
   flightOrTripDetails: string;
 }
 
+export type ActiveView = 'home' | 'book' | 'requirements' | 'terms' | 'admin';
+
 export default function App() {
-  // Admin View State: Strictly Option B (Accessible exclusively via typing "/#admin" or "/admin" in the browser URL)
-  const checkIsAdminRoute = (): boolean => {
-    if (typeof window === 'undefined') return false;
+  // Client Route State
+  const getInitialView = (): ActiveView => {
+    if (typeof window === 'undefined') return 'home';
     const rawHash = decodeURIComponent(window.location.hash || '').trim().toLowerCase();
     const rawPath = decodeURIComponent(window.location.pathname || '').trim().toLowerCase();
-    return (
+    const p = new URLSearchParams(window.location.search);
+
+    if (
       rawHash === '#admin' ||
       rawHash === '#/admin' ||
       rawHash.startsWith('#admin') ||
       rawPath === '/admin' ||
       rawPath === '/admin/' ||
       rawPath === '/#admin'
-    );
+    ) {
+      return 'admin';
+    }
+    if (
+      rawHash === '#book' ||
+      rawHash === '#/book' ||
+      rawPath === '/book' ||
+      rawPath === '/book/' ||
+      p.get('open_modal') === 'true' ||
+      !!p.get('step')
+    ) {
+      return 'book';
+    }
+    if (
+      rawHash === '#requirements' ||
+      rawHash === '#kyc' ||
+      rawHash === '#/requirements' ||
+      rawPath === '/requirements' ||
+      rawPath === '/requirements/' ||
+      rawPath === '/kyc'
+    ) {
+      return 'requirements';
+    }
+    if (
+      rawHash === '#terms' ||
+      rawHash === '#terms-and-conditions' ||
+      rawHash === '#/terms' ||
+      rawPath === '/terms' ||
+      rawPath === '/terms/' ||
+      rawPath === '/terms-and-conditions'
+    ) {
+      return 'terms';
+    }
+    return 'home';
   };
 
-  const [isAdminView, setIsAdminView] = useState<boolean>(() => checkIsAdminRoute());
+  const [activeView, setActiveView] = useState<ActiveView>(() => getInitialView());
+  const isAdminView = activeView === 'admin';
+  const setIsAdminView = (val: boolean) => {
+    if (val) setActiveView('admin');
+    else setActiveView('home');
+  };
 
-  // Listen to browser navigation changes
+  // Central Navigation Dispatcher
+  const navigateTo = (view: ActiveView, options?: { camera?: string; date?: string; scrollTo?: string }) => {
+    if (options?.camera) {
+      const requestedCam = CAMERAS.find(c => c.id === options.camera);
+      if (requestedCam && requestedCam.isAvailable) {
+        setSelectedCameraId(requestedCam.id);
+        setBooking(prev => ({ ...prev, cameraId: requestedCam.id }));
+      }
+    }
+    if (options?.date) {
+      setCalcStartDate(options.date);
+      setCalcEndDate(options.date);
+      setBooking(prev => ({ ...prev, startDate: options.date!, endDate: options.date! }));
+    }
+
+    setActiveView(view);
+    setMobileMenuOpen(false);
+
+    if (typeof window !== 'undefined') {
+      let newPath = '/';
+      if (view === 'book') newPath = '/book';
+      else if (view === 'requirements') newPath = '/requirements';
+      else if (view === 'terms') newPath = '/terms';
+      else if (view === 'admin') newPath = '/admin';
+
+      if (window.location.pathname !== newPath && !window.location.hash) {
+        window.history.pushState(null, '', newPath);
+      }
+
+      if (options?.scrollTo) {
+        setTimeout(() => {
+          const el = document.getElementById(options.scrollTo!);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 60);
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  };
+
+  // Listen to browser navigation changes (Back/Forward buttons & hashchanges)
   useEffect(() => {
     const handleLocationChange = () => {
-      setIsAdminView(checkIsAdminRoute());
+      setActiveView(getInitialView());
     };
     window.addEventListener('popstate', handleLocationChange);
     window.addEventListener('hashchange', handleLocationChange);
@@ -1170,6 +1256,7 @@ export default function App() {
     setBookingSubmitError(null);
     setModalStep(1);
     setIsModalOpen(true);
+    navigateTo('book');
   };
 
   // Launch Confetti when Step 6 reached
@@ -1575,12 +1662,18 @@ export default function App() {
 
           {/* Desktop Nav Links (Spacious for xl and up) */}
           <nav className="hidden xl:flex items-center gap-5 2xl:gap-6 text-sm font-semibold text-[#1A1A2E] whitespace-nowrap">
-            <a href="#catalog" className="hover:text-[#6B46C1] transition-colors">Camera Catalog</a>
-            <button type="button" onClick={() => setShowKycModal(true)} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">Requirements</button>
-            <a href="#how" className="hover:text-[#6B46C1] transition-colors">How to Book</a>
-            <a href="#pricing" className="hover:text-[#6B46C1] transition-colors">Pricing & Calculator</a>
-            <button type="button" onClick={() => setShowTermsModal(true)} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">Terms</button>
-            <a href="#faq" className="hover:text-[#6B46C1] transition-colors">FAQ</a>
+            <button type="button" onClick={() => navigateTo('home', { scrollTo: 'catalog' })} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">Camera Fleet</button>
+            <button type="button" onClick={() => navigateTo('requirements')} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm flex items-center gap-1.5">
+              <span>Requirements</span>
+              <span className="text-[10px] font-black bg-[#EDE8FC] text-[#553C9A] px-2 py-0.5 rounded-full border border-[#C9B8F0]">Guide</span>
+            </button>
+            <button type="button" onClick={() => navigateTo('home', { scrollTo: 'how' })} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">How to Book</button>
+            <button type="button" onClick={() => navigateTo('home', { scrollTo: 'pricing' })} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">Pricing Calculator</button>
+            <button type="button" onClick={() => navigateTo('terms')} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm flex items-center gap-1.5">
+              <span>Terms &amp; Conditions</span>
+              <span className="text-[10px] font-black bg-[#EDE8FC] text-[#553C9A] px-2 py-0.5 rounded-full border border-[#C9B8F0]">Contract</span>
+            </button>
+            <button type="button" onClick={() => navigateTo('home', { scrollTo: 'faq' })} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">FAQ</button>
           </nav>
 
           {/* CTA & Responsive Mobile / Tablet Toggle */}
@@ -1613,55 +1706,75 @@ export default function App() {
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
-                handleOpenBookingModal();
+                navigateTo('book');
               }}
               className="w-full py-2.5 px-3 rounded-xl bg-[#1A1A2E] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
             >
               <span>Book Camera Now</span>
               <ArrowRight className="w-3.5 h-3.5 text-[#F5C6A8]" />
             </button>
-            <a
-              href="#catalog"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo('home', { scrollTo: 'catalog' });
+              }}
+              className="px-3 py-2 rounded-xl text-left text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
-              Camera Catalog
-            </a>
-            <a
-              href="#kyc-requirements"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
+              Camera Fleet Showroom
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo('requirements');
+              }}
+              className="px-3 py-2 rounded-xl text-left text-sm font-semibold hover:bg-[#EDE8FC] transition-colors flex items-center justify-between"
             >
-              Rental Requirements
-            </a>
-            <a
-              href="#how"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
+              <span>Requirements Handbook</span>
+              <span className="text-[10px] bg-[#EDE8FC] text-[#553C9A] px-2 py-0.5 rounded-md font-bold">Dedicated</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo('terms');
+              }}
+              className="px-3 py-2 rounded-xl text-left text-sm font-semibold hover:bg-[#EDE8FC] transition-colors flex items-center justify-between"
+            >
+              <span>Terms &amp; Conditions</span>
+              <span className="text-[10px] bg-[#EDE8FC] text-[#553C9A] px-2 py-0.5 rounded-md font-bold">Dedicated</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo('home', { scrollTo: 'how' });
+              }}
+              className="px-3 py-2 rounded-xl text-left text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               How to Book
-            </a>
-            <a
-              href="#pricing"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo('home', { scrollTo: 'pricing' });
+              }}
+              className="px-3 py-2 rounded-xl text-left text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               Pricing Calculator
-            </a>
-            <a
-              href="#terms"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
-            >
-              Terms & Conditions
-            </a>
-            <a
-              href="#faq"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[#EDE8FC]"
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigateTo('home', { scrollTo: 'faq' });
+              }}
+              className="px-3 py-2 rounded-xl text-left text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               FAQ
-            </a>
+            </button>
           </div>
         )}
       </header>
@@ -1703,19 +1816,22 @@ export default function App() {
 
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2 w-full sm:w-auto">
-              <a
-                href="#catalog"
+              <button
+                type="button"
+                onClick={() => handleOpenBookingModal(activeHeroSlide.id)}
                 className="w-full sm:w-auto min-h-[48px] sm:min-h-[52px] px-6 sm:px-7 py-3.5 sm:py-4 rounded-full font-extrabold text-sm sm:text-base bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_0px_#1A1A2E] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_#1A1A2E] transition-all cursor-pointer flex items-center justify-center gap-2 text-center"
               >
-                <span>Select Camera & Dates</span>
-              </a>
+                <span>Select Camera &amp; Dates</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
 
-              <a
-                href="#kyc-requirements"
-                className="w-full sm:w-auto min-h-[48px] sm:min-h-[52px] px-6 py-3.5 sm:py-4 rounded-full font-bold text-sm sm:text-base bg-white text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FEF0E7] transition-all flex items-center justify-center text-center"
+              <button
+                type="button"
+                onClick={() => navigateTo('requirements')}
+                className="w-full sm:w-auto min-h-[48px] sm:min-h-[52px] px-6 py-3.5 sm:py-4 rounded-full font-bold text-sm sm:text-base bg-white text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FEF0E7] transition-all flex items-center justify-center text-center cursor-pointer"
               >
-                Rental Requirements
-              </a>
+                Requirements Handbook
+              </button>
             </div>
 
             {/* Trust Badges Strip */}
@@ -2315,87 +2431,90 @@ export default function App() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          RENTAL REQUIREMENTS & VERIFICATION SECTION
+          RENTAL REQUIREMENTS & VERIFICATION PREVIEW
       ───────────────────────────────────────────────────────────── */}
       <section id="kyc-requirements" className="py-16 sm:py-20 px-4 sm:px-8 bg-white border-y border-[#E8E4F0]">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-6xl mx-auto">
 
-          <div className="text-center max-w-2xl mx-auto mb-12">
+          <div className="text-center max-w-2xl mx-auto mb-10">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] text-xs font-bold mb-3">
               <ShieldCheck className="w-3.5 h-3.5 text-[#DD6B20]" />
-              <span>Safety & Transparent Verification</span>
+              <span>Hassle-Free Verification</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-black text-[#1A1A2E] tracking-tight">
               Rental Requirements
             </h2>
-            <p className="mt-2 text-base text-[#6B6B8A] font-medium">
-              We protect both our equipment and your deposit. Simple, clear guidelines verified directly from your phone.
+            <p className="mt-2 text-sm sm:text-base text-[#6B6B8A] font-medium">
+              Simple, trust-based verification. We verify identities once to safeguard high-end production gear and keep security deposits affordable.
             </p>
           </div>
 
-          {/* 5 Steps Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {FIVE_STEP_REQUIREMENTS.map((req) => (
-              <div
-                key={req.step}
-                className="group bg-[#FAFAF7] rounded-[24px] border-2 border-[#E8E4F0] p-6 flex flex-col justify-between hover:border-[#1A1A2E] hover:shadow-[5px_5px_0px_0px_#1A1A2E] hover:-translate-y-1 transition-all duration-200"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="w-8 h-8 rounded-xl bg-[#1A1A2E] text-white flex items-center justify-center font-black text-xs">
-                      0{req.step}
-                    </span>
-                    <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A]">
-                      {req.badge}
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-black text-[#1A1A2E]">
-                    {req.title}
-                  </h3>
-                  <p className="text-xs text-[#6B6B8A] mt-2 font-medium">
-                    {req.desc}
-                  </p>
-
-                  <ul className="mt-4 space-y-2 text-[11px] text-[#1A1A2E]">
-                    {req.details.map((detail, idx) => (
-                      <li key={idx} className="flex items-start gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#38A169] shrink-0 mt-0.5" />
-                        <span>{detail}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-[#E8E4F0] text-[10px] font-bold text-[#6B6B8A]">
-                  {req.mandatoryText}
-                </div>
-              </div>
-            ))}
-
-            {/* Student Exemption Highlight Card */}
-            <div className="group bg-[#E8F7F1] rounded-[24px] border-2 border-[#A8DBC8] hover:border-[#1A1A2E] p-6 flex flex-col justify-between hover:shadow-[5px_5px_0px_0px_#1A1A2E] hover:-translate-y-1 transition-all duration-200">
+          {/* 3 Quick Preview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+            <div className="bg-[#FAFAF7] rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] p-6 flex flex-col justify-between">
               <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <GraduationCap className="w-6 h-6 text-[#234E52]" />
-                  <span className="font-extrabold text-sm text-[#234E52]">
-                    {STUDENT_EXEMPTION_NOTICE.title}
-                  </span>
+                <div className="w-10 h-10 rounded-xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-center justify-center text-[#6B46C1] font-black text-sm mb-4">
+                  01
                 </div>
-                <p className="text-xs text-[#234E52] leading-relaxed font-medium">
-                  {STUDENT_EXEMPTION_NOTICE.desc}
+                <h3 className="text-lg font-black text-[#1A1A2E] mb-1">Two (2) Valid IDs</h3>
+                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed mb-3">
+                  Primary government IDs (Passport, Driver’s License, UMID, National ID, PRC) or secondary supporting IDs.
                 </p>
-                <div className="mt-4 p-3 bg-white/80 rounded-xl text-[11px] text-[#234E52] font-semibold space-y-1">
-                  <div>✓ Valid Student ID (front &amp; back)</div>
-                  <div>✓ Current Certificate of Registration (COR)</div>
-                  <div>✓ Parent / Guardian Government ID</div>
+                <div className="p-2.5 rounded-xl bg-white border border-[#E8E4F0] text-[11px] font-bold text-[#553C9A]">
+                  🎓 Students: Student ID + COR accepted!
                 </div>
-              </div>
-
-              <div className="mt-5 pt-3 border-t border-[#A8DBC8] text-[10px] font-black text-[#234E52]">
-                STUDENTS NATIONWIDE WELCOME!
               </div>
             </div>
+
+            <div className="bg-[#FAFAF7] rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] p-6 flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-[#FEF0E7] border border-[#F5C6A8] flex items-center justify-center text-[#DD6B20] font-black text-sm mb-4">
+                  02
+                </div>
+                <h3 className="text-lg font-black text-[#1A1A2E] mb-1">Authorization Slip &amp; Selfie</h3>
+                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed mb-3">
+                  A handwritten note with date, 3 specimen signatures, and a selfie holding your IDs. Verified directly from your phone.
+                </p>
+                <div className="p-2.5 rounded-xl bg-white border border-[#E8E4F0] text-[11px] font-bold text-[#DD6B20]">
+                  📸 Live webcam &amp; mobile camera capture
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#FAFAF7] rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] p-6 flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-[#E8F7F1] border border-emerald-300 flex items-center justify-center text-emerald-700 font-black text-sm mb-4">
+                  03
+                </div>
+                <h3 className="text-lg font-black text-[#1A1A2E] mb-1">Proof of Billing / Delivery</h3>
+                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed mb-3">
+                  Residential utility bill or 2 e-commerce delivery screenshots (Shopee, Lazada, TikTok) matching your delivery address.
+                </p>
+                <div className="p-2.5 rounded-xl bg-white border border-[#E8E4F0] text-[11px] font-bold text-emerald-700">
+                  🔒 Protected under Data Privacy Act 2012
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Dedicated Page Callout Banner */}
+          <div className="p-6 rounded-[28px] bg-[#EDE8FC] border-2 border-[#1A1A2E] shadow-[6px_6px_0px_#1A1A2E] flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-white border-2 border-[#1A1A2E] flex items-center justify-center shadow-[2px_2px_0px_#1A1A2E] shrink-0">
+                <FileText className="w-5 h-5 text-[#6B46C1]" />
+              </div>
+              <div>
+                <h4 className="text-sm sm:text-base font-black text-[#1A1A2E]">Need the complete ID list &amp; document guide?</h4>
+                <p className="text-xs text-[#553C9A] font-medium">Explore accepted ID tiers, student exemptions, specimen signature templates, and privacy policies.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigateTo('requirements')}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white border-2 border-[#1A1A2E] text-[#1A1A2E] text-xs font-black shadow-[3px_3px_0px_#1A1A2E] hover:bg-[#FAFAF7] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer whitespace-nowrap"
+            >
+              Open Requirements Handbook →
+            </button>
           </div>
 
         </div>
@@ -2882,78 +3001,72 @@ export default function App() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          TERMS AND CONDITIONS ACCORDION SECTION
+          TERMS & CONDITIONS REASSURANCE PREVIEW
       ───────────────────────────────────────────────────────────── */}
       <section id="terms" className="py-16 sm:py-20 px-4 sm:px-8 bg-[#FAFAF7] border-b border-[#E8E4F0]">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
 
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] text-xs font-bold mb-3">
-              <FileText className="w-3.5 h-3.5 text-[#DD6B20]" />
-              <span>Guidelines for Smooth Rentals</span>
+          <div className="text-center max-w-2xl mx-auto mb-10">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] text-xs font-black mb-3">
+              <Scale className="w-3.5 h-3.5 text-[#6B46C1]" />
+              <span>Borrower Rights &amp; Responsibilities</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-black text-[#1A1A2E] tracking-tight">
-              Terms &amp; Conditions
+              Rental Policies &amp; Agreement
             </h2>
-            <p className="mt-2 text-base text-[#6B6B8A] font-medium">
-              Transparent, straightforward rental policies. Please review these terms before booking.
+            <p className="mt-2 text-sm sm:text-base text-[#6B6B8A] font-medium">
+              Clear, predictable, and transparent policies for complete peace of mind while creating across Metro Manila.
             </p>
           </div>
 
-          <div className="space-y-3">
-            {TERMS_AND_CONDITIONS_DATA.map((clause, index) => {
-              const isOpen = openTermsClause === index;
-              return (
-                <div
-                  key={clause.number}
-                  className={`rounded-2xl border-2 transition-all ${isOpen
-                    ? 'border-[#1A1A2E] bg-white shadow-[3px_3px_0px_#1A1A2E]'
-                    : 'border-[#E8E4F0] bg-white hover:border-[#C9B8F0]'
-                    }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setOpenTermsClause(isOpen ? null : index)}
-                    className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-4 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-xl bg-[#EDE8FC] text-[#553C9A] flex items-center justify-center font-black text-xs shrink-0">
-                        {clause.number}
-                      </span>
-                      <div>
-                        <span className="font-extrabold text-sm sm:text-base text-[#1A1A2E] block">
-                          {clause.title}
-                        </span>
-                        <span className="text-[11px] text-[#6B6B8A] font-medium hidden sm:block">
-                          {clause.highlight}
-                        </span>
-                      </div>
-                    </div>
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-transform ${isOpen ? 'rotate-180 bg-[#C9B8F0] text-[#1A1A2E]' : 'bg-[#FAFAF7] text-[#6B6B8A]'
-                        }`}
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </div>
-                  </button>
+          {/* 3 Reassurance Feature Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+            <div className="bg-white rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] p-6">
+              <div className="w-10 h-10 rounded-xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-center justify-center text-[#6B46C1] mb-3">
+                <Clock className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-black text-[#1A1A2E] mb-1">24h Turnaround Buffer</h3>
+              <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed">
+                We strictly block 24 hours between consecutive rentals to clean, sanitize, inspect, and charge every camera and accessory.
+              </p>
+            </div>
 
-                  {isOpen && (
-                    <div className="px-5 pb-5 text-xs text-[#4A4A68] space-y-2 border-t border-[#E8E4F0]/60 pt-3 leading-relaxed">
-                      {clause.content.map((p, idx) => (
-                        <p key={idx} className="flex items-start gap-2">
-                          <span className="text-[#6B46C1] font-bold mt-0.5">•</span>
-                          <span>{p}</span>
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            <div className="bg-white rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] p-6">
+              <div className="w-10 h-10 rounded-xl bg-[#E8F7F1] border border-emerald-300 flex items-center justify-center text-emerald-700 mb-3">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-black text-[#1A1A2E] mb-1">Prompt Deposit Refund</h3>
+              <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed">
+                Your ₱1,000 security deposit is returned directly to your GCash account within 24 hours of gear return and inspection.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] p-6">
+              <div className="w-10 h-10 rounded-xl bg-[#FEF0E7] border border-[#F5C6A8] flex items-center justify-center text-[#DD6B20] mb-3">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-black text-[#1A1A2E] mb-1">Grab Express &amp; Meetups</h3>
+              <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed">
+                Owner books Grab Express directly for secure handover across Metro Manila, or meet up at Pasig hubs (₱200 fee).
+              </p>
+            </div>
           </div>
 
-          <div className="mt-8 p-4 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] text-center text-xs text-[#553C9A] font-semibold">
-            {TERMS_ACKNOWLEDGEMENT_TEXT}
+          {/* Dedicated Terms CTA Banner */}
+          <div className="p-6 rounded-[28px] bg-white border-2 border-[#1A1A2E] shadow-[6px_6px_0px_#1A1A2E] flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h4 className="text-sm sm:text-base font-black text-[#1A1A2E]">Official 8-Clause Equipment Rental Agreement</h4>
+              <p className="text-xs text-[#6B6B8A] font-medium mt-0.5">
+                Review full policies on care &amp; liability, cancellation penalties, extension fees, and governing law (v2026.10-Oct).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigateTo('terms')}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1A1A2E] text-white text-xs font-black shadow-[3px_3px_0px_#6B46C1] hover:bg-[#2A2A42] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer whitespace-nowrap"
+            >
+              Read Full Agreement →
+            </button>
           </div>
 
         </div>
@@ -3073,10 +3186,13 @@ export default function App() {
               Quick Links
             </div>
             <ul className="space-y-2 text-xs text-gray-300">
-              <li><a href="#catalog" className="hover:text-white transition-colors">Camera Catalog</a></li>
-              <li><a href="#how" className="hover:text-white transition-colors">How It Works</a></li>
-              <li><a href="#pricing" className="hover:text-white transition-colors">Pricing & Calculator</a></li>
-              <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
+              <li><button type="button" onClick={() => navigateTo('book')} className="hover:text-white transition-colors cursor-pointer text-left">Book Camera (/book)</button></li>
+              <li><button type="button" onClick={() => navigateTo('requirements')} className="hover:text-white transition-colors cursor-pointer text-left">Requirements Handbook (/requirements)</button></li>
+              <li><button type="button" onClick={() => navigateTo('terms')} className="hover:text-white transition-colors cursor-pointer text-left">Terms &amp; Conditions (/terms)</button></li>
+              <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'catalog' })} className="hover:text-white transition-colors cursor-pointer text-left">Camera Fleet Showroom</button></li>
+              <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'pricing' })} className="hover:text-white transition-colors cursor-pointer text-left">Pricing Calculator</button></li>
+              <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'faq' })} className="hover:text-white transition-colors cursor-pointer text-left">FAQ</button></li>
+              <li><button type="button" onClick={() => navigateTo('admin')} className="hover:text-white transition-colors cursor-pointer text-left text-gray-500">Admin Console</button></li>
             </ul>
           </div>
 
@@ -3138,7 +3254,8 @@ export default function App() {
     sheetLastSynced,
     isSyncingSheet,
     bookings,
-    todayStr
+    todayStr,
+    activeView
   ]);
 
   // ─────────────────────────────────────────────────────────────
@@ -3197,78 +3314,130 @@ export default function App() {
         </div>
       )}
 
-      {/* Memoized Landing Page Sections */}
-      {landingPageContent}
+      {/* 1. DEDICATED REQUIREMENTS VIEW */}
+      {activeView === 'requirements' && (
+        <DedicatedRequirementsPage onNavigate={navigateTo} />
+      )}
 
+      {/* 2. DEDICATED TERMS & CONDITIONS VIEW */}
+      {activeView === 'terms' && (
+        <DedicatedTermsPage onNavigate={navigateTo} />
+      )}
 
-      {/* ─────────────────────────────────────────────────────────────
-          7. MULTI-STEP BOOKING MODAL (STATE MACHINE: 6 STEPS)
-      ───────────────────────────────────────────────────────────── */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 overflow-hidden animate-fadeIn">
-          {/* Hardware-accelerated static backdrop layer (no blur GPU rasterization overhead) */}
-          <div
-            className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
-            onClick={() => setIsModalOpen(false)}
-            aria-hidden="true"
-          />
+      {/* 3. HOMEPAGE VIEW */}
+      {activeView === 'home' && !isModalOpen && (
+        <>
+          {landingPageContent}
+        </>
+      )}
 
-          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[90vh] z-10 isolate">
-
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-white border-b border-[#E8E4F0] flex items-center justify-between">
+      {/* 4. DEDICATED BOOKING CHECKOUT VIEW (100% OF BOOKING SYSTEM PRESERVED) */}
+      {(activeView === 'book' || isModalOpen) && (
+        <div className="min-h-screen bg-[#FAFAF7] text-[#1A1A2E] flex flex-col font-sans selection:bg-[#C9B8F0] selection:text-[#1A1A2E]">
+          {/* Header */}
+          <header className="sticky top-0 z-40 bg-[#FAFAF7]/95 backdrop-blur-md border-b-2 border-[#1A1A2E] px-4 sm:px-8 py-3.5 transition-all">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] p-0.5 flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
-                  <img
-                    src="/logo.png"
-                    alt="PackAndFilm"
-                    className="w-full h-full object-contain scale-105"
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-lg text-[#1A1A2E]">
-                      {modalStep === 6 ? 'Booking Confirmed' : booking.cameraId ? `Book Your ${modalCamera.shortName}` : 'Select Your Camera'}
-                    </span>
-                    {modalStep < 6 && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A]">
-                        Step {modalStep} of 5
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-[#6B6B8A]">
-                    {modalStep === 1 && (booking.cameraId ? 'Select dates & review package pricing' : 'Choose your camera to view available dates & times')}
-                    {modalStep === 2 && 'Choose Meetup (₱200 fee) or Grab Express Delivery'}
-                    {modalStep === 3 && 'ID verification & document uploads (confidential)'}
-                    {modalStep === 4 && 'Renter contact details & refund info'}
-                    {modalStep === 5 && 'GCash downpayment (₱300) & Terms agreement'}
-                    {modalStep === 6 && 'Ready for handover! Check your details'}
-                  </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    navigateTo('home');
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-[#1A1A2E] bg-white hover:bg-[#EDE8FC] text-xs font-black shadow-[2px_2px_0px_#1A1A2E] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer"
+                >
+                  <Home className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Back to Home</span>
+                  <span className="sm:hidden">Home</span>
+                </button>
+                <span className="text-[#6B6B8A] text-xs font-bold hidden sm:inline">/</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-[#1A1A2E]">
+                    {modalStep === 6 ? 'Reservation Confirmed' : booking.cameraId ? `Rent ${modalCamera.shortName || 'Camera'}` : 'Select Camera & Dates'}
+                  </span>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]">
+                    Step {modalStep} of {modalStep === 6 ? 6 : 5}
+                  </span>
                 </div>
               </div>
 
-              {/* Close Button */}
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-9 h-9 rounded-full bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#FEF0E7] hover:border-[#1A1A2E] flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer"
-                aria-label="Close modal"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowKycModal(true)}
+                  className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-[#6B6B8A] hover:text-[#1A1A2E] px-2.5 py-1.5 rounded-lg border border-[#E8E4F0] bg-white cursor-pointer"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#6B46C1]" />
+                  <span>ID Guide</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-[#6B6B8A] hover:text-[#1A1A2E] px-2.5 py-1.5 rounded-lg border border-[#E8E4F0] bg-white cursor-pointer"
+                >
+                  <Scale className="w-3.5 h-3.5 text-[#6B46C1]" />
+                  <span>Terms &amp; Conditions</span>
+                </button>
+              </div>
             </div>
+          </header>
 
-            {/* Step Progress Bar (Steps 1 to 5) */}
-            {modalStep < 6 && (
-              <div className="w-full bg-[#E8E4F0] h-1.5 flex">
-                <div
-                  className="bg-gradient-to-r from-[#C9B8F0] via-[#F5C6A8] to-[#A8DBC8] h-full transition-all duration-300"
-                  style={{ width: `${(modalStep / 5) * 100}%` }}
-                />
-              </div>
-            )}
+          {/* Breadcrumbs / Step Progress Tracker for Desktop */}
+          <div className="bg-white border-b border-[#E8E4F0] px-4 sm:px-8 py-3 hidden md:block">
+            <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 overflow-x-auto">
+              {[
+                { step: 1, label: 'Gear & Dates' },
+                { step: 2, label: 'Handover Mode' },
+                { step: 3, label: 'ID Verification' },
+                { step: 4, label: 'Renter Details' },
+                { step: 5, label: 'Payment & Review' },
+                { step: 6, label: 'Confirmed' }
+              ].map((s) => {
+                const isDone = modalStep > s.step;
+                const isCurrent = modalStep === s.step;
+                return (
+                  <div
+                    key={s.step}
+                    className={`flex items-center gap-2 text-xs font-black ${
+                      isCurrent ? 'text-[#6B46C1]' : isDone ? 'text-emerald-700' : 'text-[#A0A0BA]'
+                    }`}
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-black border ${
+                        isCurrent
+                          ? 'bg-[#EDE8FC] border-[#6B46C1] text-[#6B46C1]'
+                          : isDone
+                          ? 'bg-emerald-100 border-emerald-400 text-emerald-800'
+                          : 'bg-[#FAFAF7] border-[#E8E4F0] text-[#A0A0BA]'
+                      }`}
+                    >
+                      {isDone ? '✓' : s.step}
+                    </div>
+                    <span>{s.label}</span>
+                    {s.step < 6 && <ChevronRight className="w-3.5 h-3.5 text-[#D1D1DF]" />}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-            {/* Modal Scrollable Body */}
-            <div ref={modalBodyRef} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1">
+          {/* Mobile Progress Bar */}
+          <div className="md:hidden w-full bg-[#E8E4F0] h-1.5">
+            <div
+              className="bg-gradient-to-r from-[#C9B8F0] via-[#F5C6A8] to-[#A8DBC8] h-full transition-all duration-300"
+              style={{ width: `${(modalStep / 6) * 100}%` }}
+            />
+          </div>
+
+          {/* Main Layout: 2 Columns on Desktop, 1 Column on Mobile */}
+          <main className="max-w-7xl mx-auto w-full px-4 sm:px-8 py-6 sm:py-10 flex-1">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+              {/* Left Column: Form Card */}
+              <div className={`lg:col-span-8 ${modalStep === 6 ? 'lg:col-span-12 max-w-3xl mx-auto w-full' : ''}`}>
+                <div className="bg-white rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] p-5 sm:p-8 flex flex-col">
+                  {/* Step Body */}
+                  <div ref={modalBodyRef} className="space-y-6 flex-1">
 
               {/* ───────────────── STEP 1: CAMERA SELECTION, DATES & PRICING BREAKDOWN ───────────────── */}
               {modalStep === 1 && (
@@ -5443,8 +5612,136 @@ export default function App() {
               </div>
             )}
 
-          </div>
+                </div>
+              </div>
 
+              {/* Right Column: Sticky Live Digital Receipt (Desktop) */}
+              {modalStep < 6 && (
+                <aside className="hidden lg:block lg:col-span-4 sticky top-24">
+                  <div className="bg-[#EDE8FC]/70 rounded-[28px] border-2 border-[#1A1A2E] shadow-[6px_6px_0px_#1A1A2E] p-6 space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 border-b border-[#C9B8F0]">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-[#6B46C1]" />
+                        <span className="text-xs font-black uppercase tracking-wider text-[#553C9A]">
+                          Live Digital Receipt
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-[#553C9A] border border-[#C9B8F0]">
+                        Real-Time Quote
+                      </span>
+                    </div>
+
+                    {/* Camera Thumbnail & Title */}
+                    <div className="flex items-center gap-3.5 bg-white p-3 rounded-2xl border border-[#C9B8F0]">
+                      <div className="w-14 h-14 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                        <img
+                          src={modalCamera.image}
+                          alt={modalCamera.name}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-black text-sm text-[#1A1A2E] truncate">
+                          {modalCamera.name}
+                        </div>
+                        <div className="text-[11px] text-[#6B6B8A] font-medium">
+                          ₱{modalQuote.rate || 500}/day tier • 4K Vlog Ready
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Rental Period & Handover Details */}
+                    <div className="space-y-2 text-xs font-medium text-[#1A1A2E] bg-white/60 p-3.5 rounded-2xl border border-[#C9B8F0]/60">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B6B8A]">Dates:</span>
+                        <span className="font-bold">
+                          {booking.startDate || calcStartDate} → {booking.endDate || calcEndDate}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B6B8A]">Duration:</span>
+                        <span className="font-bold text-[#553C9A]">
+                          {modalQuote.days} {modalQuote.days === 1 ? 'Day (24h)' : 'Days'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B6B8A]">Handover:</span>
+                        <span className="font-bold">
+                          {booking.handoverMode === 'meetup' ? `Meetup (${booking.meetupLocation})` : 'Grab Express Delivery'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Itemized Line Items */}
+                    <div className="space-y-1.5 text-xs text-[#1A1A2E] pt-2 border-t border-[#C9B8F0]">
+                      <div className="flex items-center justify-between text-[#6B6B8A]">
+                        <span>Rental Rate ({modalQuote.days}d × ₱{modalQuote.rate || 500})</span>
+                        <span className="font-bold text-[#1A1A2E]">₱{(modalQuote.rentalTotal || 0).toLocaleString()}</span>
+                      </div>
+                      {(modalQuote.meetupFee || 0) > 0 && (
+                        <div className="flex items-center justify-between text-[#6B6B8A]">
+                          <span>Meetup Handling Fee</span>
+                          <span className="font-bold text-[#1A1A2E]">₱{modalQuote.meetupFee}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-[#6B6B8A]">
+                        <span>Security Deposit (Refundable)</span>
+                        <span className="font-bold text-[#1A1A2E]">₱{(modalQuote.deposit || 1000).toLocaleString()}</span>
+                      </div>
+
+                      <div className="pt-2 border-t border-[#C9B8F0] flex items-center justify-between font-black text-sm text-[#1A1A2E]">
+                        <span>Grand Total</span>
+                        <span>₱{((modalQuote.rentalTotal || 0) + (modalQuote.deposit || 1000) + (modalQuote.meetupFee || 0)).toLocaleString()}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs font-bold text-emerald-700 bg-emerald-50 p-2 rounded-xl border border-emerald-200">
+                        <span>Downpayment Credited</span>
+                        <span>-₱{DOWNPAYMENT_FEE}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs font-black text-[#553C9A] bg-white p-2.5 rounded-xl border border-[#C9B8F0]">
+                        <span>Balance Due at Handover</span>
+                        <span>₱{(modalQuote.balanceDue || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Trust Badges in Receipt */}
+                    <div className="pt-2 space-y-2 text-[11px] text-[#6B6B8A] font-medium">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>24-hour turnaround buffer guaranteed</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>₱1,000 deposit refunded within 24h of return</span>
+                      </div>
+                    </div>
+
+                    {/* Quick Helper Links */}
+                    <div className="pt-2 border-t border-[#C9B8F0] flex items-center justify-between text-xs font-bold text-[#553C9A]">
+                      <button
+                        type="button"
+                        onClick={() => setShowKycModal(true)}
+                        className="hover:underline cursor-pointer"
+                      >
+                        Accepted IDs Guide
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowTermsModal(true)}
+                        className="hover:underline cursor-pointer"
+                      >
+                        8-Clause Contract
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+              )}
+
+            </div>
+          </main>
         </div>
       )}
 
@@ -6192,7 +6489,7 @@ export default function App() {
       {/* Floating Quick Rent Pill (Gracefully fades in when scrolling past Hero) */}
       <div
         className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 transition-all duration-300 transform ${
-          showFloatingCta ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
+          showFloatingCta && activeView === 'home' && !isModalOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
         }`}
       >
         <button
