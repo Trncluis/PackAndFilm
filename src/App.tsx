@@ -38,7 +38,9 @@ import {
   Loader2,
   Clock,
   Info,
-  Plane
+  Plane,
+  Sun,
+  CalendarRange
 } from 'lucide-react';
 
 import { CAMERAS, CameraItem } from './data/cameras';
@@ -72,6 +74,7 @@ const APPS_SCRIPT_URL: string = "https://script.google.com/macros/s/AKfycbziRdlY
 
 interface BookingState {
   cameraId: string;
+  rentalType: 'same-day' | 'multi-day';
   startDate: string;
   endDate: string;
   handoverMode: 'meetup' | 'courier';
@@ -236,8 +239,10 @@ export default function App() {
     const paramStart = params?.get('startDate');
     const paramEnd = params?.get('endDate');
     const paramCam = params?.get('camera');
+    const isSameDayInitial = Boolean(paramStart && paramEnd && paramStart === paramEnd);
     return {
       cameraId: paramCam || '',
+      rentalType: isSameDayInitial ? 'same-day' : 'multi-day',
       startDate: paramStart || todayStr,
       endDate: paramEnd || nextDay,
       handoverMode: 'meetup',
@@ -822,6 +827,36 @@ export default function App() {
     }));
   };
 
+  // Toggle Between Same-Day vs Multi-Day Rental Mode
+  const handleRentalTypeToggle = (type: 'same-day' | 'multi-day') => {
+    if (type === 'same-day') {
+      const baseDate = booking.startDate || todayStr;
+      setBooking(prev => ({
+        ...prev,
+        rentalType: 'same-day',
+        startDate: baseDate,
+        endDate: baseDate,
+      }));
+    } else {
+      const baseStart = booking.startDate || todayStr;
+      let nextEnd = booking.endDate;
+      if (!nextEnd || nextEnd <= baseStart) {
+        const d = new Date(baseStart);
+        d.setDate(d.getDate() + 2);
+        nextEnd = d.toISOString().split('T')[0];
+      }
+      setBooking(prev => ({
+        ...prev,
+        rentalType: 'multi-day',
+        startDate: baseStart,
+        endDate: nextEnd,
+      }));
+    }
+    clearFieldError('startDate');
+    clearFieldError('endDate');
+    clearFieldError('dateConflict');
+  };
+
   // Form Step Validation State & Auto-Scroll
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [stepAttempted, setStepAttempted] = useState<Record<number, boolean>>({});
@@ -906,6 +941,9 @@ export default function App() {
       }
       if (booking.startDate && booking.endDate && booking.startDate > booking.endDate) {
         errors.endDate = 'End date cannot be earlier than start date.';
+      }
+      if (booking.rentalType === 'multi-day' && booking.startDate && booking.endDate && booking.startDate === booking.endDate) {
+        errors.endDate = 'Multi-Day rentals require at least 2 days. For single-day shoots, please switch to "Same-Day Rental" above.';
       }
       if (modalConflict.hasConflict) {
         errors.dateConflict = modalConflict.message || 'The selected dates conflict with an active booking.';
@@ -1059,6 +1097,7 @@ export default function App() {
         setBooking(prev => ({
           ...prev,
           cameraId: activeCamId,
+          rentalType: nextWindow.start === nextWindow.end ? 'same-day' : 'multi-day',
           startDate: nextWindow.start,
           endDate: nextWindow.end,
           handoverMode: calcHandover,
@@ -1067,6 +1106,7 @@ export default function App() {
         setBooking(prev => ({
           ...prev,
           cameraId: activeCamId,
+          rentalType: calcStartDate === calcEndDate ? 'same-day' : 'multi-day',
           startDate: calcStartDate,
           endDate: calcEndDate,
           handoverMode: calcHandover,
@@ -1076,6 +1116,7 @@ export default function App() {
       setBooking(prev => ({
         ...prev,
         cameraId: '',
+        rentalType: calcStartDate === calcEndDate ? 'same-day' : 'multi-day',
         startDate: calcStartDate,
         endDate: calcEndDate,
         handoverMode: calcHandover,
@@ -1289,7 +1330,7 @@ export default function App() {
       termsAccepted: booking.termsAccepted,
       termsVersion: booking.termsVersion || RENTAL_CONFIG.termsVersion,
       termsAcceptedAt: booking.termsAcceptedAt || new Date().toISOString(),
-      notes: 'Emergency Contacts: ' + emergencyContactsText,
+      notes: `Rental Type: ${booking.rentalType || (booking.startDate === booking.endDate ? 'same-day' : 'multi-day')} • Pickup: ${booking.pickupTimeSlot} • Return: ${booking.returnTimeSlot} • Emergency Contacts: ${emergencyContactsText}`,
       // KYC Uploaded Files passed to Google Apps Script -> Google Drive:
       id1File: booking.id1File,
       id1BackFile: booking.id1BackFile,
@@ -3186,8 +3227,8 @@ export default function App() {
                             }}
                             className={`relative p-3.5 rounded-2xl text-left transition-all cursor-pointer group flex flex-col justify-between ${
                               isSelected
-                                ? 'bg-white border-2 border-[#1A1A2E] shadow-[4px_4px_0px_0px_#1A1A2E] ring-2 ring-[#C9B8F0]/60'
-                                : 'bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-white hover:shadow-[2px_2px_0px_0px_#1A1A2E]'
+                                ? 'bg-white border-2 border-[#1A1A2E] shadow-[4px_4px_0px_0px_#1A1A2E]'
+                                : 'bg-[#FAFAF7] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-white hover:shadow-[3px_3px_0px_0px_#1A1A2E]'
                             }`}
                           >
                             <div className="w-full">
@@ -3284,144 +3325,400 @@ export default function App() {
                         </span>
                       </div>
 
-                      {/* 2-Column Integrated Date & Time Cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        {/* Column 1: Pickup Date & Preferred Time Dropdown */}
-                        <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
-                          <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
-                              1. Pickup Schedule
+                      {/* ☀️ Same-Day vs ✈️ Multi-Day Rental Selection Cards (Compact) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {/* Same-Day Option Card */}
+                        <button
+                          type="button"
+                          onClick={() => handleRentalTypeToggle('same-day')}
+                          className={`p-2.5 sm:p-3 rounded-2xl border-2 text-left transition-all cursor-pointer flex items-center justify-between gap-2.5 group ${
+                            booking.rentalType === 'same-day'
+                              ? 'border-[#1A1A2E] bg-[#FFF9F2] shadow-[3px_3px_0px_#1A1A2E]'
+                              : 'border-[#E8E4F0] bg-white hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105 ${
+                              booking.rentalType === 'same-day'
+                                ? 'bg-white border-[#1A1A2E] text-[#DD6B20]'
+                                : 'bg-[#FFF9F2] border-[#F5C6A8] text-[#DD6B20]'
+                            }`}>
+                              <Sun className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-black text-xs text-[#1A1A2E] truncate">
+                                  Same-Day Rental
+                                </span>
+                                <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full border ${
+                                  booking.rentalType === 'same-day'
+                                    ? 'bg-[#1A1A2E] text-white border-[#1A1A2E]'
+                                    : 'bg-[#FFF0E7] text-[#C05621] border-[#F5C6A8]'
+                                }`}>
+                                  1 Day
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-[#6B6B8A] mt-0.5 truncate leading-tight">
+                                8 AM – 12 AM • ₱{modalCamera.standardRate}/day flat
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                              booking.rentalType === 'same-day'
+                                ? 'bg-[#1A1A2E] text-white'
+                                : 'bg-[#FAFAF7] text-[#6B6B8A] border border-[#E8E4F0]'
+                            }`}>
+                              {booking.rentalType === 'same-day' ? (
+                                <>
+                                  <Check className="w-2.5 h-2.5 text-[#A8DBC8]" />
+                                  <span>Selected</span>
+                                </>
+                              ) : (
+                                <span>Select</span>
+                              )}
                             </span>
-                            {modalConflict.isStartTurnover ? (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                                Afternoon Pickup (2:00 PM)
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                                Flexible Window
-                              </span>
-                            )}
+                          </div>
+                        </button>
+
+                        {/* Multi-Day Option Card */}
+                        <button
+                          type="button"
+                          onClick={() => handleRentalTypeToggle('multi-day')}
+                          className={`p-2.5 sm:p-3 rounded-2xl border-2 text-left transition-all cursor-pointer flex items-center justify-between gap-2.5 group ${
+                            booking.rentalType === 'multi-day'
+                              ? 'border-[#1A1A2E] bg-[#EDE8FC] shadow-[3px_3px_0px_#1A1A2E]'
+                              : 'border-[#E8E4F0] bg-white hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105 ${
+                              booking.rentalType === 'multi-day'
+                                ? 'bg-white border-[#1A1A2E] text-[#6B46C1]'
+                                : 'bg-[#EDE8FC] border-[#C9B8F0] text-[#6B46C1]'
+                            }`}>
+                              <CalendarRange className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-black text-xs text-[#1A1A2E] truncate">
+                                  Multi-Day Rental
+                                </span>
+                                <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full border ${
+                                  booking.rentalType === 'multi-day'
+                                    ? 'bg-[#1A1A2E] text-white border-[#1A1A2E]'
+                                    : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
+                                }`}>
+                                  2+ Days
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-[#6B6B8A] mt-0.5 truncate leading-tight">
+                                Tiered rates • As low as ₱{modalCamera.bulkRate}/d
+                              </p>
+                            </div>
                           </div>
 
-                          <div data-field-key="startDate">
-                            <CustomDatePicker
-                              label="Pickup / Delivery Date"
-                              isRequired={true}
-                              placeholder="Select pickup date"
-                              value={booking.startDate}
-                              minDate={todayStr}
-                              rangeStart={booking.startDate}
-                              rangeEnd={booking.endDate}
-                              bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
-                              hasConflict={modalConflict.hasConflict}
-                              conflictMessage={modalConflict.message}
-                              hasError={!!validationErrors.startDate}
-                              errorMessage={validationErrors.startDate}
-                              onChange={(val) => {
-                                setBooking(b => ({
-                                  ...b,
-                                  startDate: val,
-                                  endDate: val > b.endDate ? val : b.endDate,
-                                }));
-                                clearFieldError('startDate');
-                                clearFieldError('endDate');
-                                clearFieldError('dateConflict');
-                              }}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <CustomSelect
-                              label="Preferred Pickup Time"
-                              isRequired={true}
-                              size="sm"
-                              value={booking.pickupTimeSlot}
-                              options={pickupTimeOptions}
-                              headerNotice={
-                                modalConflict.isStartTurnover
-                                  ? "Available from 2:00 PM for afternoon pickup."
-                                  : undefined
-                              }
-                              onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
-                            />
-
-                            {/* Interactive Hourly Timeline Selector */}
-                            <HourlyTimelineSelector
-                              label="Quick Select Hour"
-                              value={booking.pickupTimeSlot}
-                              hours={pickupQuickHours}
-                              earliestBadge={modalConflict.isStartTurnover ? "2 PM Earliest" : undefined}
-                              onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Column 2: Return Date & Preferred Time Dropdown */}
-                        <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
-                          <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
-                              2. Return Schedule
+                          <div className="shrink-0">
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                              booking.rentalType === 'multi-day'
+                                ? 'bg-[#1A1A2E] text-white'
+                                : 'bg-[#FAFAF7] text-[#6B6B8A] border border-[#E8E4F0]'
+                            }`}>
+                              {booking.rentalType === 'multi-day' ? (
+                                <>
+                                  <Check className="w-2.5 h-2.5 text-[#A8DBC8]" />
+                                  <span>Selected</span>
+                                </>
+                              ) : (
+                                <span>Select</span>
+                              )}
                             </span>
-                            {modalConflict.isEndTurnover ? (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                                Morning Return (by 12:00 PM)
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                                Flexible Window
-                              </span>
-                            )}
                           </div>
-
-                          <div data-field-key="endDate">
-                            <CustomDatePicker
-                              label="Return Date"
-                              isRequired={true}
-                              placeholder="Select return date"
-                              value={booking.endDate}
-                              minDate={booking.startDate || todayStr}
-                              rangeStart={booking.startDate}
-                              rangeEnd={booking.endDate}
-                              isEndDate={true}
-                              bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
-                              hasConflict={modalConflict.hasConflict}
-                              conflictMessage={modalConflict.message}
-                              hasError={!!validationErrors.endDate}
-                              errorMessage={validationErrors.endDate}
-                              onChange={(val) => {
-                                setBooking(b => ({ ...b, endDate: val }));
-                                clearFieldError('endDate');
-                                clearFieldError('dateConflict');
-                              }}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <CustomSelect
-                              label="Preferred Return Time"
-                              isRequired={true}
-                              size="sm"
-                              value={booking.returnTimeSlot}
-                              options={returnTimeOptions}
-                              headerNotice={
-                                modalConflict.isEndTurnover
-                                  ? "Morning return by 12:00 PM applies for this date."
-                                  : undefined
-                              }
-                              onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
-                            />
-
-                            {/* Interactive Hourly Timeline Selector */}
-                            <HourlyTimelineSelector
-                              label="Quick Select Hour"
-                              value={booking.returnTimeSlot}
-                              hours={returnQuickHours}
-                              earliestBadge={modalConflict.isEndTurnover ? "12 PM Return" : undefined}
-                              onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
-                            />
-                          </div>
-                        </div>
+                        </button>
                       </div>
+
+                      {/* ─── Dynamic Layout Based on Rental Type ─── */}
+                      {booking.rentalType === 'same-day' ? (
+                        /* SAME-DAY LAYOUT: Single Date Picker + Side-by-Side Same-Day Times */
+                        <div className="space-y-3.5 animate-fadeIn">
+                          {/* Single Date Picker Card */}
+                          <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                            <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                              <div className="flex items-center gap-1.5">
+                                <Sun className="w-3.5 h-3.5 text-[#DD6B20]" />
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                                  Shoot & Handover Date
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#6B46C1] border border-[#D6BCFA]">
+                                1 Day Standard Rate (₱{modalQuote.rate}/day)
+                              </span>
+                            </div>
+
+                            <div data-field-key="startDate">
+                              <CustomDatePicker
+                                label="Select Shoot Date"
+                                isRequired={true}
+                                placeholder="Choose your shoot date"
+                                value={booking.startDate}
+                                minDate={todayStr}
+                                rangeStart={booking.startDate}
+                                rangeEnd={booking.startDate}
+                                bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                                hasConflict={modalConflict.hasConflict}
+                                conflictMessage={modalConflict.message}
+                                hasError={!!validationErrors.startDate}
+                                errorMessage={validationErrors.startDate}
+                                onChange={(val) => {
+                                  setBooking(b => ({
+                                    ...b,
+                                    startDate: val,
+                                    endDate: val,
+                                  }));
+                                  clearFieldError('startDate');
+                                  clearFieldError('endDate');
+                                  clearFieldError('dateConflict');
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* 2-Column Side-by-Side Time Slots for Same-Day */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            {/* Pickup Time */}
+                            <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                              <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                                  1. Pickup Time
+                                </span>
+                                {modalConflict.isStartTurnover ? (
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                    Afternoon Pickup (2:00 PM)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                                    Ready from 8:00 AM
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="space-y-2">
+                                <CustomSelect
+                                  label="Preferred Pickup Time"
+                                  isRequired={true}
+                                  size="sm"
+                                  value={booking.pickupTimeSlot}
+                                  options={pickupTimeOptions}
+                                  headerNotice={
+                                    modalConflict.isStartTurnover
+                                      ? "Available from 2:00 PM for afternoon pickup."
+                                      : undefined
+                                  }
+                                  onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                                />
+
+                                <HourlyTimelineSelector
+                                  label="Quick Select Hour"
+                                  value={booking.pickupTimeSlot}
+                                  hours={pickupQuickHours}
+                                  earliestBadge={modalConflict.isStartTurnover ? "2 PM Earliest" : undefined}
+                                  onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Return Time (Same Day) */}
+                            <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                              <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                                  2. Return Time (Same Day)
+                                </span>
+                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                                  By 12:00 AM Midnight
+                                </span>
+                              </div>
+
+                              <div className="space-y-2">
+                                <CustomSelect
+                                  label="Preferred Return Time"
+                                  isRequired={true}
+                                  size="sm"
+                                  value={booking.returnTimeSlot}
+                                  options={returnTimeOptions}
+                                  headerNotice={
+                                    modalConflict.isEndTurnover
+                                      ? "Morning return by 12:00 PM applies for this date."
+                                      : "Return to meetup hub or dispatch courier before 12:00 AM Midnight."
+                                  }
+                                  onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                                />
+
+                                <HourlyTimelineSelector
+                                  label="Quick Select Hour"
+                                  value={booking.returnTimeSlot}
+                                  hours={returnQuickHours}
+                                  earliestBadge={modalConflict.isEndTurnover ? "12 PM Return" : undefined}
+                                  onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* MULTI-DAY LAYOUT: 2-Column Range Calendar & Times */
+                        <div className="space-y-3.5 animate-fadeIn">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            {/* Column 1: Pickup Date & Preferred Time Dropdown */}
+                            <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                              <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                                  1. Pickup Schedule
+                                </span>
+                                {modalConflict.isStartTurnover ? (
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                    Afternoon Pickup (2:00 PM)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                                    Flexible Window
+                                  </span>
+                                )}
+                              </div>
+
+                              <div data-field-key="startDate">
+                                <CustomDatePicker
+                                  label="Pickup / Delivery Date"
+                                  isRequired={true}
+                                  placeholder="Select pickup date"
+                                  value={booking.startDate}
+                                  minDate={todayStr}
+                                  rangeStart={booking.startDate}
+                                  rangeEnd={booking.endDate}
+                                  bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                                  hasConflict={modalConflict.hasConflict}
+                                  conflictMessage={modalConflict.message}
+                                  hasError={!!validationErrors.startDate}
+                                  errorMessage={validationErrors.startDate}
+                                  onChange={(val) => {
+                                    setBooking(b => ({
+                                      ...b,
+                                      startDate: val,
+                                      endDate: val > b.endDate ? val : b.endDate,
+                                    }));
+                                    clearFieldError('startDate');
+                                    clearFieldError('endDate');
+                                    clearFieldError('dateConflict');
+                                  }}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <CustomSelect
+                                  label="Preferred Pickup Time"
+                                  isRequired={true}
+                                  size="sm"
+                                  value={booking.pickupTimeSlot}
+                                  options={pickupTimeOptions}
+                                  headerNotice={
+                                    modalConflict.isStartTurnover
+                                      ? "Available from 2:00 PM for afternoon pickup."
+                                      : undefined
+                                  }
+                                  onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                                />
+
+                                <HourlyTimelineSelector
+                                  label="Quick Select Hour"
+                                  value={booking.pickupTimeSlot}
+                                  hours={pickupQuickHours}
+                                  earliestBadge={modalConflict.isStartTurnover ? "2 PM Earliest" : undefined}
+                                  onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Column 2: Return Date & Preferred Time Dropdown */}
+                            <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-3 shadow-xs">
+                              <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
+                                  2. Return Schedule
+                                </span>
+                                {modalConflict.isEndTurnover ? (
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                    Morning Return (by 12:00 PM)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                                    Flexible Window
+                                  </span>
+                                )}
+                              </div>
+
+                              <div data-field-key="endDate">
+                                <CustomDatePicker
+                                  label="Return Date"
+                                  isRequired={true}
+                                  placeholder="Select return date"
+                                  value={booking.endDate}
+                                  minDate={booking.startDate || todayStr}
+                                  rangeStart={booking.startDate}
+                                  rangeEnd={booking.endDate}
+                                  isEndDate={true}
+                                  bookedRanges={bookings.filter(b => b.cameraId === booking.cameraId)}
+                                  hasConflict={modalConflict.hasConflict}
+                                  conflictMessage={modalConflict.message}
+                                  hasError={!!validationErrors.endDate}
+                                  errorMessage={validationErrors.endDate}
+                                  onChange={(val) => {
+                                    setBooking(b => ({ ...b, endDate: val }));
+                                    clearFieldError('endDate');
+                                    clearFieldError('dateConflict');
+                                  }}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <CustomSelect
+                                  label="Preferred Return Time"
+                                  isRequired={true}
+                                  size="sm"
+                                  value={booking.returnTimeSlot}
+                                  options={returnTimeOptions}
+                                  headerNotice={
+                                    modalConflict.isEndTurnover
+                                      ? "Morning return by 12:00 PM applies for this date."
+                                      : undefined
+                                  }
+                                  onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                                />
+
+                                <HourlyTimelineSelector
+                                  label="Quick Select Hour"
+                                  value={booking.returnTimeSlot}
+                                  hours={returnQuickHours}
+                                  earliestBadge={modalConflict.isEndTurnover ? "12 PM Return" : undefined}
+                                  onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Friendly hint when 1 day is picked in Multi-Day */}
+                          {booking.startDate === booking.endDate && (
+                            <div className="p-3 rounded-xl bg-[#EDE8FC] border border-[#D6BCFA] text-xs text-[#553C9A] flex items-center justify-between">
+                              <span className="font-semibold">💡 Single day selected. Need a 1-day rental?</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRentalTypeToggle('same-day')}
+                                className="font-extrabold text-[#6B46C1] hover:underline cursor-pointer"
+                              >
+                                Switch to Same-Day Rental →
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Schedule Conflict or Operating Hours Status Banner */}
                       {modalConflict.hasConflict ? (

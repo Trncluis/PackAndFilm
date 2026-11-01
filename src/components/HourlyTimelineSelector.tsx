@@ -78,12 +78,14 @@ export const HourlyTimelineSelector: React.FC<HourlyTimelineSelectorProps> = Rea
       <div className="flex items-center justify-between mb-1.5 px-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
           <Clock className="w-3 h-3 text-[#6B6B8A] shrink-0" />
-          <span className="text-[11px] font-bold text-[#6B6B8A] truncate">
+          <span className="text-[11px] font-bold text-[#6B6B8A] shrink-0">
             {label}
           </span>
-          <span className="text-[10px] font-semibold text-[#A0AEC0]">
-            ({hours.length} available)
-          </span>
+          {!earliestBadge && (
+            <span className="text-[10px] font-semibold text-[#A0AEC0] truncate">
+              ({hours.length} available)
+            </span>
+          )}
           {earliestBadge && (
             <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] shrink-0">
               {earliestBadge}
