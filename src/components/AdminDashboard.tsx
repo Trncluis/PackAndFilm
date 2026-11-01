@@ -487,7 +487,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Bookings Data & Sync
-  const [bookings, setBookings] = useState<AdminBookingItem[]>([]);
+  const [bookings, setBookings] = useState<AdminBookingItem[]>(() => (localBookings && localBookings.length > 0 ? (localBookings as any) : []));
   const [isLoading, setIsLoading] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -528,6 +528,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setWorkflowErrorMsg(null);
     }
   }, [selectedBooking?.bookingRef]);
+
+  // Prevent background scroll-chaining and repaint cycles when any modal is open in Admin Dashboard
+  useEffect(() => {
+    const isAnyModalOpen = !!selectedBooking || !!previewDoc || showClearAllModal || !!deleteTargetBooking;
+    if (isAnyModalOpen) {
+      const originalOverflow = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [selectedBooking, previewDoc, showClearAllModal, deleteTargetBooking]);
 
   // ─────────────────────────────────────────────────────────────
   // BACKEND AUTHENTICATION (POST action: adminLogin & SHA-256 Verification)
@@ -1504,8 +1516,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         const isUpdatingSelected = updatingRef === selectedBooking.bookingRef;
 
         return (
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-            <div className="relative w-full max-w-3xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[92vh]">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 overflow-hidden animate-fadeIn">
+            {/* Hardware-accelerated static backdrop layer (no blur GPU rasterization overhead) */}
+            <div
+              className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
+              onClick={() => setSelectedBooking(null)}
+              aria-hidden="true"
+            />
+
+            <div className="relative w-full max-w-3xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[90vh] z-10 isolate">
               
               {/* Modal Header */}
               <div className="px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
@@ -1535,7 +1554,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               {/* Modal Body */}
-              <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1 text-xs">
 
                 {/* Workflow Alert Message (if error occurred during status update) */}
                 {workflowErrorMsg && (
@@ -1831,8 +1850,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           4. FULLSCREEN DOCUMENT PREVIEW POPUP
       ───────────────────────────────────────────────────────────── */}
       {previewDoc && (
-        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-          <div className="relative max-w-4xl w-full max-h-[92vh] bg-[#1A1A2E] rounded-3xl p-4 sm:p-5 flex flex-col shadow-2xl">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-2.5 sm:p-6 overflow-hidden animate-fadeIn">
+          {/* Hardware-accelerated static backdrop layer */}
+          <div
+            className="fixed inset-0 bg-black/85 transition-opacity will-change-opacity"
+            onClick={() => setPreviewDoc(null)}
+            aria-hidden="true"
+          />
+          <div className="relative max-w-4xl w-full max-h-[92vh] bg-[#1A1A2E] rounded-3xl p-4 sm:p-5 flex flex-col shadow-2xl z-10 isolate">
             {/* Header */}
             <div className="w-full flex items-center justify-between pb-3 text-white border-b border-gray-700 mb-3">
               <div className="flex items-center gap-2">
@@ -1893,8 +1918,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           5. DANGER CONFIRMATION: CLEAR ALL BOOKINGS MODAL
       ───────────────────────────────────────────────────────────── */}
       {showClearAllModal && (
-        <div className="fixed inset-0 z-70 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="relative w-full max-w-lg bg-[#FAFAF7] rounded-[28px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden p-6 sm:p-7 space-y-5">
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 overflow-hidden animate-fadeIn">
+          {/* Hardware-accelerated static backdrop layer */}
+          <div
+            className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
+            onClick={() => {
+              setShowClearAllModal(false);
+              setClearConfirmInput('');
+            }}
+            aria-hidden="true"
+          />
+          <div className="relative w-full max-w-lg bg-[#FAFAF7] rounded-[28px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden p-6 sm:p-7 space-y-5 z-10 isolate">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] flex items-center justify-center text-[#E53E3E] shrink-0">
                 <AlertTriangle className="w-6 h-6 text-[#E53E3E]" />
@@ -1964,8 +1998,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           6. CONFIRMATION: DELETE SINGLE BOOKING MODAL
       ───────────────────────────────────────────────────────────── */}
       {deleteTargetBooking && (
-        <div className="fixed inset-0 z-70 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="relative w-full max-w-md bg-[#FAFAF7] rounded-[28px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden p-6 space-y-4">
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 overflow-hidden animate-fadeIn">
+          {/* Hardware-accelerated static backdrop layer */}
+          <div
+            className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
+            onClick={() => setDeleteTargetBooking(null)}
+            aria-hidden="true"
+          />
+          <div className="relative w-full max-w-md bg-[#FAFAF7] rounded-[28px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden p-6 space-y-4 z-10 isolate">
             <div className="flex items-start gap-3.5">
               <div className="w-10 h-10 rounded-2xl bg-[#FFF5F5] border border-[#FEB2B2] flex items-center justify-center text-[#E53E3E] shrink-0">
                 <Trash2 className="w-5 h-5 text-[#E53E3E]" />

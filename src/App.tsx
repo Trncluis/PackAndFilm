@@ -66,6 +66,7 @@ import { CustomDatePicker } from './components/CustomDatePicker';
 import { CustomSelect, SelectOption } from './components/CustomSelect';
 import { HourlyTimelineSelector } from './components/HourlyTimelineSelector';
 import { AdminDashboard } from './components/AdminDashboard';
+import { LiveCameraSnapshotModal } from './components/LiveCameraSnapshotModal';
 
 const DOWNPAYMENT_FEE = RENTAL_CONFIG.reservationFee;
 
@@ -210,16 +211,6 @@ export default function App() {
     return 1;
   });
 
-  // Prevent background scroll-chaining and repaint cycles when modal is open
-  useEffect(() => {
-    if (isModalOpen) {
-      const originalOverflow = window.getComputedStyle(document.body).overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
-    }
-  }, [isModalOpen]);
   const [copiedGcash, setCopiedGcash] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
   const [inclusionsModalCamera, setInclusionsModalCamera] = useState<CameraItem | null>(null);
@@ -231,6 +222,28 @@ export default function App() {
   // Terms and Conditions State
   const [openTermsClause, setOpenTermsClause] = useState<number | null>(null);
   const [showTermsModal, setShowTermsModal] = useState<boolean>(false);
+
+  // Live Camera Snapshot State (Desktop WebRTC Viewfinder & Mobile Native Capture)
+  const [liveCameraTarget, setLiveCameraTarget] = useState<{
+    fieldKey: keyof BookingState;
+    title: string;
+    subtitle: string;
+    instruction: string;
+    nameField?: 'id1Name' | 'id1BackName' | 'id2Name' | 'id2BackName';
+  } | null>(null);
+  const mobileSelfieCameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Prevent background scroll-chaining and repaint cycles when any modal is open
+  useEffect(() => {
+    const isAnyModalActive = isModalOpen || !!inclusionsModalCamera || !!liveCameraTarget || showTermsModal;
+    if (isAnyModalActive) {
+      const originalOverflow = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isModalOpen, inclusionsModalCamera, liveCameraTarget, showTermsModal]);
 
   // Form State for Booking
   const [booking, setBooking] = useState<BookingState>(() => {
@@ -1260,6 +1273,36 @@ export default function App() {
       [field]: null,
       ...(nameField ? { [nameField]: '' } : {}),
     }));
+  };
+
+  // Live Camera Snapshot Callback
+  const handleLiveCameraCapture = (base64DataUrl: string) => {
+    if (!liveCameraTarget) return;
+    const { fieldKey, nameField } = liveCameraTarget;
+    setBooking(prev => ({
+      ...prev,
+      [fieldKey]: base64DataUrl,
+      ...(nameField ? { [nameField]: 'Live Camera Capture.jpg' } : {}),
+    }));
+    clearFieldError(fieldKey as string);
+    setLiveCameraTarget(null);
+    showToast('Photo captured successfully!', 'success');
+  };
+
+  // Open Live Camera Handler (with mobile native camera fallback)
+  const handleOpenLiveCamera = (
+    fieldKey: keyof BookingState,
+    title: string,
+    subtitle: string,
+    instruction: string,
+    nameField?: 'id1Name' | 'id1BackName' | 'id2Name' | 'id2BackName'
+  ) => {
+    const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile && fieldKey === 'selfieWithIdsFile' && mobileSelfieCameraInputRef.current) {
+      mobileSelfieCameraInputRef.current.click();
+    } else {
+      setLiveCameraTarget({ fieldKey, title, subtitle, instruction, nameField });
+    }
   };
 
   // Copy GCash handler
@@ -3051,8 +3094,6 @@ export default function App() {
     calcConflict,
     openFaq,
     mobileMenuOpen,
-    inclusionsModalCamera,
-    inclusionsTipId,
     sheetLastSynced,
     isSyncingSheet,
     bookings,
@@ -3235,9 +3276,9 @@ export default function App() {
                               <div className="flex items-start justify-between gap-2 mb-2">
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
-                                    isSelected
-                                      ? 'bg-[#1A1A2E] text-white border-[#1A1A2E]'
-                                      : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
+                                    cam.id === 'dji-pocket-3'
+                                      ? 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
+                                      : 'bg-[#FEF0E7] text-[#C05621] border-[#F5C6A8]'
                                   }`}>
                                     {cam.id === 'dji-pocket-3' ? 'CREATOR COMBO' : 'VLOGGER BUNDLE'}
                                   </span>
@@ -3286,12 +3327,14 @@ export default function App() {
                               </span>
                               <span className={`text-[11px] font-bold px-3 py-1 rounded-xl transition-all ${
                                 isSelected
-                                  ? 'bg-[#1A1A2E] text-white shadow-xs inline-flex items-center gap-1'
+                                  ? cam.id === 'dji-pocket-3'
+                                    ? 'bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] shadow-2xs inline-flex items-center gap-1 font-black'
+                                    : 'bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] shadow-2xs inline-flex items-center gap-1 font-black'
                                   : 'bg-white border border-[#E8E4F0] text-[#1A1A2E] group-hover:border-[#1A1A2E] group-hover:bg-[#EDE8FC]'
                               }`}>
                                 {isSelected ? (
                                   <>
-                                    <Check className="w-3 h-3 text-[#A8DBC8]" />
+                                    <Check className={`w-3.5 h-3.5 ${cam.id === 'dji-pocket-3' ? 'text-[#6B46C1]' : 'text-[#DD6B20]'}`} />
                                     <span>Selected</span>
                                   </>
                                 ) : (
@@ -3350,11 +3393,7 @@ export default function App() {
                                 <span className="font-black text-xs text-[#1A1A2E] truncate">
                                   Same-Day Rental
                                 </span>
-                                <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full border ${
-                                  booking.rentalType === 'same-day'
-                                    ? 'bg-[#1A1A2E] text-white border-[#1A1A2E]'
-                                    : 'bg-[#FFF0E7] text-[#C05621] border-[#F5C6A8]'
-                                }`}>
+                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full border bg-[#FFF0E7] text-[#C05621] border-[#F5C6A8]">
                                   1 Day
                                 </span>
                               </div>
@@ -3365,14 +3404,14 @@ export default function App() {
                           </div>
 
                           <div className="shrink-0">
-                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-all ${
                               booking.rentalType === 'same-day'
-                                ? 'bg-[#1A1A2E] text-white'
-                                : 'bg-[#FAFAF7] text-[#6B6B8A] border border-[#E8E4F0]'
+                                ? 'bg-[#FFF0E7] text-[#C05621] border border-[#F5C6A8] shadow-2xs font-black'
+                                : 'bg-[#FAFAF7] text-[#6B6B8A] border border-[#E8E4F0] group-hover:border-[#F5C6A8] group-hover:text-[#C05621]'
                             }`}>
                               {booking.rentalType === 'same-day' ? (
                                 <>
-                                  <Check className="w-2.5 h-2.5 text-[#A8DBC8]" />
+                                  <Check className="w-2.5 h-2.5 text-[#DD6B20]" />
                                   <span>Selected</span>
                                 </>
                               ) : (
@@ -3405,11 +3444,7 @@ export default function App() {
                                 <span className="font-black text-xs text-[#1A1A2E] truncate">
                                   Multi-Day Rental
                                 </span>
-                                <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full border ${
-                                  booking.rentalType === 'multi-day'
-                                    ? 'bg-[#1A1A2E] text-white border-[#1A1A2E]'
-                                    : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
-                                }`}>
+                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full border bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]">
                                   2+ Days
                                 </span>
                               </div>
@@ -3420,14 +3455,14 @@ export default function App() {
                           </div>
 
                           <div className="shrink-0">
-                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-all ${
                               booking.rentalType === 'multi-day'
-                                ? 'bg-[#1A1A2E] text-white'
-                                : 'bg-[#FAFAF7] text-[#6B6B8A] border border-[#E8E4F0]'
+                                ? 'bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] shadow-2xs font-black'
+                                : 'bg-[#FAFAF7] text-[#6B6B8A] border border-[#E8E4F0] group-hover:border-[#C9B8F0] group-hover:text-[#553C9A]'
                             }`}>
                               {booking.rentalType === 'multi-day' ? (
                                 <>
-                                  <Check className="w-2.5 h-2.5 text-[#A8DBC8]" />
+                                  <Check className="w-2.5 h-2.5 text-[#6B46C1]" />
                                   <span>Selected</span>
                                 </>
                               ) : (
@@ -4281,14 +4316,14 @@ export default function App() {
                     <p className="text-[11px] text-[#6B6B8A]">
                       Write the date, 3 specimen signatures, and <strong>&quot;For Pack and Film Camera Rental purposes only&quot;</strong> on a paper and take a photo together with your IDs.
                     </p>
-                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
                       <label className={`cursor-pointer px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.authorizationSlipFile
                         ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
                         : 'bg-[#FAFAF7] border-[#A8DBC8] text-[#234E52] hover:bg-[#E8F7F1]'
                         }`}>
                         <FileCheck className="w-3.5 h-3.5" />
                         <span className="flex items-center gap-1">
-                          <span>{booking.authorizationSlipFile ? 'Replace Slip Photo' : 'Upload Paper Photo with IDs'}</span>
+                          <span>{booking.authorizationSlipFile ? 'Change Slip Photo' : 'Upload Paper Photo with IDs'}</span>
                           <span className="text-red-500 font-bold">*</span>
                         </span>
                         <input
@@ -4328,31 +4363,38 @@ export default function App() {
                     }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
-                        <span>1D. Selfie Holding Your 2 Valid IDs & Paper</span>
+                        <span>1D. Selfie Holding Your 2 Valid IDs &amp; Paper</span>
                         <span className="text-red-500 font-bold">*</span>
                         {booking.selfieWithIdsFile && <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>}
+                      </span>
+                      <span className="text-[10px] text-[#553C9A] font-extrabold bg-[#EDE8FC] px-2 py-0.5 rounded">
+                        Required
                       </span>
                     </div>
                     <p className="text-[11px] text-[#6B6B8A]">
                       Submit a clear selfie holding your 2 valid IDs and the handwritten slip.
                     </p>
+
                     <div className="flex flex-wrap items-center gap-3 pt-1">
-                      <label className={`cursor-pointer px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.selfieWithIdsFile
-                        ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
-                        : 'bg-[#FAFAF7] border-[#C9B8F0] text-[#553C9A] hover:bg-[#EDE8FC]'
-                        }`}>
-                        <Upload className="w-3.5 h-3.5" />
+                      <button
+                        type="button"
+                        onClick={() => handleOpenLiveCamera(
+                          'selfieWithIdsFile',
+                          'Take Live Selfie with IDs',
+                          'Hold your 2 Valid IDs and Handwritten Slip clearly in frame',
+                          'Position your face in the oval guide and hold both IDs and the slip steadily.'
+                        )}
+                        className={`cursor-pointer px-3.5 py-2 rounded-xl border-2 text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-xs ${validationErrors.selfieWithIdsFile
+                          ? 'bg-[#FFF5F5] border-red-400 text-red-600 ring-2 ring-red-100'
+                          : 'bg-[#FAFAF7] border-[#C9B8F0] text-[#553C9A] hover:bg-[#EDE8FC]'
+                          }`}
+                      >
+                        <Camera className="w-3.5 h-3.5 text-[#6B46C1]" />
                         <span className="flex items-center gap-1">
-                          <span>{booking.selfieWithIdsFile ? 'Replace Selfie Photo' : 'Upload Selfie Holding IDs & Paper'}</span>
+                          <span>{booking.selfieWithIdsFile ? 'Retake Live Selfie Photo' : 'Take Live Photo with IDs'}</span>
                           <span className="text-red-500 font-bold">*</span>
                         </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleRealFileUpload(e, 'selfieWithIdsFile')}
-                        />
-                      </label>
+                      </button>
 
                       {booking.selfieWithIdsFile && (
                         <div className="flex items-center gap-2 text-xs">
@@ -4370,6 +4412,7 @@ export default function App() {
                         </div>
                       )}
                     </div>
+
 
                     {validationErrors.selfieWithIdsFile && (
                       <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
@@ -5776,8 +5819,15 @@ export default function App() {
           TERMS AND CONDITIONS FULL MODAL
       ───────────────────────────────────────────────────────────── */}
       {showTermsModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 overflow-hidden animate-fadeIn">
+          {/* Hardware-accelerated static backdrop layer (no blur GPU rasterization overhead) */}
+          <div
+            className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
+            onClick={() => setShowTermsModal(false)}
+            aria-hidden="true"
+          />
+
+          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[90vh] z-10 isolate">
 
             {/* Header */}
             <div className="px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
@@ -5799,13 +5849,14 @@ export default function App() {
                 type="button"
                 onClick={() => setShowTermsModal(false)}
                 className="w-8 h-8 rounded-full bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#FEF0E7] flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer"
+                aria-label="Close terms modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Body */}
-            <div className="p-6 overflow-y-auto space-y-3.5 flex-1 text-xs">
+            <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-3.5 flex-1 text-xs">
               <div className="p-3.5 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] text-[11px] text-[#7B341E] leading-relaxed">
                 <strong>Important Notice:</strong> By proceeding with the reservation payment, the renter acknowledges that they have read, understood, and agreed to all the Terms &amp; Conditions of Pack and Film Camera Rental.
               </div>
@@ -5899,8 +5950,18 @@ export default function App() {
           CAMERA KIT INCLUSIONS & ACCESSORIES MODAL
       ───────────────────────────────────────────────────────────── */}
       {inclusionsModalCamera && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
-          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[28px] sm:rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[92vh] my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 overflow-hidden animate-fadeIn">
+          {/* Hardware-accelerated static backdrop layer (no blur GPU rasterization overhead) */}
+          <div
+            className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
+            onClick={() => {
+              setInclusionsModalCamera(null);
+              setInclusionsTipId(null);
+            }}
+            aria-hidden="true"
+          />
+
+          <div className="relative w-full max-w-2xl bg-[#FAFAF7] rounded-[28px] sm:rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] overflow-hidden flex flex-col max-h-[90vh] z-10 isolate">
 
             {/* Modal Header Bar */}
             <div className="px-5 sm:px-6 py-4 bg-white border-b-2 border-[#1A1A2E] flex items-center justify-between">
@@ -5971,7 +6032,7 @@ export default function App() {
             </div>
 
             {/* Scrollable Inclusions Grid */}
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
+            <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain flex-1 space-y-4">
               <div className="p-3 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] text-xs text-[#7B341E] flex items-start gap-2">
                 <Sparkles className="w-4 h-4 text-[#DD6B20] shrink-0 mt-0.5" />
                 <span>
@@ -6100,6 +6161,35 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          BUILT-IN LIVE CAMERA SNAPSHOT MODAL (Desktop WebRTC Viewfinder)
+      ───────────────────────────────────────────────────────────── */}
+      <LiveCameraSnapshotModal
+        isOpen={!!liveCameraTarget}
+        title={liveCameraTarget?.title}
+        subtitle={liveCameraTarget?.subtitle}
+        instruction={liveCameraTarget?.instruction}
+        onCapture={handleLiveCameraCapture}
+        onClose={() => setLiveCameraTarget(null)}
+        onFallbackUpload={() => {
+          if (liveCameraTarget) {
+            const fieldKey = String(liveCameraTarget.fieldKey);
+            const input = document.querySelector<HTMLInputElement>(`[data-field-key="${fieldKey}"] input[type="file"]`);
+            if (input) input.click();
+          }
+        }}
+      />
+
+      {/* Hidden Mobile Native Camera Input (Triggers instant OS front camera on iOS/Android) */}
+      <input
+        ref={mobileSelfieCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="hidden"
+        onChange={(e) => handleRealFileUpload(e, 'selfieWithIdsFile')}
+      />
 
       {/* Floating Quick Rent Pill (Gracefully fades in when scrolling past Hero) */}
       <div
