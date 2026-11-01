@@ -55,7 +55,6 @@ export const HourlyTimelineSelector: React.FC<HourlyTimelineSelectorProps> = Rea
     if (selectedBtn) {
       selectedBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
-    // Re-check scroll buttons after scrolling
     const t = setTimeout(checkScroll, 300);
     return () => clearTimeout(t);
   }, [value, checkScroll]);
@@ -73,33 +72,33 @@ export const HourlyTimelineSelector: React.FC<HourlyTimelineSelectorProps> = Rea
   };
 
   return (
-    <div className="pt-0.5">
+    <div className="pt-1">
       {/* Micro-header with title, badge and scroll controls */}
       <div className="flex items-center justify-between mb-1.5 px-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <Clock className="w-3 h-3 text-[#6B6B8A] shrink-0" />
-          <span className="text-[11px] font-bold text-[#6B6B8A] shrink-0">
+          <Clock className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
+          <span className="text-xs font-black text-[#1A1A2E] shrink-0">
             {label}
           </span>
           {!earliestBadge && (
-            <span className="text-[10px] font-semibold text-[#A0AEC0] truncate">
+            <span className="text-[10px] font-bold text-[#6B6B8A] truncate">
               ({hours.length} available)
             </span>
           )}
           {earliestBadge && (
-            <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] shrink-0">
+            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] shrink-0">
               {earliestBadge}
             </span>
           )}
         </div>
 
         {isScrollable && (
-          <div className="flex items-center gap-1 shrink-0 ml-1">
+          <div className="flex items-center gap-1.5 shrink-0 ml-1">
             <button
               type="button"
               onClick={scrollLeft}
               disabled={!canScrollLeft}
-              className="w-5 h-5 rounded-md flex items-center justify-center text-[#6B6B8A] hover:text-[#1A1A2E] hover:bg-[#EDE8FC] disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+              className="w-6 h-6 rounded-lg bg-white border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] flex items-center justify-center text-[#1A1A2E] shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer active:translate-y-0.5"
               aria-label="Scroll earlier hours"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -108,7 +107,7 @@ export const HourlyTimelineSelector: React.FC<HourlyTimelineSelectorProps> = Rea
               type="button"
               onClick={scrollRight}
               disabled={!canScrollRight}
-              className="w-5 h-5 rounded-md flex items-center justify-center text-[#6B6B8A] hover:text-[#1A1A2E] hover:bg-[#EDE8FC] disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+              className="w-6 h-6 rounded-lg bg-white border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] flex items-center justify-center text-[#1A1A2E] shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer active:translate-y-0.5"
               aria-label="Scroll later hours"
             >
               <ChevronRight className="w-3.5 h-3.5" />
@@ -120,16 +119,16 @@ export const HourlyTimelineSelector: React.FC<HourlyTimelineSelectorProps> = Rea
       {/* Pill strip with gradient edge masks when overflowing */}
       <div className="relative">
         {isScrollable && canScrollLeft && (
-          <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none z-10 rounded-l-lg" />
+          <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none z-10 rounded-l-xl" />
         )}
         {isScrollable && canScrollRight && (
-          <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white via-white/80 to-transparent pointer-events-none z-10 rounded-r-lg" />
+          <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white via-white/80 to-transparent pointer-events-none z-10 rounded-r-xl" />
         )}
 
         <div
           ref={scrollRef}
           onScroll={checkScroll}
-          className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 scrollbar-none scroll-smooth"
+          className="flex items-center gap-2 overflow-x-auto py-1 px-1 scrollbar-none scroll-smooth"
         >
           {hours.map((hour) => {
             const isSelected = value === hour.value;
@@ -139,10 +138,10 @@ export const HourlyTimelineSelector: React.FC<HourlyTimelineSelectorProps> = Rea
                 type="button"
                 data-value={hour.value}
                 onClick={() => onChange(hour.value)}
-                className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer select-none ${
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
                   isSelected
-                    ? 'bg-[#1A1A2E] text-white shadow-xs scale-[1.02] ring-2 ring-[#1A1A2E]/20'
-                    : 'bg-[#FAFAF7] border border-[#E8E4F0] text-[#1A1A2E] hover:bg-[#EDE8FC] hover:border-[#C9B8F0]'
+                    ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] -translate-y-0.5 z-10'
+                    : 'bg-[#FAFAF7] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] text-[#1A1A2E] shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0'
                 }`}
               >
                 {hour.shortLabel}
@@ -154,4 +153,3 @@ export const HourlyTimelineSelector: React.FC<HourlyTimelineSelectorProps> = Rea
     </div>
   );
 });
-

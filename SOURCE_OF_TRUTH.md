@@ -11,7 +11,7 @@
 
 * **Legal & Display Name:** Pack and Film - Camera Rentals (`PackAndFilm`)
 * **Tagline:** Aesthetic Camera Rentals in Metro Manila
-* **Operating Hours:** Strictly **8:00 AM – 8:00 PM ONLY** (all handovers, meetups, deliveries, and returns must fall within this window)
+* **Operating Hours:** Strictly **8:00 AM – 12:00 AM (Midnight) Daily** (all handovers, meetups, deliveries, and returns must fall within this operating window)
 * **Social Media & Customer Channels:**
   * **Instagram:** [@packandfilm.ph](https://www.instagram.com/packandfilm.ph/)
   * **Facebook Page:** [Pack and Film Facebook](https://www.facebook.com/people/Pack-and-Film/61595302043810/)
@@ -299,7 +299,7 @@ Thank you so much for renting with PackAndFilm! We'd love to see your shots—fe
   * **True Overlaps:** Any rental overlapping by multiple days or internal days (e.g. requesting `Oct 31` to `Nov 2` when `Oct 31` to `Nov 1` is booked) remains strictly blocked as a collision.
 
 ### 11.2. Operating Hours & Same-Day Turnover Protocol
-* **Standard Operating Hours:** 8:00 AM – 8:00 PM daily for all meetups and Grab Express dispatches.
+* **Standard Operating Hours:** 8:00 AM – 12:00 AM (Midnight) daily for all meetups and Grab Express dispatches.
 * **Flexible Day-to-Day Coordination:** On normal dates without consecutive bookings, pickup and return times are coordinated directly with the customer to match their shoot schedule.
 * **Consecutive Same-Day Turnover Rule (Zero-Math Protection):**
   * When a booking shares a turnover boundary date with another rental:

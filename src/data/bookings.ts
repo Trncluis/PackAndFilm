@@ -140,3 +140,119 @@ export const findNextFreeWindowForCamera = (
   }
   return { start: startFromStr, end: startFromStr };
 };
+
+export type DayAvailabilityStatus = 'available' | 'booked' | 'turnover' | 'past';
+
+export interface DayAvailabilityInfo {
+  dateStr: string;
+  dayName: string;
+  dayNum: number;
+  status: DayAvailabilityStatus;
+  label: string;
+  tooltip: string;
+  conflictingBooking?: BookingRecord;
+}
+
+export function getCameraDayAvailability(
+  cameraId: string,
+  dateStr: string,
+  todayStr: string,
+  bookingsList: BookingRecord[] = []
+): DayAvailabilityInfo {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dateObj = new Date(y, m - 1, d);
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayName = dayNames[dateObj.getDay()];
+  const dayNum = dateObj.getDate();
+
+  if (dateStr < todayStr) {
+    return {
+      dateStr,
+      dayName,
+      dayNum,
+      status: 'past',
+      label: 'Past',
+      tooltip: 'Past date'
+    };
+  }
+
+  const cameraBookings = bookingsList.filter(b => b.cameraId === cameraId);
+
+  // Check if it is a same-day booking on this date
+  const sameDayBooking = cameraBookings.find(b => b.startDate === dateStr && b.endDate === dateStr);
+  if (sameDayBooking) {
+    return {
+      dateStr,
+      dayName,
+      dayNum,
+      status: 'booked',
+      label: 'Booked',
+      tooltip: `Reserved for Same-Day rental on ${dateStr}`,
+      conflictingBooking: sameDayBooking
+    };
+  }
+
+  // Check if a booking starts on this date
+  const startsToday = cameraBookings.find(b => b.startDate === dateStr);
+
+  // Check if a previous multi-day booking ends on this date
+  const endsToday = cameraBookings.find(b => b.endDate === dateStr && b.startDate < b.endDate);
+
+  // If a booking is active throughout the day (startDate <= dateStr < endDate)
+  const ongoingBooking = cameraBookings.find(b => b.startDate <= dateStr && dateStr < b.endDate);
+
+  if (ongoingBooking) {
+    return {
+      dateStr,
+      dayName,
+      dayNum,
+      status: 'booked',
+      label: 'Booked',
+      tooltip: `Reserved from ${ongoingBooking.startDate} to ${ongoingBooking.endDate}`,
+      conflictingBooking: ongoingBooking
+    };
+  }
+
+  // If a previous booking returns today at 12 PM Noon, and no new booking starts
+  if (endsToday && !startsToday) {
+    return {
+      dateStr,
+      dayName,
+      dayNum,
+      status: 'turnover',
+      label: 'Ready 2 PM',
+      tooltip: `Afternoon turnover: Available for pickup starting from 2:00 PM`,
+      conflictingBooking: endsToday
+    };
+  }
+
+  // Otherwise fully available
+  return {
+    dateStr,
+    dayName,
+    dayNum,
+    status: 'available',
+    label: 'Available',
+    tooltip: `Available for rental on ${dateStr}`
+  };
+}
+
+export function getCameraNext7DaysAvailability(
+  cameraId: string,
+  todayStr: string,
+  bookingsList: BookingRecord[] = []
+): DayAvailabilityInfo[] {
+  const result: DayAvailabilityInfo[] = [];
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const baseDate = new Date(y, m - 1, d);
+
+  for (let i = 0; i < 7; i++) {
+    const curDate = new Date(baseDate.getTime() + i * 86400000);
+    const yStr = curDate.getFullYear();
+    const mStr = String(curDate.getMonth() + 1).padStart(2, '0');
+    const dStr = String(curDate.getDate()).padStart(2, '0');
+    const dateStr = `${yStr}-${mStr}-${dStr}`;
+    result.push(getCameraDayAvailability(cameraId, dateStr, todayStr, bookingsList));
+  }
+  return result;
+}

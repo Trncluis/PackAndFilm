@@ -43,6 +43,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const uniqueIdRef = useRef<string>(`cal-${Math.random().toString(36).substring(2, 9)}`);
 
   // Parse initial view year and month from value or minDate or today
   const getInitialDate = () => {
@@ -67,6 +68,20 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
     }
   }, [value]);
 
+  // Close when another calendar instance opens
+  useEffect(() => {
+    const handleOtherCalendarOpen = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.id !== uniqueIdRef.current) {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('packandfilm-calendar-open', handleOtherCalendarOpen);
+    return () => {
+      window.removeEventListener('packandfilm-calendar-open', handleOtherCalendarOpen);
+    };
+  }, []);
+
   // Click outside listener
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -90,9 +105,9 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  const daysOfWeek = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const daysOfWeek = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 
-    // Days calculation: Only compute when calendar popup is open to preserve 60 FPS typing speed
+  // Days calculation: Only compute when calendar popup is open to preserve 60 FPS typing speed
   const allCalendarDays = useMemo(() => {
     if (!isOpen) return [];
 
@@ -116,8 +131,9 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
       };
     });
 
-    const totalGridCount = 42;
-    const remainingDays = totalGridCount - (prevMonthDays.length + currentMonthDays.length);
+    // Dynamic grid: only complete the final week row rather than hardcoding 42 cells (6 rows)
+    const totalDays = prevMonthDays.length + currentMonthDays.length;
+    const remainingDays = totalDays % 7 === 0 ? 0 : 7 - (totalDays % 7);
     const nextMonthDays = Array.from({ length: remainingDays }, (_, i) => {
       const d = i + 1;
       const nextY = month === 11 ? year + 1 : year;
@@ -219,6 +235,15 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
     setIsOpen(false);
   };
 
+  const toggleOpen = () => {
+    if (!isOpen) {
+      window.dispatchEvent(new CustomEvent('packandfilm-calendar-open', {
+        detail: { id: uniqueIdRef.current }
+      }));
+    }
+    setIsOpen(!isOpen);
+  };
+
   return (
     <div className="relative w-full" ref={containerRef}>
       {label && (
@@ -231,7 +256,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
       {/* Trigger Button styled with PackAndFilm Pastel Design Language */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={toggleOpen}
         className={`w-full min-h-[50px] px-4 py-2.5 rounded-2xl border-2 text-left transition-all flex items-center justify-between gap-3 bg-[#FAFAF7] cursor-pointer group ${
           isOpen
             ? 'border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] bg-white ring-2 ring-[#C9B8F0]/40'
@@ -276,55 +301,55 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
                 e.stopPropagation();
                 onChange('');
               }}
-              className="p-1 rounded-lg text-gray-400 hover:text-[#1A1A2E] hover:bg-[#EDE8FC] transition-colors"
+              className="p-1 rounded-lg text-gray-400 hover:text-[#1A1A2E] hover:bg-[#EDE8FC] transition-colors cursor-pointer"
               title="Clear date"
             >
               <X className="w-3.5 h-3.5" />
             </span>
           )}
           <span
-            className={`text-xs font-black px-2 py-0.5 rounded-full border transition-colors ${
+            className={`text-xs font-black px-2.5 py-1 rounded-full border-2 transition-all flex items-center gap-1 ${
               isOpen
-                ? 'bg-[#1A1A2E] text-white border-[#1A1A2E]'
-                : 'bg-white text-[#553C9A] border-[#E8E4F0]'
+                ? 'bg-[#C9B8F0] text-[#1A1A2E] border-[#1A1A2E] shadow-2xs'
+                : 'bg-white text-[#553C9A] border-[#E8E4F0] group-hover:border-[#C9B8F0]'
             }`}
           >
-            {isOpen ? 'Close' : 'Calendar'}
+            <span>{isOpen ? 'Close' : 'Calendar'}</span>
           </span>
         </div>
       </button>
 
       {/* Popover Calendar with Gen-Z Pastel Neo-Brutalist Theme */}
       {isOpen && (
-        <div className="absolute top-[calc(100%+8px)] left-0 z-50 w-full sm:w-[330px] bg-white rounded-[28px] border-2 border-[#1A1A2E] shadow-[6px_6px_0px_0px_#1A1A2E] p-4.5 animate-fadeIn">
+        <div className={`absolute top-[calc(100%+8px)] ${isEndDate ? 'right-0' : 'left-0'} z-50 w-[310px] sm:w-[330px] bg-[#FAFAF7] rounded-[28px] border-2 border-[#1A1A2E] shadow-[6px_6px_0px_0px_#1A1A2E] p-3.5 sm:p-4 animate-fadeIn isolate`}>
           
           {/* Header Month / Year Navigation */}
           <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E8E4F0]">
             <div>
-              <h4 className="font-black text-sm text-[#1A1A2E] tracking-tight">
+              <h4 className="font-black text-base text-[#1A1A2E] tracking-tight">
                 {monthNames[month]} {year}
               </h4>
-              <p className="text-[10px] font-semibold text-[#6B6B8A]">
+              <p className="text-[11px] font-semibold text-[#6B6B8A] mt-0.5">
                 Metro Manila Booking Calendar
               </p>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={handlePrevMonth}
-                className="w-7 h-7 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#EDE8FC] hover:border-[#C9B8F0] flex items-center justify-center text-[#1A1A2E] transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] flex items-center justify-center text-[#1A1A2E] transition-all shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] cursor-pointer active:translate-y-0.5"
                 aria-label="Previous month"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 type="button"
                 onClick={handleNextMonth}
-                className="w-7 h-7 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] hover:bg-[#EDE8FC] hover:border-[#C9B8F0] flex items-center justify-center text-[#1A1A2E] transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] flex items-center justify-center text-[#1A1A2E] transition-all shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] cursor-pointer active:translate-y-0.5"
                 aria-label="Next month"
               >
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -334,15 +359,15 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
             {daysOfWeek.map((d, idx) => (
               <span
                 key={idx}
-                className="text-[11px] font-black text-[#6B6B8A] uppercase tracking-wider py-1"
+                className="text-[11px] font-black text-[#6B6B8A] uppercase tracking-wider py-0.5 select-none"
               >
                 {d}
               </span>
             ))}
           </div>
 
-          {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-1">
+          {/* Days Grid with Connected Range Styling */}
+          <div className="grid grid-cols-7 gap-y-1 gap-x-0.5">
             {allCalendarDays.map((item, idx) => {
               const disabled = isDateDisabled(item.dateStr);
               const isSelected = value === item.dateStr;
@@ -352,11 +377,10 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
               const bookedInfo = (booked || turnover) ? getBookedInfo(item.dateStr) : null;
 
               // Range calculation if rangeStart and rangeEnd are given
-              const inRange =
-                rangeStart &&
-                rangeEnd &&
-                item.dateStr >= rangeStart &&
-                item.dateStr <= rangeEnd;
+              const isRangeActive = Boolean(rangeStart && rangeEnd && rangeStart !== rangeEnd);
+              const isRangeStart = isRangeActive && item.dateStr === rangeStart;
+              const isRangeEnd = isRangeActive && item.dateStr === rangeEnd;
+              const isRangeMiddle = isRangeActive && rangeStart! < item.dateStr && item.dateStr < rangeEnd!;
 
               return (
                 <button
@@ -375,41 +399,51 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
                       ? 'Date unavailable'
                       : formatFriendlyDate(item.dateStr)
                   }
-                  className={`relative h-9 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
+                  className={`relative h-9 rounded-2xl font-bold text-xs flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
                     !item.isCurrentMonth
-                      ? 'text-gray-300 opacity-60'
+                      ? 'text-[#CBD5E0] cursor-not-allowed opacity-50 font-medium'
+                      : isRangeStart
+                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-l-2xl rounded-r-none font-black shadow-xs z-10'
+                      : isRangeEnd
+                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-r-2xl rounded-l-none font-black shadow-xs z-10'
+                      : isRangeMiddle
+                      ? 'bg-[#EDE8FC] text-[#553C9A] rounded-none font-black border-y-2 border-[#1A1A2E]'
                       : isSelected
-                      ? 'bg-[#1A1A2E] text-white shadow-sm ring-2 ring-[#C9B8F0]'
-                      : inRange
-                      ? 'bg-[#EDE8FC] text-[#553C9A]'
+                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-2xl font-black shadow-[2px_2px_0px_#1A1A2E] scale-105 z-10'
+                      : isToday
+                      ? 'bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] rounded-2xl font-black hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E]'
                       : turnover
-                      ? 'bg-[#FFF9F2] text-[#C05621] border border-[#F5C6A8] hover:bg-[#FEF0E7]'
+                      ? 'bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E] rounded-2xl font-black'
                       : booked
-                      ? 'bg-[#FFF5F5] text-[#C53030] border border-[#FEB2B2] hover:bg-[#FED7D7]'
+                      ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-2xl font-bold cursor-not-allowed opacity-75'
                       : disabled
-                      ? 'text-gray-300 bg-gray-50/60 cursor-not-allowed'
-                      : 'text-[#1A1A2E] hover:bg-[#EDE8FC] hover:text-[#553C9A]'
+                      ? 'text-[#CBD5E0] bg-gray-50/50 cursor-not-allowed font-medium'
+                      : 'text-[#1A1A2E] font-extrabold hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:border hover:border-[#A8DBC8] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0'
                   }`}
                 >
                   <span className="leading-none">{item.day}</span>
 
                   {/* Indicator Dots */}
-                  {booked ? (
-                    <span
-                      className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-red-500"
-                      title="Booked Slot"
-                    />
-                  ) : turnover ? (
-                    <span
-                      className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-[#DD6B20]"
-                      title="Turnover Day • Handover Available"
-                    />
-                  ) : isToday && !isSelected ? (
-                    <span
-                      className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-[#38A169]"
-                      title="Today"
-                    />
-                  ) : null}
+                  {item.isCurrentMonth && (
+                    <>
+                      {isToday && !isSelected && !isRangeStart && !isRangeEnd ? (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-[#DD6B20] mt-0.5 shrink-0"
+                          title="Today"
+                        />
+                      ) : turnover && !isSelected && !isRangeStart && !isRangeEnd ? (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-[#6B46C1] mt-0.5 shrink-0"
+                          title="Turnover Day • Handover Available"
+                        />
+                      ) : booked && !isRangeMiddle ? (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-[#E53E3E] mt-0.5 shrink-0"
+                          title="Booked Slot"
+                        />
+                      ) : null}
+                    </>
+                  )}
                 </button>
               );
             })}
@@ -417,24 +451,28 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
 
           {/* Legend Strip */}
           <div className="mt-3 pt-2.5 border-t border-[#E8E4F0] flex items-center justify-between text-[10px] text-[#6B6B8A]">
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1 font-bold text-[#2F855A]">
                 <span className="w-2 h-2 rounded-full bg-[#38A169]" />
-                <span className="font-semibold">Open</span>
+                <span>Open</span>
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-red-500" />
-                <span className="font-semibold">Booked</span>
+              <span className="flex items-center gap-1 font-bold text-[#553C9A]">
+                <span className="w-2 h-2 rounded-full bg-[#6B46C1]" />
+                <span>Turnover</span>
+              </span>
+              <span className="flex items-center gap-1 font-bold text-[#C53030]">
+                <span className="w-2 h-2 rounded-full bg-[#E53E3E]" />
+                <span>Reserved</span>
               </span>
             </div>
 
             <button
               type="button"
               onClick={handlePickToday}
-              className="text-[11px] font-extrabold text-[#6B46C1] hover:underline flex items-center gap-1 cursor-pointer"
+              className="text-[11px] font-extrabold text-[#553C9A] hover:text-[#1A1A2E] flex items-center gap-1 cursor-pointer transition-colors"
             >
-              <Sparkles className="w-3 h-3 text-[#F5C6A8]" />
-              <span>Jump to Today</span>
+              <Sparkles className="w-3.5 h-3.5 text-[#DD6B20]" />
+              <span>Today</span>
             </button>
           </div>
 

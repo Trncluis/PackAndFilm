@@ -716,6 +716,21 @@ function mapBookingRecord(r, i, colMap, formulas, bookingsSheet) {
     gcashRefNumber: r[colMap.gcashRefNumber] || "",
     status: r[colMap.status] || "Pending Verification",
     notes: r[colMap.notes] || "",
+    rentalType: (function() {
+      const match = String(r[colMap.notes] || "").match(/Rental Type:\s*([^•\n;]+)/i);
+      if (match) return match[1].trim();
+      const s = r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "";
+      const e = r[colMap.endDate] ? Utilities.formatDate(new Date(r[colMap.endDate]), "GMT+8", "yyyy-MM-dd") : "";
+      return (s && e && s === e) ? "same-day" : "multi-day";
+    })(),
+    pickupTimeSlot: (function() {
+      const match = String(r[colMap.notes] || "").match(/Pickup:\s*([^•\n;]+)/i);
+      return match ? match[1].trim() : "";
+    })(),
+    returnTimeSlot: (function() {
+      const match = String(r[colMap.notes] || "").match(/Return:\s*([^•\n;]+)/i);
+      return match ? match[1].trim() : "";
+    })(),
     driveFolderUrl: resolvedFolderUrl,
     id1Url: id1,
     id2Url: id2,

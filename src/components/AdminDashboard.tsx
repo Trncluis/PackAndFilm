@@ -23,8 +23,23 @@ import {
   ShieldAlert,
   Trash2,
   AlertTriangle,
-  XCircle
+  XCircle,
+  Clock
 } from 'lucide-react';
+
+export function parseBookingNotesSchedule(notes?: string, startDate?: string, endDate?: string) {
+  const isSameDay = !!(startDate && endDate && startDate === endDate);
+  const pickupMatch = notes ? notes.match(/Pickup:\s*([^•\n;]+)/i) : null;
+  const returnMatch = notes ? notes.match(/Return:\s*([^•\n;]+)/i) : null;
+  const typeMatch = notes ? notes.match(/Rental Type:\s*([^•\n;]+)/i) : null;
+
+  return {
+    isSameDay: typeMatch ? typeMatch[1].trim().toLowerCase() === 'same-day' : isSameDay,
+    rentalType: typeMatch ? typeMatch[1].trim() : (isSameDay ? 'Same-Day' : 'Multi-Day'),
+    pickupTime: pickupMatch ? pickupMatch[1].trim() : null,
+    returnTime: returnMatch ? returnMatch[1].trim() : null,
+  };
+}
 
 export interface AdminBookingItem {
   bookingRef: string;
@@ -1318,6 +1333,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {filteredBookings.map((b) => {
                 const workflow = getBookingWorkflowStep(b.status);
                 const isUpdating = updatingRef === b.bookingRef;
+                const schedule = parseBookingNotesSchedule(b.notes, b.startDate, b.endDate);
 
                 return (
                   <div
@@ -1372,12 +1388,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[10px] font-bold text-[#6B6B8A] uppercase">Rental Window</span>
+                        <div className="flex items-center gap-1.5 justify-between">
+                          <span className="text-[10px] font-bold text-[#6B6B8A] uppercase">Rental Window</span>
+                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full border ${
+                            schedule.isSameDay
+                              ? 'bg-[#FEF0E7] text-[#C05621] border-[#F5C6A8]'
+                              : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
+                          }`}>
+                            {schedule.isSameDay ? 'Same-Day (1d)' : `${b.rentalDays}d Multi-Day`}
+                          </span>
+                        </div>
                         <div className="font-extrabold text-[#1A1A2E] flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-[#DD6B20]" />
-                          <span>{b.startDate} → {b.endDate}</span>
-                          <span className="text-[10px] text-[#6B6B8A]">({b.rentalDays}d)</span>
+                          <span>{b.startDate} {b.startDate !== b.endDate && `→ ${b.endDate}`}</span>
                         </div>
+                        {(schedule.pickupTime || schedule.returnTime) && (
+                          <div className="text-[10px] font-bold text-[#553C9A] flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3 text-[#6B46C1] shrink-0" />
+                            <span>{schedule.pickupTime || '8:00 AM'} → {schedule.returnTime || '8:00 PM'}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-0.5">
@@ -1738,6 +1768,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* Handover & Rental Schedule Summary */
+                (() => {
+                  const modalSched = parseBookingNotesSchedule(selectedBooking.notes, selectedBooking.startDate, selectedBooking.endDate);
+                  return (
+                    <div className="p-4 rounded-2xl bg-white border-2 border-[#1A1A2E] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-[#553C9A]" />
+                          <h4 className="font-black text-xs text-[#1A1A2E]">
+                            Rental Window & Handover Schedule
+                          </h4>
+                        </div>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                          modalSched.isSameDay
+                            ? 'bg-[#FEF0E7] text-[#C05621] border-[#F5C6A8]'
+                            : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
+                        }`}>
+                          {modalSched.isSameDay ? 'Same-Day Rental (1 Day)' : `Multi-Day Rental (${selectedBooking.rentalDays} Days)`}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                          <span className="text-[10px] font-bold text-[#6B6B8A] uppercase block">Dates</span>
+                          <span className="font-extrabold text-xs text-[#1A1A2E] mt-0.5 block">
+                            {selectedBooking.startDate} {selectedBooking.startDate !== selectedBooking.endDate ? `→ ${selectedBooking.endDate}` : '(Same-Day)'}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                          <span className="text-[10px] font-bold text-[#6B6B8A] uppercase block">Preferred Pickup</span>
+                          <span className="font-extrabold text-xs text-[#553C9A] mt-0.5 block">
+                            {modalSched.pickupTime || '8:00 AM'}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                          <span className="text-[10px] font-bold text-[#6B6B8A] uppercase block">Preferred Return</span>
+                          <span className="font-extrabold text-xs text-[#C05621] mt-0.5 block">
+                            {modalSched.returnTime || '8:00 PM'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Emergency Contacts & Additional Notes */}
                 <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2">
