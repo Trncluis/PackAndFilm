@@ -65,7 +65,6 @@ import {
   TERMS_ACKNOWLEDGEMENT_TEXT
 } from './data/rentalConfig';
 
-import { CustomDatePicker } from './components/CustomDatePicker';
 import { UnifiedRentalCalendar } from './components/UnifiedRentalCalendar';
 import { CustomSelect, SelectOption } from './components/CustomSelect';
 import { HourlyTimelineSelector } from './components/HourlyTimelineSelector';
@@ -1225,13 +1224,13 @@ export default function App() {
     setCalcEndDate(eStr);
   };
 
-  // Open Modal with prefilled calculator dates (blocking if conflict)
+  // Open Modal directly (with target camera selected, clean zero-default dates/handover unless date explicitly passed)
   const handleOpenBookingModal = (targetCameraId?: string, prefillStartDate?: string) => {
     const requestedCam = CAMERAS.find(c => c.id === targetCameraId);
     const activeCamId = (requestedCam && requestedCam.isAvailable) ? requestedCam.id : (targetCameraId ? 'dji-pocket-3' : '');
     
-    let startDateToUse = prefillStartDate || calcStartDate;
-    let endDateToUse = prefillStartDate || calcEndDate;
+    let startDateToUse = prefillStartDate || '';
+    let endDateToUse = prefillStartDate || '';
 
     if (activeCamId && prefillStartDate) {
       const dayAvail = getCameraDayAvailability(activeCamId, prefillStartDate, todayStr, bookings);
@@ -1247,42 +1246,25 @@ export default function App() {
 
     if (activeCamId) {
       setSelectedCameraId(activeCamId);
-      const activeConflict = checkCameraDateConflict(activeCamId, startDateToUse, endDateToUse, bookings);
-      if (activeConflict.hasConflict) {
-        const nextWindow = findNextFreeWindowForCamera(activeCamId, startDateToUse, currentQuote.days, bookings);
-        setCalcStartDate(nextWindow.start);
-        setCalcEndDate(nextWindow.end);
-        setBooking(prev => ({
-          ...prev,
-          cameraId: activeCamId,
-          rentalType: nextWindow.start === nextWindow.end ? 'same-day' : 'multi-day',
-          startDate: nextWindow.start,
-          endDate: nextWindow.end,
-          handoverMode: calcHandover,
-        }));
-      } else {
-        setCalcStartDate(startDateToUse);
-        setCalcEndDate(endDateToUse);
-        setBooking(prev => ({
-          ...prev,
-          cameraId: activeCamId,
-          rentalType: startDateToUse === endDateToUse ? 'same-day' : 'multi-day',
-          startDate: startDateToUse,
-          endDate: endDateToUse,
-          handoverMode: calcHandover,
-        }));
-      }
+      setBooking(prev => ({
+        ...prev,
+        cameraId: activeCamId,
+        rentalType: (startDateToUse && startDateToUse === endDateToUse) ? 'same-day' : 'multi-day',
+        startDate: startDateToUse,
+        endDate: endDateToUse,
+      }));
     } else {
       setBooking(prev => ({
         ...prev,
         cameraId: '',
-        rentalType: startDateToUse === endDateToUse ? 'same-day' : 'multi-day',
+        rentalType: 'multi-day',
         startDate: startDateToUse,
         endDate: endDateToUse,
-        handoverMode: calcHandover,
       }));
     }
     setBookingSubmitError(null);
+    setValidationErrors({});
+    setStepAttempted({});
     setModalStep(1);
     setIsModalOpen(true);
     navigateTo('book');
@@ -1698,7 +1680,6 @@ export default function App() {
               <span className="text-[10px] font-black bg-[#EDE8FC] text-[#553C9A] px-2 py-0.5 rounded-full border border-[#C9B8F0]">Guide</span>
             </button>
             <button type="button" onClick={() => navigateTo('home', { scrollTo: 'how' })} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">How to Book</button>
-            <button type="button" onClick={() => navigateTo('home', { scrollTo: 'pricing' })} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm">Pricing Calculator</button>
             <button type="button" onClick={() => navigateTo('terms')} className="hover:text-[#6B46C1] transition-colors cursor-pointer font-semibold text-sm flex items-center gap-1.5">
               <span>Terms &amp; Conditions</span>
               <span className="text-[10px] font-black bg-[#EDE8FC] text-[#553C9A] px-2 py-0.5 rounded-full border border-[#C9B8F0]">Contract</span>
@@ -1784,16 +1765,6 @@ export default function App() {
               className="px-3 py-2 rounded-xl text-left text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
             >
               How to Book
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                navigateTo('home', { scrollTo: 'pricing' });
-              }}
-              className="px-3 py-2 rounded-xl text-left text-sm font-semibold hover:bg-[#EDE8FC] transition-colors"
-            >
-              Pricing Calculator
             </button>
             <button
               type="button"
@@ -2278,7 +2249,7 @@ export default function App() {
                       showToast(`✨ ${cam.name} is coming soon to our lineup! Currently, the DJI Osmo Pocket 3 and Canon PowerShot G7 X Mark III are available for rental.`, 'info');
                       return;
                     }
-                    setSelectedCameraId(cam.id);
+                    handleOpenBookingModal(cam.id);
                   }}
                   className={`relative rounded-[28px] border-2 p-6 flex flex-col justify-between transition-all ${!isAvailable
                     ? 'bg-[#FAFAF7]/95 border-[#E8E4F0] hover:border-[#F5C6A8] hover:shadow-[3px_3px_0px_0px_#F5C6A8] cursor-pointer'
@@ -2420,23 +2391,12 @@ export default function App() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedCameraId(cam.id);
-                          const pricingEl = document.getElementById('pricing');
-                          pricingEl?.scrollIntoView({ behavior: 'smooth' });
+                          handleOpenBookingModal(cam.id);
                         }}
-                        className={`w-full py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${isSelected
-                          ? 'bg-[#1A1A2E] text-white shadow-sm'
-                          : 'bg-[#FAFAF7] hover:bg-[#EDE8FC] text-[#1A1A2E] border border-[#E8E4F0]'
-                          }`}
+                        className="w-full py-2.5 sm:py-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer bg-[#1A1A2E] hover:bg-[#6B46C1] text-white shadow-[2px_2px_0px_#1A1A2E] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 active:translate-y-0.5"
                       >
-                        {isSelected ? (
-                          <>
-                            <Check className="w-4 h-4 text-[#A8DBC8]" />
-                            <span>Selected Camera Active</span>
-                          </>
-                        ) : (
-                          <span>Select & Calculate Dates</span>
-                        )}
+                        <Calendar className="w-3.5 h-3.5 text-[#F5C6A8]" />
+                        <span>Rent {cam.shortName} →</span>
                       </button>
                     ) : (
                       <button
@@ -2543,483 +2503,7 @@ export default function App() {
 
 
 
-      {/* ─────────────────────────────────────────────────────────────
-          5. INTERACTIVE PRICING CALCULATOR
-      ───────────────────────────────────────────────────────────── */}
-      <section id="pricing" className="py-16 sm:py-20 px-4 sm:px-8 bg-gradient-to-b from-[#FAFAF7] to-[#EDE8FC]/40">
-        <div className="max-w-5xl mx-auto">
-
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] text-xs font-bold mb-3">
-              <CreditCard className="w-3.5 h-3.5 text-[#6B46C1]" />
-              <span>Transparent Calculator</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-black text-[#1A1A2E] tracking-tight">
-              Real-Time Pricing Calculator
-            </h2>
-            <p className="mt-2 text-base text-[#6B6B8A] font-medium">
-              Pick your rental dates and delivery mode to calculate exact quotes, bulk discounts, and security deposit details.
-            </p>
-          </div>
-
-          {/* Calculator Card */}
-          <div className="bg-white rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_0px_#1A1A2E] p-5 sm:p-8 md:p-10">
-
-            {/* Step 0: Camera Switcher directly inside the calculator */}
-            <div className="mb-8 pb-6 border-b border-[#E8E4F0]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                <label className="text-xs font-black uppercase tracking-wider text-[#6B6B8A]">
-                  Step 1: Select Camera Model
-                </label>
-                <span className="text-[11px] font-bold text-[#553C9A] bg-[#EDE8FC] px-2.5 py-0.5 rounded-full w-fit">
-                  Active: {selectedCamera.name}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {CAMERAS.map((cam) => {
-                  const isCur = selectedCameraId === cam.id;
-                  const isAvailable = cam.isAvailable;
-                  return (
-                    <button
-                      key={cam.id}
-                      type="button"
-                      onClick={() => {
-                        if (!isAvailable) {
-                          showToast(`✨ ${cam.name} is coming soon to our lineup! Currently, the DJI Osmo Pocket 3 and Canon PowerShot G7 X Mark III are available for rental.`, 'info');
-                          return;
-                        }
-                        setSelectedCameraId(cam.id);
-                      }}
-                      className={`min-h-[52px] p-3.5 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${!isAvailable
-                        ? 'border-[#E8E4F0] bg-[#FAFAF7]/80 text-[#6B6B8A] cursor-not-allowed hover:border-[#F5C6A8]'
-                        : isCur
-                          ? 'border-[#1A1A2E] bg-[#EDE8FC] shadow-[3px_3px_0px_#1A1A2E] cursor-pointer'
-                          : 'border-[#E8E4F0] bg-[#FAFAF7] hover:border-[#C9B8F0] cursor-pointer'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <span className={`font-black text-xs line-clamp-1 ${!isAvailable ? 'text-[#6B6B8A]' : 'text-[#1A1A2E]'}`}>
-                          {cam.shortName}
-                        </span>
-                        {isCur ? (
-                          <Check className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
-                        ) : !isAvailable ? (
-                          <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8]">
-                            Coming Soon
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-[#6B6B8A]">₱{cam.standardRate}/d</span>
-                        )}
-                      </div>
-                      <div className="mt-1 flex items-center justify-between text-[11px] w-full">
-                        <span className={`font-extrabold ${!isAvailable ? 'text-[#6B6B8A]' : 'text-[#553C9A]'}`}>
-                          {cam.standardRate > 0 ? `₱${cam.standardRate}/day` : '₱--- / day'} {!isAvailable && <span className="text-[9px] font-normal text-[#8A8A9E]">(Target)</span>}
-                        </span>
-                        <span className={`text-[10px] font-bold ${!isAvailable ? 'text-[#8A8A9E]' : 'text-[#38A169]'}`}>
-                          {!isAvailable ? 'Pre-launch' : `₱${cam.bulkRate} bulk`}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Dynamic Camera Official Tiered Pricing Strip */}
-            {selectedCamera.pricingTiers && selectedCamera.pricingTiers.length > 0 && (
-              <div className="mb-8 p-4 sm:p-5 rounded-2xl bg-[#FAFAF7] border border-[#E8E4F0]">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3.5">
-                  <span className="text-xs font-black uppercase tracking-wider text-[#1A1A2E] flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#553C9A]" />
-                    <span>{selectedCamera.shortName} Official Rental Rates</span>
-                  </span>
-                  <span className="text-[11px] font-bold text-[#234E52] bg-[#E8F7F1] px-2.5 py-0.5 rounded-full border border-[#A8DBC8] w-fit">
-                    Refundable Deposit: ₱{(selectedCamera.depositAmount || selectedCamera.meetupDeposit || 1000).toLocaleString()} (Meetup &amp; Grab Express)
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {selectedCamera.pricingTiers.map((tier, idx) => {
-                    const isTierActive = currentQuote.days >= tier.minDays && currentQuote.days <= tier.maxDays;
-                    return (
-                      <div
-                        key={idx}
-                        className={`p-3 rounded-xl border text-center transition-all ${isTierActive
-                          ? 'bg-[#EDE8FC] border-[#553C9A] shadow-xs'
-                          : 'bg-white border-[#E8E4F0]'
-                        }`}
-                      >
-                        <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">{tier.label}</span>
-                        <span className="text-base font-black text-[#1A1A2E] mt-0.5 block">
-                          ₱{tier.rate} <span className="text-[10px] font-semibold text-[#6B6B8A]">/ day</span>
-                        </span>
-                        <span className="text-[10px] text-[#553C9A] font-bold block">
-                          {tier.sublabel || (tier.rate === selectedCamera.standardRate ? 'Standard' : 'Tier Discount')}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Responsive Flex-Col on Mobile / 12-Col on Desktop */}
-            <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 lg:gap-8">
-
-              {/* Controls Column */}
-              <div className="w-full lg:col-span-7 space-y-6">
-
-                {/* Quick Date Presets */}
-                <div>
-                  <label className="block text-xs font-extrabold uppercase tracking-wider text-[#6B6B8A] mb-2">
-                    Step 2: Quick Trip Presets
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => handleSetPreset(2)}
-                      className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FEF0E7] transition-all cursor-pointer text-center flex items-center justify-center"
-                    >
-                      Concert Night (2 Days)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetPreset(3)}
-                      className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] transition-all cursor-pointer text-center flex items-center justify-center"
-                    >
-                      Weekend Getaway (3 Days)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetPreset(5)}
-                      className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#FAFAF7] border border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#E8F7F1] transition-all cursor-pointer text-center flex items-center justify-center"
-                    >
-                      Out of Town (5 Days)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Date Inputs with Custom Pastel Calendar */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <CustomDatePicker
-                    label="Start Date (Pickup / Delivery)"
-                    placeholder="Select trip start date"
-                    value={calcStartDate}
-                    minDate={todayStr}
-                    rangeStart={calcStartDate}
-                    rangeEnd={calcEndDate}
-                    bookedRanges={bookings.filter(b => b.cameraId === selectedCameraId)}
-                    hasConflict={calcConflict.hasConflict}
-                    onChange={(newStart) => {
-                      setCalcStartDate(newStart);
-                      if (newStart > calcEndDate) {
-                        setCalcEndDate(newStart);
-                      }
-                    }}
-                  />
-
-                  <CustomDatePicker
-                    label="End Date (Return Date)"
-                    placeholder="Select return date"
-                    value={calcEndDate}
-                    minDate={calcStartDate || todayStr}
-                    rangeStart={calcStartDate}
-                    rangeEnd={calcEndDate}
-                    isEndDate={true}
-                    bookedRanges={bookings.filter(b => b.cameraId === selectedCameraId)}
-                    hasConflict={calcConflict.hasConflict}
-                    onChange={(newEnd) => setCalcEndDate(newEnd)}
-                  />
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex items-center justify-between text-xs text-[#6B6B8A]">
-                  <div className="flex items-center gap-1.5 font-bold text-[#1A1A2E]">
-                    <Clock className="w-3.5 h-3.5 text-[#553C9A]" />
-                    <span>Operating Hours: 8:00 AM – 11:00 PM</span>
-                  </div>
-                  <span className="text-[11px] font-medium text-[#553C9A]">
-                    Handover time coordinated upon booking
-                  </span>
-                </div>
-
-                {/* Dynamic Conflict Detection Scoped to Camera */}
-                {calcConflict.hasConflict ? (
-                  <div className="p-4 rounded-2xl bg-[#FFF5F5] border-2 border-[#FEB2B2] text-[#9B2C2C] space-y-2.5 animate-fadeIn">
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-[#FED7D7] flex items-center justify-center shrink-0 mt-0.5">
-                        <CalendarX className="w-4 h-4 text-[#C53030]" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-1">
-                          <span className="font-black text-xs text-[#9B2C2C]">
-                            {selectedCamera.shortName} Unavailable on These Dates
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FEB2B2] text-[#9B2C2C]">
-                            Reserved
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#C53030] mt-1 font-medium leading-relaxed">
-                          {calcConflict.message}
-                        </p>
-                        <div className="text-[11px] text-[#9B2C2C] font-semibold mt-1">
-                          Location: {calcConflict.conflictingBooking?.hub}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-[#FEB2B2]/60 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleAutoPickNextAvailable}
-                        className="min-h-[40px] px-4 py-2 rounded-xl bg-[#E53E3E] text-white text-xs font-bold hover:bg-[#C53030] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Jump to Next Free Dates</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowScheduleModal(true)}
-                        className="min-h-[40px] px-3.5 py-2 rounded-xl bg-white border border-[#FEB2B2] text-xs font-bold text-[#9B2C2C] hover:bg-[#FED7D7] transition-colors cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>View {selectedCamera.shortName} Schedule</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : calcConflict.isTurnover ? (
-                  <div className="p-3.5 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] text-xs text-[#7B341E] space-y-1.5 animate-fadeIn">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-[#DD6B20] shrink-0" />
-                        <span className="font-bold text-[#9C4221]">{selectedCamera.shortName} Available (Transition Schedule)</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowScheduleModal(true)}
-                        className="text-[11px] font-bold text-[#C05621] hover:text-[#7B341E] underline cursor-pointer text-left sm:text-right"
-                      >
-                        View Schedule
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-[#9C4221] leading-relaxed">
-                      {calcConflict.turnoverNote || "Consecutive schedule: The camera returns from a previous rental on this date and is ready for afternoon pickup."}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-3 rounded-2xl bg-[#E8F7F1] border border-[#A8DBC8] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#234E52] gap-2">
-                    <div className="flex items-center gap-2">
-                      <CalendarCheck className="w-4 h-4 text-[#38A169] shrink-0" />
-                      <span className="font-bold">{selectedCamera.shortName} is 100% Available</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowScheduleModal(true)}
-                      className="text-[11px] font-bold text-[#234E52] hover:text-[#1A1A2E] underline cursor-pointer text-left sm:text-right"
-                    >
-                      View Busy Calendar
-                    </button>
-                  </div>
-                )}
-
-                {/* Handover Mode Selection */}
-                <div>
-                  <label className="block text-xs font-extrabold uppercase tracking-wider text-[#6B6B8A] mb-2">
-                    Step 3: Handover &amp; Return Method (Metro Manila)
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-                    <button
-                      type="button"
-                      onClick={() => setCalcHandover('meetup')}
-                      className={`min-h-[88px] p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${calcHandover === 'meetup'
-                        ? 'border-[#1A1A2E] bg-[#EDE8FC] shadow-[3px_3px_0px_#1A1A2E]'
-                        : 'border-[#E8E4F0] bg-[#FAFAF7] hover:border-[#C9B8F0]'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-sm text-[#1A1A2E]">Meet-up Hubs</span>
-                        {calcHandover === 'meetup' && <Check className="w-4 h-4 text-[#553C9A]" />}
-                      </div>
-                      <p className="mt-1 text-xs text-[#6B6B8A] leading-tight">
-                        SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 11:00 PM).
-                      </p>
-                      <div className="mt-2 text-[11px] font-bold text-[#553C9A] flex items-center justify-between">
-                        <span>Handling Fee: +₱200</span>
-                        <span>Deposit: ₱{currentQuote.deposit.toLocaleString()}</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setCalcHandover('courier')}
-                      className={`min-h-[88px] p-4 rounded-2xl border-2 text-left transition-all cursor-pointer ${calcHandover === 'courier'
-                        ? 'border-[#1A1A2E] bg-[#FEF0E7] shadow-[3px_3px_0px_#1A1A2E]'
-                        : 'border-[#E8E4F0] bg-[#FAFAF7] hover:border-[#F5C6A8]'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-sm text-[#1A1A2E]">Grab Express ONLY</span>
-                        {calcHandover === 'courier' && <Check className="w-4 h-4 text-[#C05621]" />}
-                      </div>
-                      <p className="mt-1 text-xs text-[#6B6B8A] leading-tight">
-                        Owner books rider for release &amp; return. Renter shoulders delivery fee.
-                      </p>
-                      <div className="mt-2 text-[11px] font-bold text-[#C05621] flex items-center justify-between">
-                        <span>8:00 AM – 11:00 PM ONLY</span>
-                        <span>Deposit: ₱{currentQuote.deposit.toLocaleString()}</span>
-                      </div>
-                    </button>
-
-                  </div>
-                </div>
-
-                {/* Bulk Promo Notification */}
-                {currentQuote.isBulk ? (
-                  <div className="p-3.5 rounded-2xl bg-[#E8F7F1] border border-[#A8DBC8] flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-[#A8DBC8] flex items-center justify-center shrink-0">
-                      <Sparkles className="w-4 h-4 text-[#234E52]" />
-                    </div>
-                    <div className="text-xs">
-                      <span className="font-extrabold text-[#234E52]">Tier Discount Applied! </span>
-                      <span className="text-[#234E52]">
-                        You unlocked ₱{currentQuote.rate}/day ({currentQuote.tierLabel}).
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3.5 rounded-2xl bg-[#FAFAF7] border border-[#E8E4F0] flex items-center justify-between text-xs text-[#6B6B8A]">
-                    <span>Tip: Rent for 2+ days to unlock lower daily rates (down to <strong>₱{selectedCamera.bulkRate || 350}/day</strong> on 6+ days for {selectedCamera.shortName}).</span>
-                  </div>
-                )}
-
-              </div>
-
-              {/* Quote Breakdown Output Column (Stacks naturally on mobile) */}
-              <div className="w-full lg:col-span-5 bg-[#FAFAF7] rounded-[28px] border-2 border-[#E8E4F0] p-6 flex flex-col justify-between">
-
-                <div>
-                  <div className="flex items-center justify-between pb-3 border-b border-[#E8E4F0]">
-                    <span className="text-xs font-black uppercase text-[#6B6B8A]">Price Breakdown</span>
-                    <span className="text-xs font-bold text-[#1A1A2E] bg-white px-2.5 py-1 rounded-full border border-[#E8E4F0]">
-                      {currentQuote.days} {currentQuote.days === 1 ? 'Day' : 'Days'} Total
-                    </span>
-                  </div>
-
-                  <div className="mt-4 space-y-3 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[#6B6B8A]">
-                        Base Rental ({currentQuote.days}d × ₱{currentQuote.rate})
-                      </span>
-                      <span className="font-bold text-[#1A1A2E]">
-                        ₱{currentQuote.rentalTotal.toLocaleString()}
-                      </span>
-                    </div>
-
-                    {currentQuote.meetupFee > 0 && (
-                      <div className="flex justify-between items-center text-[#553C9A]">
-                        <span>Meetup Handling Fee</span>
-                        <span className="font-bold">
-                          +₱{currentQuote.meetupFee.toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-
-                    {calcHandover === 'courier' && (
-                      <div className="flex justify-between items-center text-[#C05621] text-xs">
-                        <span>Grab Express Delivery Fee</span>
-                        <span className="font-semibold">Paid by Renter to Rider</span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-1 text-[#6B6B8A]">
-                        <span>Security Deposit</span>
-                        <span className="text-[10px] text-[#38A169] font-bold">(100% Refundable)</span>
-                      </div>
-                      <span className="font-bold text-[#1A1A2E]">
-                        ₱{currentQuote.deposit.toLocaleString()}
-                      </span>
-                    </div>
-
-                    <div className="pt-3 border-t border-[#E8E4F0] flex justify-between items-center">
-                      <span className="font-extrabold text-[#1A1A2E]">Total Package Value</span>
-                      <span className="font-black text-xl text-[#1A1A2E]">
-                        ₱{currentQuote.totalPackageValue.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-
-                    
-
-                  {/* Payment Schedule Card */}
-                  <div className="mt-6 p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-[#553C9A]">1. Pay Now via GCash (Reservation):</span>
-                      <span className="font-extrabold text-[#553C9A] px-2 py-0.5 rounded bg-[#EDE8FC]">
-                        ₱{DOWNPAYMENT_FEE} (Credited to rental)
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <div>
-                        <span className="font-bold text-[#1A1A2E] block">2. Total Payment on Handover:</span>
-                        <span className="text-[10px] text-[#6B6B8A]">
-                          ₱{currentQuote.remainingRentalBalance.toLocaleString()} rental bal + ₱{currentQuote.deposit.toLocaleString()} deposit{currentQuote.meetupFee > 0 ? ' + ₱200 meetup' : ''}
-                        </span>
-                      </div>
-                      <span className="font-extrabold text-sm text-[#1A1A2E]">
-                        ₱{currentQuote.paymentOnHandover.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs pt-1.5 border-t border-[#E8E4F0]">
-                      <div>
-                        <span className="font-bold text-[#2F855A] block">3. Security Deposit Refund:</span>
-                        <span className="text-[10px] text-[#2F855A]/80">Sent to GCash within 24 hours of inspection</span>
-                      </div>
-                      <span className="font-extrabold text-[#2F855A]">
-                        + ₱{currentQuote.deposit.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <button
-                    disabled={calcConflict.hasConflict}
-                    onClick={() => handleOpenBookingModal()}
-                    className={`w-full min-h-[50px] py-3.5 px-6 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 ${calcConflict.hasConflict
-                      ? 'bg-gray-200 text-gray-400 border-2 border-gray-300 cursor-not-allowed shadow-none'
-                      : 'bg-[#1A1A2E] text-white hover:bg-[#6B46C1] shadow-md hover:shadow-lg cursor-pointer'
-                      }`}
-                  >
-                    {calcConflict.hasConflict ? (
-                      <>
-                        <CalendarX className="w-4 h-4 text-red-500" />
-                        <span>Dates Reserved — Cannot Book</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Reserve These Dates</span>
-                        <ArrowRight className="w-4 h-4 text-[#F5C6A8]" />
-                      </>
-                    )}
-                  </button>
-                  <p className="mt-2 text-center text-[11px] text-[#6B6B8A]">
-                    {calcConflict.hasConflict
-                      ? 'Please select an open date window above to proceed with reservation.'
-                      : 'No obligation until downpayment is verified in GCash.'}
-                  </p>
-                </div>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-      </section>
+      
 
       {/* ─────────────────────────────────────────────────────────────
           TERMS & CONDITIONS REASSURANCE PREVIEW
@@ -3211,8 +2695,7 @@ export default function App() {
               <li><button type="button" onClick={() => navigateTo('requirements')} className="hover:text-white transition-colors cursor-pointer text-left">Requirements Handbook</button></li>
               <li><button type="button" onClick={() => navigateTo('terms')} className="hover:text-white transition-colors cursor-pointer text-left">Terms &amp; Conditions</button></li>
               <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'catalog' })} className="hover:text-white transition-colors cursor-pointer text-left">Camera Fleet Showroom</button></li>
-              <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'pricing' })} className="hover:text-white transition-colors cursor-pointer text-left">Pricing Calculator</button></li>
-              <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'faq' })} className="hover:text-white transition-colors cursor-pointer text-left">FAQ</button></li>
+                            <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'faq' })} className="hover:text-white transition-colors cursor-pointer text-left">FAQ</button></li>
             </ul>
           </div>
 

@@ -116,6 +116,16 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
     return [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
   }, [year, month]);
 
+  // Helper to add days without UTC timezone skew
+  const addDaysToDateStr = (dStr: string, daysToAdd: number = 1): string => {
+    const [y, m, d] = dStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + daysToAdd);
+    const yStr = dt.getFullYear();
+    const mStr = String(dt.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(dt.getDate()).padStart(2, '0');
+    return `${yStr}-${mStr}-${dayStr}`;
+  };
+
   // Handle cell click
   const handleDateClick = (dateStr: string, dayInfo: DayAvailabilityInfo) => {
     if (dayInfo.status === 'past' || dayInfo.status === 'booked') return;
@@ -130,8 +140,7 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
     if (!selectingEnd) {
       setTempStart(dateStr);
       setSelectingEnd(true);
-      const [y, m, d] = dateStr.split('-').map(Number);
-      const nextDayStr = new Date(y, m - 1, d + 1).toISOString().split('T')[0];
+      const nextDayStr = addDaysToDateStr(dateStr, 1);
       onDateRangeChange(dateStr, nextDayStr);
     } else {
       if (dateStr > tempStart) {
@@ -140,8 +149,7 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
       } else if (dateStr < tempStart) {
         setTempStart(dateStr);
         setSelectingEnd(true);
-        const [y, m, d] = dateStr.split('-').map(Number);
-        const nextDayStr = new Date(y, m - 1, d + 1).toISOString().split('T')[0];
+        const nextDayStr = addDaysToDateStr(dateStr, 1);
         onDateRangeChange(dateStr, nextDayStr);
       } else {
         onDateRangeChange(dateStr, dateStr);
@@ -156,8 +164,7 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
     if (rentalType === 'same-day') {
       onDateRangeChange(todayStr, todayStr);
     } else {
-      const [ty, tm, td] = todayStr.split('-').map(Number);
-      const nextDayStr = new Date(ty, tm - 1, td + 1).toISOString().split('T')[0];
+      const nextDayStr = addDaysToDateStr(todayStr, 1);
       onDateRangeChange(todayStr, nextDayStr);
     }
   };
