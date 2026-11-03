@@ -19,17 +19,16 @@ export const RENTAL_CONFIG = {
   facebookAdminAccount: 'Pack and Film',
 
   // Operating Hours
-  operatingHours: '8:00 AM – 12:00 AM (Midnight)',
+  operatingHours: '8:00 AM – 11:00 PM',
   turnoverBufferHours: 2,
-  scheduleNote: 'Standard operating hours: 8:00 AM – 12:00 AM (Midnight) daily. Handovers are coordinated upon booking. On same-day transition dates, pickup begins from 2:00 PM and return is by 12:00 PM.',
+  scheduleNote: 'Standard operating hours: 8:00 AM – 11:00 PM daily. Handovers are coordinated upon booking. On same-day transition dates, pickup begins from 2:00 PM and return is by 12:00 PM.',
   startHourStr: '8:00 AM',
-  endHourStr: '12:00 AM',
+  endHourStr: '11:00 PM',
 
   // Pricing & Duration Tiers (DJI Osmo Pocket 3)
   pricingTiers: [
-    { minDays: 1, maxDays: 1, rate: 450, label: '1 Day (₱450/day)' },
-    { minDays: 2, maxDays: 3, rate: 420, label: '2–3 Days Tier (₱420/day)' },
-    { minDays: 4, maxDays: 5, rate: 380, label: '4–5 Days Tier (₱380/day)' },
+    { minDays: 1, maxDays: 2, rate: 450, label: '1–2 Days (₱450/day)' },
+    { minDays: 3, maxDays: 5, rate: 400, label: '3–5 Days Tier (₱400/day)' },
     { minDays: 6, maxDays: 999, rate: 350, label: '6+ Days Long Term (₱350/day)' }
   ],
   reservationFee: 300, // Credited toward rental fee, non-refundable
@@ -91,7 +90,7 @@ export const HOW_TO_BOOK_STEPS = [
     step: '05',
     title: 'Meet-up or delivery',
     badge: 'Gear Handover',
-    desc: 'Settle remaining balance + ₱1,000 refundable security deposit before release. Operating hours: 8:00 AM – 12:00 AM (Midnight) daily. Handover time is coordinated with your schedule upon booking confirmation. Unit may be claimed via Meetup at SM East Ortigas, Bridgetowne, or Opus Mall with ₱200 handling fee or via Grab Express ONLY. Security Deposit will refunded within 24 hours after inspection.'
+    desc: 'Settle remaining balance + ₱1,000 refundable security deposit before release. Operating hours: 8:00 AM – 11:00 PM daily. Handover time is coordinated with your schedule upon booking confirmation. Unit may be claimed via Meetup at SM East Ortigas, Bridgetowne, or Opus Mall with ₱200 handling fee or via Grab Express ONLY. Security Deposit will refunded within 24 hours after inspection.'
   }
 ];
 
@@ -190,9 +189,9 @@ export const TERMS_AND_CONDITIONS_DATA = [
   {
     number: '04',
     title: 'Rental Period & Shipping',
-    highlight: '8:00 AM – 12:00 AM (Midnight) Daily • Coordinated Schedule • ₱200 Meetup Fee • Grab Express ONLY',
+    highlight: '8:00 AM – 11:00 PM Daily • Coordinated Schedule • ₱200 Meetup Fee • Grab Express ONLY',
     content: [
-      'Operating Hours: 8:00 AM – 12:00 AM (Midnight) daily. All gear handovers, meetups, deliveries, and returns are scheduled within this window.',
+      'Operating Hours: 8:00 AM – 11:00 PM daily. All gear handovers, meetups, deliveries, and returns are scheduled within this window.',
       'Flexible Scheduling: Handover and return times are coordinated directly with you to match your shoot schedule.',
       'Same-Day Transition Schedule: When consecutive bookings occur on the same date, pickup begins from 2:00 PM and return is scheduled by 12:00 PM to ensure full gear inspection and 100% charging.',
       'Unit can be claimed via Grab Express delivery or through meet-up at SM East, Bridgetowne, or Opus.',

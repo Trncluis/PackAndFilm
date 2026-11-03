@@ -36,8 +36,8 @@ export const checkCameraDateConflict = (
       hasConflict: false,
       conflictingBooking: null,
       message: '',
-      pickupWindow: '8:00 AM – 12:00 AM (Flexible)',
-      returnWindow: '8:00 AM – 12:00 AM (Flexible)'
+      pickupWindow: '8:00 AM – 11:00 PM (Flexible)',
+      returnWindow: '8:00 AM – 11:00 PM (Flexible)'
     };
   }
 
@@ -102,8 +102,8 @@ export const checkCameraDateConflict = (
       isStartTurnover,
       isEndTurnover,
       turnoverNote,
-      pickupWindow: isStartTurnover ? '2:00 PM – 12:00 AM (Afternoon Pickup)' : '8:00 AM – 12:00 AM (Flexible)',
-      returnWindow: isEndTurnover ? '8:00 AM – 12:00 PM (Morning Return)' : '8:00 AM – 12:00 AM (Flexible)',
+      pickupWindow: isStartTurnover ? '2:00 PM – 11:00 PM (Afternoon Pickup)' : '8:00 AM – 11:00 PM (Flexible)',
+      returnWindow: isEndTurnover ? '8:00 AM – 12:00 PM (Morning Return)' : '8:00 AM – 11:00 PM (Flexible)',
       message: ''
     };
   }
@@ -114,8 +114,8 @@ export const checkCameraDateConflict = (
     isTurnover: false,
     isStartTurnover: false,
     isEndTurnover: false,
-    pickupWindow: '8:00 AM – 12:00 AM (Flexible)',
-    returnWindow: '8:00 AM – 12:00 AM (Flexible)',
+    pickupWindow: '8:00 AM – 11:00 PM (Flexible)',
+    returnWindow: '8:00 AM – 11:00 PM (Flexible)',
     message: ''
   };
 };

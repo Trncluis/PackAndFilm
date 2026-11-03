@@ -404,7 +404,7 @@ export const DedicatedRequirementsPage: React.FC<DedicatedRequirementsPageProps>
               },
               {
                 q: 'How long does the KYC review take?',
-                a: 'Verification is fast! Once you submit the booking form and downpayment, we review your documents within 15–30 minutes during our standard operating hours (8:00 AM – 12:00 AM Midnight daily).'
+                a: 'Verification is fast! Once you submit the booking form and downpayment, we review your documents within 15–30 minutes during our standard operating hours (8:00 AM – 11:00 PM daily).'
               },
               {
                 q: 'Is my personal data safe and protected?',

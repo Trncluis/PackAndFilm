@@ -54,10 +54,9 @@ export const CAMERAS: CameraItem[] = [
     meetupDeposit: 1000,
     courierDeposit: 1000,
     pricingTiers: [
-      { minDays: 1, maxDays: 1, rate: 450, label: '1 Day', sublabel: 'Standard (₱450/d)' },
-      { minDays: 2, maxDays: 3, rate: 420, label: '2–3 Days', sublabel: 'Weekend Tier (₱420/d)' },
-      { minDays: 4, maxDays: 5, rate: 380, label: '4–5 Days', sublabel: 'Extended Trip (₱380/d)' },
-      { minDays: 6, maxDays: 999, rate: 350, label: '6+ Days', sublabel: 'Long-Term Value (₱350/d)' },
+      { minDays: 1, maxDays: 2, rate: 450, label: '1–2 Days', sublabel: 'Standard (₱450/d)' },
+      { minDays: 3, maxDays: 5, rate: 400, label: '3–5 Days', sublabel: 'Trip Saver (₱400/d)' },
+      { minDays: 6, maxDays: 999, rate: 350, label: '6+ Days', sublabel: 'Long-Term (₱350/d)' },
     ],
     rating: 4.98,
     reviewCount: 180,
@@ -71,82 +70,61 @@ export const CAMERAS: CameraItem[] = [
         badge: 'Main Gimbal',
         color: 'bg-[#EDE8FC] text-[#553C9A]',
         tagBg: 'bg-[#C9B8F0]',
-        desc: '1-inch CMOS sensor, 4K/120fps ultra-smooth mechanical 3-axis gimbal with 2" rotatable OLED screen.',
-        spec: '4K/120fps • 10-bit D-Log M • 1-inch Sensor',
+        desc: '1-inch CMOS sensor, 4K/60fps ultra-smooth mechanical 3-axis gimbal with 2" rotatable OLED screen.',
+        spec: '4K/60fps • 10-bit D-Log M • 1-inch Sensor',
         tip: 'Flip screen sideways to immediately power on and start recording!'
       },
       {
         id: 2,
-        title: '128GB MicroSD (SanDisk Extreme PRO)',
-        badge: 'High Speed',
+        title: 'Carrying Case',
+        badge: 'Travel Case',
         color: 'bg-[#FEF0E7] text-[#C05621]',
         tagBg: 'bg-[#F5C6A8]',
-        desc: 'SanDisk Extreme PRO V30 A2 rated. High bitrates for uninterrupted 4K video clips (4+ hrs).',
-        spec: '128GB • 200MB/s Read • V30 4K Certified',
-        tip: 'Formatted clean before handoff. Zero leftover clips.'
+        desc: 'Custom weatherproof padded protective organizer case designed for Osmo Pocket 3 and all kit accessories.',
+        spec: 'EVA Shockproof Shell • Water-Resistant • Sanitized',
+        tip: 'Hospital-grade sanitized and sealed prior to handoff.'
       },
       {
         id: 3,
-        title: 'Dual OTG Card Reader (Lightning + Type-C)',
-        badge: 'Instant Export',
-        color: 'bg-[#E8F7F1] text-[#234E52]',
-        tagBg: 'bg-[#A8DBC8]',
-        desc: 'Plug-and-play adapter to move clips directly to iPhone Camera Roll or Android in seconds.',
-        spec: 'Dual Type-C & Lightning • Plug & Play',
-        tip: 'Open iOS Files app or Android Gallery to export in full 4K.'
-      },
-      {
-        id: 4,
-        title: 'Silicone Desktop Base',
-        badge: 'Tabletop Stand',
-        color: 'bg-[#EDE8FC] text-[#553C9A]',
-        tagBg: 'bg-[#C9B8F0]',
-        desc: 'Snug non-slip silicone cradle for steady cafe tabletop talking heads and timelapses.',
-        spec: 'Anti-slip base • Compact • Drop-safe',
-        tip: 'Perfect for cafe food vlogs, study-with-me streams, or sit-downs.'
-      },
-      {
-        id: 5,
-        title: 'Handle Extension Grip',
-        badge: 'Comfort Grip',
-        color: 'bg-[#FEF0E7] text-[#C05621]',
-        tagBg: 'bg-[#F5C6A8]',
-        desc: 'Adds comfortable grip length and includes standard 1/4" tripod screw thread.',
-        spec: '1/4" Threaded base • Extra grip • Type-C Passthrough',
-        tip: 'Allows you to mount onto any mini tripod or selfie stick.'
-      },
-      {
-        id: 6,
-        title: 'Protective Hard Lens Cover',
+        title: 'Protective Cover',
         badge: 'Lens Shield',
         color: 'bg-[#E8F7F1] text-[#234E52]',
         tagBg: 'bg-[#A8DBC8]',
-        desc: 'Hard-shell shield that locks the gimbal motor safely while carrying inside your purse or tote.',
-        spec: 'Gimbal clamp • Magnetic latch • Scratch proof',
-        tip: 'Snap this on whenever storing or moving locations.'
+        desc: 'Hard-shell shield that safely clamps and locks the gimbal motor while carrying inside your bag.',
+        spec: 'Gimbal Lock Clamp • Magnetic Latch • Scratch Proof',
+        tip: 'Snap this on whenever storing or moving between shooting spots.'
       },
       {
-        id: 7,
-        title: 'Pastel Woven Wrist Strap',
-        badge: 'Anti-Drop',
+        id: 4,
+        title: 'Ulanzi Tripod',
+        badge: 'Tripod Stand',
         color: 'bg-[#EDE8FC] text-[#553C9A]',
         tagBg: 'bg-[#C9B8F0]',
-        desc: 'Reinforced woven paracord wrist lanyard with adjustable cinch toggle for concerts.',
-        spec: 'Reinforced nylon • Adjustable cinch • Pastel hue',
-        tip: 'Loop around your wrist before filming concert crowds.'
+        desc: 'Compact desktop mini tripod with 1/4" screw thread for rock-steady timelapse, talking-head, and desk shots.',
+        spec: '1/4" Threaded • Anti-Slip Feet • Foldable',
+        tip: 'Perfect for cafe food vlogs, study streams, or table sit-downs.'
       },
       {
-        id: 8,
-        title: 'Weatherproof Shock Organizer Case',
-        badge: 'Travel Bag',
+        id: 5,
+        title: '128GB MicroSD Card',
+        badge: 'High Speed',
         color: 'bg-[#FEF0E7] text-[#C05621]',
         tagBg: 'bg-[#F5C6A8]',
-        desc: 'Padded EVA carry case with custom compartments for all items. Sanitized before handover.',
-        spec: 'EVA shockproof shell • Water-resistant • Compact',
-        tip: 'Hospital-grade sanitized and sealed at our Pasig base.'
+        desc: 'SanDisk Extreme MicroSD card certified for uninterrupted 4K video recording and high bitrate clips.',
+        spec: '128GB Storage • Fast Write Speed • 4K Ready',
+        tip: 'Formatted clean before handoff. Zero leftover clips.'
+      },
+      {
+        id: 6,
+        title: 'Card Reader (OTG Dual Interface)',
+        badge: 'Instant Transfer',
+        color: 'bg-[#E8F7F1] text-[#234E52]',
+        tagBg: 'bg-[#A8DBC8]',
+        desc: 'Dual OTG card reader (Lightning & USB-C) for instant plug-and-play photo and video export directly to your smartphone.',
+        spec: 'Dual Lightning & Type-C OTG • Plug & Play',
+        tip: 'Plug into iPhone Files or Android Gallery to export full 4K clips without a PC.'
       }
-    ]
-  },
+    ]},
   {
     id: 'canon-g7x-mark-iii',
     name: 'Canon PowerShot G7 X Mark III Creator Vlogging Kit',
@@ -157,15 +135,14 @@ export const CAMERAS: CameraItem[] = [
     image: '/canon-g7x-hero.png',
     isAvailable: true,
     depositAmount: 1000,
-    standardRate: 500,
-    bulkRate: 400,
+    standardRate: 550,
+    bulkRate: 450,
     meetupDeposit: 1000,
     courierDeposit: 1000,
     pricingTiers: [
-      { minDays: 1, maxDays: 1, rate: 500, label: '1 Day', sublabel: 'Standard (₱500/d)' },
-      { minDays: 2, maxDays: 3, rate: 450, label: '2–3 Days', sublabel: 'Weekend Tier (₱450/d)' },
-      { minDays: 4, maxDays: 5, rate: 420, label: '4–5 Days', sublabel: 'Extended Trip (₱420/d)' },
-      { minDays: 6, maxDays: 999, rate: 400, label: '6+ Days', sublabel: 'Long-Term Value (₱400/d)' },
+      { minDays: 1, maxDays: 2, rate: 550, label: '1–2 Days', sublabel: 'Standard (₱550/d)' },
+      { minDays: 3, maxDays: 5, rate: 500, label: '3–5 Days', sublabel: 'Trip Saver (₱500/d)' },
+      { minDays: 6, maxDays: 999, rate: 450, label: '6+ Days', sublabel: 'Long-Term (₱450/d)' },
     ],
     rating: 4.97,
     reviewCount: 38,
@@ -175,57 +152,57 @@ export const CAMERAS: CameraItem[] = [
     bagItems: [
       {
         id: 1,
-        title: 'Canon PowerShot G7 X Mark III Camera Body',
+        title: 'Canon G7X III Camera Body',
         badge: 'Main Unit',
         color: 'bg-[#FEF0E7] text-[#C05621]',
         tagBg: 'bg-[#F5C6A8]',
-        desc: '20.1MP 1.0-inch stacked sensor, fast f/1.8–2.8 4.2x optical zoom lens, DIGIC 8 processor, and 180° flip-up touchscreen for aesthetic vlogs.',
+        desc: '20.1MP 1.0-inch stacked sensor, fast f/1.8–2.8 4.2x optical zoom lens, DIGIC 8 processor, and 180° flip-up touchscreen for aesthetic vlogs & concert shots.',
         spec: '20.1MP • 4K 30p Uncropped • 180° Flip Touchscreen • Optical IS',
         tip: 'Flip screen up for instant selfie framing; use the tactile control ring around the lens for smooth zooming.'
       },
       {
         id: 2,
-        title: '32GB High-Speed SD Card',
-        badge: 'Storage',
+        title: 'Camera Bag & Pouch',
+        badge: 'Bag & Pouch',
         color: 'bg-[#EDE8FC] text-[#553C9A]',
         tagBg: 'bg-[#C9B8F0]',
+        desc: 'Custom compartmentalized organizer travel bag plus soft protective sleeve pouch to safeguard the camera body and accessories.',
+        spec: 'Padded Dividers • Soft Inner Pouch • Water-Resistant Canvas',
+        tip: 'Hospital-grade sanitized and sealed at our Pasig base prior to every release.'
+      },
+      {
+        id: 3,
+        title: '32GB SD Card',
+        badge: 'Storage',
+        color: 'bg-[#E8F7F1] text-[#234E52]',
+        tagBg: 'bg-[#A8DBC8]',
         desc: 'Fast read/write SD memory card certified for 4K video recording and high-speed continuous photo shooting.',
         spec: '32GB Capacity • Class 10 UHS-I • 4K Ready',
         tip: 'Sanitized, formatted, and zero leftover clips before every rental handoff.'
       },
       {
-        id: 3,
-        title: 'SD Card Reader (OTG Dual Interface)',
+        id: 4,
+        title: 'Card Reader (OTG Dual Interface)',
         badge: 'Instant Transfer',
-        color: 'bg-[#E8F7F1] text-[#234E52]',
-        tagBg: 'bg-[#A8DBC8]',
+        color: 'bg-[#FEF0E7] text-[#C05621]',
+        tagBg: 'bg-[#F5C6A8]',
         desc: 'Plug-and-play high-speed card reader to transfer full-resolution photos and 4K clips directly to your iPhone or Android.',
         spec: 'Dual Lightning & Type-C OTG • Plug & Play',
         tip: 'Import straight into iOS Photos or Google Photos to post your reels and TikToks without a computer!'
       },
       {
-        id: 4,
-        title: 'Dedicated Wall Battery Charger',
-        badge: 'Fast Charging',
-        color: 'bg-[#FEF0E7] text-[#C05621]',
-        tagBg: 'bg-[#F5C6A8]',
-        desc: 'OEM Canon battery charger dock for rapid AC wall charging between shoot locations or overnight.',
-        spec: '100–240V AC Worldwide • LED Charge Indicator',
-        tip: 'Recharge one battery at your accommodation while shooting out with the extra battery.'
-      },
-      {
         id: 5,
-        title: 'Dual NB-13L Batteries (Main + Extra Battery)',
-        badge: 'Extended Power',
+        title: 'Battery & Charger',
+        badge: 'Power Kit',
         color: 'bg-[#EDE8FC] text-[#553C9A]',
         tagBg: 'bg-[#C9B8F0]',
-        desc: 'Two lithium-ion batteries included so you can shoot events, concerts, and travel days without power anxiety.',
-        spec: '2x NB-13L Batteries • 3.6V 1250mAh • Dual Power',
-        tip: 'Keep the spare battery in your case pouch; swap in seconds when the battery icon blinks.'
+        desc: 'OEM Canon rechargeable lithium-ion battery plus dedicated AC wall charger dock for rapid power-ups.',
+        spec: 'Rechargeable Li-ion • Dedicated AC Wall Dock Charger',
+        tip: 'Charge conveniently overnight or between shoot locations.'
       },
       {
         id: 6,
-        title: 'Reinforced Wrist Strap',
+        title: 'Wrist Strap',
         badge: 'Anti-Drop',
         color: 'bg-[#E8F7F1] text-[#234E52]',
         tagBg: 'bg-[#A8DBC8]',
@@ -235,8 +212,8 @@ export const CAMERAS: CameraItem[] = [
       },
       {
         id: 7,
-        title: 'Protective Silicone Case',
-        badge: 'Grip & Cushion',
+        title: 'Silicon Case',
+        badge: 'Protective Grip',
         color: 'bg-[#FEF0E7] text-[#C05621]',
         tagBg: 'bg-[#F5C6A8]',
         desc: 'Custom-molded silicone case providing non-slip ergonomic grip and drop cushioning without blocking any buttons or ports.',
@@ -245,46 +222,15 @@ export const CAMERAS: CameraItem[] = [
       },
       {
         id: 8,
-        title: 'Protective Camera Skin',
-        badge: 'Body Protection',
+        title: 'Ulanzi MT-44 Extendable Tripod',
+        badge: 'Extendable Tripod',
         color: 'bg-[#EDE8FC] text-[#553C9A]',
         tagBg: 'bg-[#C9B8F0]',
-        desc: 'Precision matte vinyl protective skin shielding the camera exterior from minor scuffs and daily cosmetic wear.',
-        spec: 'Precision Die-Cut Vinyl • Anti-Scratch Finish',
-        tip: 'Keeps the camera looking brand new and aesthetically clean for all your photos.'
-      },
-      {
-        id: 9,
-        title: 'Pre-installed Tempered Glass',
-        badge: 'Screen Shield',
-        color: 'bg-[#E8F7F1] text-[#234E52]',
-        tagBg: 'bg-[#A8DBC8]',
-        desc: '9H hardness optical tempered glass screen protector pre-installed over the 3.0" touchscreen to guard against scratches.',
-        spec: '9H Hardness • Oleophobic Coating • Touch Responsive',
-        tip: 'Touchscreen controls remain 100% responsive while keeping the screen pristine.'
-      },
-      {
-        id: 10,
-        title: 'Soft Protective Camera Pouch',
-        badge: 'Daily Sleeve',
-        color: 'bg-[#EDE8FC] text-[#553C9A]',
-        tagBg: 'bg-[#C9B8F0]',
-        desc: 'Soft padded drawstring pouch for carrying the G7 X Mark III safely inside your personal purse, tote, or jacket pocket.',
-        spec: 'Cushioned Lining • Drawstring Closure • Compact',
-        tip: 'Perfect for cafe-hopping when you want to travel light with just the camera.'
-      },
-      {
-        id: 11,
-        title: 'Weatherproof Padded Camera Bag',
-        badge: 'Travel Bag',
-        color: 'bg-[#FEF0E7] text-[#C05621]',
-        tagBg: 'bg-[#F5C6A8]',
-        desc: 'Custom compartmentalized organizer carry bag holding the camera, charger, spare battery, reader, and all kit items. Sanitized before handoff.',
-        spec: 'Padded Dividers • Water-Resistant Canvas • Sanitized',
-        tip: 'Sanitized hospital-grade at our Pasig base prior to every rental release.'
+        desc: 'Versatile extendable vlog tripod with integrated 2-in-1 phone clip and cold shoe mount, perfect for handheld vlogging, concerts, and table filming.',
+        spec: 'Extendable Monopod/Tripod • 360° Ball Head • Cold Shoe',
+        tip: 'Extend fully for elevated concert stage shots or group selfie angles!'
       }
-    ]
-  },
+    ]},
   {
     id: 'kodak-pixpro-fz55',
     name: 'KODAK PIXPRO FZ55 Digital Camera',
