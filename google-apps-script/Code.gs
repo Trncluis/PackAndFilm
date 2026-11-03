@@ -1468,21 +1468,13 @@ function doPost(e) {
               : "";
 
             if (bookedStart && bookedEnd) {
-              // Consecutive turnover rule:
-              // Booking 1 ends on date X (bookedEnd === reqStart) and Booking 2 starts on date X (reqStart)
-              // OR Booking 2 ends on date X (reqEnd === bookedStart) and Booking 1 starts on date X (bookedStart)
-              // Permitted only if both reservations span >= 1 night (not same-day rentals).
-              const isConsecutiveAfter = (bookedEnd === reqStart) && (bookedStart < bookedEnd) && (reqStart < reqEnd);
-              const isConsecutiveBefore = (reqEnd === bookedStart) && (reqStart < reqEnd) && (bookedStart < bookedEnd);
-
+              // Full-day reservation buffer: any date overlap is a strict collision
               if (reqStart <= bookedEnd && bookedStart <= reqEnd) {
-                if (!isConsecutiveAfter && !isConsecutiveBefore) {
-                  return ContentService.createTextOutput(JSON.stringify({
-                    status: "error",
-                    code: "DATE_CONFLICT",
-                    message: "The requested rental dates (" + reqStart + " to " + reqEnd + ") conflict with an existing reservation for this camera (" + bookedStart + " to " + bookedEnd + "). Please select different dates."
-                  })).setMimeType(ContentService.MimeType.JSON);
-                }
+                return ContentService.createTextOutput(JSON.stringify({
+                  status: "error",
+                  code: "DATE_CONFLICT",
+                  message: "The requested rental dates (" + reqStart + " to " + reqEnd + ") conflict with an existing reservation for this camera (" + bookedStart + " to " + bookedEnd + "). Please select different dates."
+                })).setMimeType(ContentService.MimeType.JSON);
               }
             }
           }
@@ -2050,8 +2042,8 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
 
   function buildDescription(type) {
     const timingNote = type === "pickup"
-      ? "Pickup Schedule: Flexible 8:00 AM – 11:00 PM (or from 2:00 PM if consecutive turnover from prior rental)."
-      : "Return Schedule: Flexible 8:00 AM – 11:00 PM (or by 11:30 AM if consecutive turnover for next rental).";
+      ? "Pickup Schedule: Flexible 8:00 AM – 11:00 PM."
+      : "Return Schedule: Flexible 8:00 AM – 11:00 PM.";
 
     return [
       "PackAndFilm Equipment Reservation",
