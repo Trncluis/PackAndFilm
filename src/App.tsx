@@ -829,20 +829,13 @@ export default function App() {
     { value: '11:00 PM', label: '11:00 PM', shortLabel: '11 PM', h: 23 },
   ], []);
 
-  // Dynamic Hourly Dropdown Options with 2-Hour Turnover Buffer Engine
+  // Dynamic Hourly Dropdown Options
   const pickupTimeOptions = useMemo<SelectOption[]>(() => {
-    // When start date has turnover, earlier shoot returns at 12:00 PM; available from 2:00 PM
-    const available = modalConflict.isStartTurnover
-      ? ALL_HOURS.filter(item => item.h >= 14)
-      : ALL_HOURS;
-
-    return available.map((item) => ({
+    return ALL_HOURS.map((item) => ({
       value: item.value,
       label: item.label,
       badge:
-        item.h === 14 && modalConflict.isStartTurnover
-          ? '⚡ Earliest Ready'
-          : item.h === 8
+        item.h === 8
           ? 'Opening'
           : item.h === 10
           ? 'Popular'
@@ -850,17 +843,13 @@ export default function App() {
           ? 'Closing Cutoff (11 PM)'
           : undefined,
     }));
-  }, [ALL_HOURS, modalConflict.isStartTurnover]);
+  }, [ALL_HOURS]);
 
   const returnTimeOptions = useMemo<SelectOption[]>(() => {
     const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
     const selectedPickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
 
     let available = ALL_HOURS;
-    // When end date has turnover, unit must be returned by 12:00 PM for afternoon shoot prep
-    if (modalConflict.isEndTurnover) {
-      available = available.filter(item => item.h <= 12);
-    }
     // On same-day rentals, return time must be strictly after pickup time
     if (isSameDay) {
       available = available.filter(item => item.h > selectedPickupH);
@@ -870,51 +859,29 @@ export default function App() {
       value: item.value,
       label: item.label,
       badge:
-        item.h === 12 && modalConflict.isEndTurnover
-          ? 'Latest Return'
-          : item.h === 23
+        item.h === 23
           ? 'Closing Cutoff (11 PM)'
           : item.h === 20
           ? 'Popular'
           : undefined,
     }));
-  }, [ALL_HOURS, modalConflict.isEndTurnover, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
+  }, [ALL_HOURS, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
 
-  // Filtered Hourly Lists for the visual timeline selector
-  const pickupQuickHours = useMemo(() => {
-    return modalConflict.isStartTurnover
-      ? ALL_HOURS.filter(item => item.h >= 14)
-      : ALL_HOURS;
-  }, [ALL_HOURS, modalConflict.isStartTurnover]);
+  // Visual timeline selector options
+  const pickupQuickHours = ALL_HOURS;
 
   const returnQuickHours = useMemo(() => {
     const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
     const selectedPickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
 
-    let available = ALL_HOURS;
-    if (modalConflict.isEndTurnover) {
-      available = available.filter(item => item.h <= 12);
-    }
     if (isSameDay) {
-      available = available.filter(item => item.h > selectedPickupH);
+      return ALL_HOURS.filter(item => item.h > selectedPickupH);
     }
-    return available;
-  }, [ALL_HOURS, modalConflict.isEndTurnover, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
+    return ALL_HOURS;
+  }, [ALL_HOURS, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
 
-  // Synchronize preferred pickup/return time slots with turnover status & same-day ordering
+  // Synchronize return time on same-day rentals so return > pickup
   useEffect(() => {
-    if (booking.pickupTimeSlot && modalConflict.isStartTurnover) {
-      const currentH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
-      if (currentH < 14) {
-        setBooking(b => ({ ...b, pickupTimeSlot: '2:00 PM' }));
-      }
-    }
-    if (booking.returnTimeSlot && modalConflict.isEndTurnover) {
-      const currentH = ALL_HOURS.find(x => x.value === booking.returnTimeSlot)?.h || 20;
-      if (currentH > 12) {
-        setBooking(b => ({ ...b, returnTimeSlot: '12:00 PM' }));
-      }
-    }
     const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
     if (isSameDay && booking.pickupTimeSlot && booking.returnTimeSlot) {
       const pickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
@@ -926,7 +893,7 @@ export default function App() {
         }
       }
     }
-  }, [ALL_HOURS, modalConflict.isStartTurnover, modalConflict.isEndTurnover, booking.startDate, booking.endDate, booking.pickupTimeSlot, booking.returnTimeSlot]);
+  }, [ALL_HOURS, booking.startDate, booking.endDate, booking.pickupTimeSlot, booking.returnTimeSlot]);
 
 
   // Jump to next available window for Calculator
@@ -1232,17 +1199,7 @@ export default function App() {
     let startDateToUse = prefillStartDate || '';
     let endDateToUse = prefillStartDate || '';
 
-    if (activeCamId && prefillStartDate) {
-      const dayAvail = getCameraDayAvailability(activeCamId, prefillStartDate, todayStr, bookings);
-      if (dayAvail.status === 'turnover') {
-        // Turnover day: Unit returned at 12 PM Noon, afternoon pickup starts 2 PM for multi-day rental
-        const [y, m, d] = prefillStartDate.split('-').map(Number);
-        const nextD = new Date(y, m - 1, d + 1);
-        const nextDStr = nextD.toISOString().split('T')[0];
-        startDateToUse = prefillStartDate;
-        endDateToUse = nextDStr;
-      }
-    }
+
 
     if (activeCamId) {
       setSelectedCameraId(activeCamId);
@@ -3217,15 +3174,9 @@ export default function App() {
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
                               1. Preferred Pickup Time
                             </span>
-                            {modalConflict.isStartTurnover ? (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                                Afternoon Pickup (2:00 PM)
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                                Ready from 8:00 AM
-                              </span>
-                            )}
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                              Ready from 8:00 AM
+                            </span>
                           </div>
 
                           <div className="space-y-2">
@@ -3238,11 +3189,7 @@ export default function App() {
                               options={pickupTimeOptions}
                               hasError={!!validationErrors.pickupTimeSlot}
                               errorMessage={validationErrors.pickupTimeSlot}
-                              headerNotice={
-                                modalConflict.isStartTurnover
-                                  ? "Available from 2:00 PM for afternoon pickup."
-                                  : undefined
-                              }
+
                               onChange={(val) => {
                                 setBooking(b => ({ ...b, pickupTimeSlot: val }));
                                 clearFieldError('pickupTimeSlot');
@@ -3253,7 +3200,7 @@ export default function App() {
                               label="Quick Select Hour"
                               value={booking.pickupTimeSlot}
                               hours={pickupQuickHours}
-                              earliestBadge={modalConflict.isStartTurnover ? "2 PM Earliest" : undefined}
+
                               onChange={(val) => {
                                 setBooking(b => ({ ...b, pickupTimeSlot: val }));
                                 clearFieldError('pickupTimeSlot');
@@ -3268,15 +3215,9 @@ export default function App() {
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
                               2. Preferred Return Time
                             </span>
-                            {modalConflict.isEndTurnover ? (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                                Morning Return (by 12:00 PM)
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                                By 11:00 PM
-                              </span>
-                            )}
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
+                              By 11:00 PM
+                            </span>
                           </div>
 
                           <div className="space-y-2">
@@ -3289,11 +3230,7 @@ export default function App() {
                               options={returnTimeOptions}
                               hasError={!!validationErrors.returnTimeSlot}
                               errorMessage={validationErrors.returnTimeSlot}
-                              headerNotice={
-                                modalConflict.isEndTurnover
-                                  ? "Morning return by 12:00 PM applies for this date."
-                                  : "Return to meetup hub or dispatch courier before 11:00 PM."
-                              }
+                              headerNotice="Return to meetup hub or dispatch courier before 11:00 PM."
                               onChange={(val) => {
                                 setBooking(b => ({ ...b, returnTimeSlot: val }));
                                 clearFieldError('returnTimeSlot');
@@ -3304,7 +3241,7 @@ export default function App() {
                               label="Quick Select Hour"
                               value={booking.returnTimeSlot}
                               hours={returnQuickHours}
-                              earliestBadge={modalConflict.isEndTurnover ? "12 PM Return" : undefined}
+
                               onChange={(val) => {
                                 setBooking(b => ({ ...b, returnTimeSlot: val }));
                                 clearFieldError('returnTimeSlot');
@@ -3354,25 +3291,7 @@ export default function App() {
                             </button>
                           </div>
                         </div>
-                      ) : modalConflict.isTurnover ? (
-                        <div className="p-3 rounded-2xl bg-[#FFF9F2] border border-[#F5C6A8] flex items-start gap-2.5 text-xs text-[#7B341E] animate-fadeIn">
-                          <Clock className="w-4 h-4 text-[#DD6B20] shrink-0 mt-0.5" />
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-[#9C4221]">Coordinated Handover Schedule</span>
-                              <button
-                                type="button"
-                                onClick={() => setShowScheduleModal(true)}
-                                className="text-[11px] font-bold text-[#C05621] hover:underline cursor-pointer"
-                              >
-                                View Calendar
-                              </button>
-                            </div>
-                            <p className="text-[11px] text-[#9C4221] mt-0.5 leading-relaxed">
-                              {modalConflict.turnoverNote || "Pickup is available starting from 2:00 PM on your selected start date."}
-                            </p>
-                          </div>
-                        </div>
+
                       ) : (
                         <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] flex flex-col sm:flex-row sm:items-center justify-between text-xs text-[#6B6B8A] gap-1">
                           <div className="flex items-center gap-1.5">

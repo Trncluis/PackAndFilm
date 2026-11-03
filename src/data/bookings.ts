@@ -44,9 +44,6 @@ export const checkCameraDateConflict = (
   // Filter bookings belonging to currently selected camera
   const cameraBookings = bookingsList.filter((b) => b.cameraId === cameraId);
 
-  let startTurnoverBooking: BookingRecord | null = null;
-  let endTurnoverBooking: BookingRecord | null = null;
-
   for (const booked of cameraBookings) {
     const s1 = booked.startDate;
     const e1 = booked.endDate;
@@ -58,53 +55,11 @@ export const checkCameraDateConflict = (
       continue;
     }
 
-    // Consecutive booking condition (Turnover on same date):
-    // 1. Previous rental ends on the exact day this rental starts (e.g. Oct 31 -> Nov 1 and Nov 1 -> Nov 2)
-    const isConsecutiveAfter = (e1 === s2 && s1 < e1 && s2 < e2);
-    // 2. This rental ends on the exact day next rental starts (e.g. Oct 30 -> Oct 31 and Oct 31 -> Nov 1)
-    const isConsecutiveBefore = (e2 === s1 && s2 < e2 && s1 < e1);
-
-    if (isConsecutiveAfter) {
-      startTurnoverBooking = booked;
-      continue;
-    }
-    if (isConsecutiveBefore) {
-      endTurnoverBooking = booked;
-      continue;
-    }
-
-    // In all other cases where dates overlap, it is a genuine conflict
+    // Any overlapping date is a genuine conflict (full day reserved)
     return {
       hasConflict: true,
       conflictingBooking: booked,
       message: `This camera unit is already reserved for these dates (${booked.startDate} to ${booked.endDate}). Please select a different rental window.`
-    };
-  }
-
-  const isStartTurnover = !!startTurnoverBooking;
-  const isEndTurnover = !!endTurnoverBooking;
-  const isTurnover = isStartTurnover || isEndTurnover;
-
-  if (isTurnover) {
-    let turnoverNote = '';
-    if (isStartTurnover && isEndTurnover) {
-      turnoverNote = `Scheduled transition: Pickup begins from 2:00 PM on ${startStr}, and return is scheduled by 12:00 PM on ${endStr}.`;
-    } else if (isStartTurnover) {
-      turnoverNote = `Scheduled transition: Pickup is available starting from 2:00 PM on ${startStr}.`;
-    } else {
-      turnoverNote = `Scheduled transition: Return is scheduled by 12:00 PM on ${endStr}.`;
-    }
-
-    return {
-      hasConflict: false,
-      conflictingBooking: startTurnoverBooking || endTurnoverBooking,
-      isTurnover: true,
-      isStartTurnover,
-      isEndTurnover,
-      turnoverNote,
-      pickupWindow: isStartTurnover ? '2:00 PM – 11:00 PM (Afternoon Pickup)' : '8:00 AM – 11:00 PM (Flexible)',
-      returnWindow: isEndTurnover ? '8:00 AM – 12:00 PM (Morning Return)' : '8:00 AM – 11:00 PM (Flexible)',
-      message: ''
     };
   }
 
@@ -178,51 +133,19 @@ export function getCameraDayAvailability(
 
   const cameraBookings = bookingsList.filter(b => b.cameraId === cameraId);
 
-  // Check if it is a same-day booking on this date
-  const sameDayBooking = cameraBookings.find(b => b.startDate === dateStr && b.endDate === dateStr);
-  if (sameDayBooking) {
+  // If this date is within ANY booking for this camera (startDate <= dateStr <= endDate), it is reserved
+  const reservedBooking = cameraBookings.find(b => b.startDate <= dateStr && dateStr <= b.endDate);
+  if (reservedBooking) {
     return {
       dateStr,
       dayName,
       dayNum,
       status: 'booked',
       label: 'Booked',
-      tooltip: `Reserved for Same-Day rental on ${dateStr}`,
-      conflictingBooking: sameDayBooking
-    };
-  }
-
-  // Check if a booking starts on this date
-  const startsToday = cameraBookings.find(b => b.startDate === dateStr);
-
-  // Check if a previous multi-day booking ends on this date
-  const endsToday = cameraBookings.find(b => b.endDate === dateStr && b.startDate < b.endDate);
-
-  // If a booking is active throughout the day (startDate <= dateStr < endDate)
-  const ongoingBooking = cameraBookings.find(b => b.startDate <= dateStr && dateStr < b.endDate);
-
-  if (ongoingBooking) {
-    return {
-      dateStr,
-      dayName,
-      dayNum,
-      status: 'booked',
-      label: 'Booked',
-      tooltip: `Reserved from ${ongoingBooking.startDate} to ${ongoingBooking.endDate}`,
-      conflictingBooking: ongoingBooking
-    };
-  }
-
-  // If a previous booking returns today at 12 PM Noon, and no new booking starts
-  if (endsToday && !startsToday) {
-    return {
-      dateStr,
-      dayName,
-      dayNum,
-      status: 'turnover',
-      label: 'Ready 2 PM',
-      tooltip: `Afternoon turnover: Available for pickup starting from 2:00 PM`,
-      conflictingBooking: endsToday
+      tooltip: reservedBooking.startDate === reservedBooking.endDate
+        ? `Reserved for Same-Day rental on ${dateStr}`
+        : `Reserved from ${reservedBooking.startDate} to ${reservedBooking.endDate}`,
+      conflictingBooking: reservedBooking
     };
   }
 

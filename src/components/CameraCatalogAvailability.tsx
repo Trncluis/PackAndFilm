@@ -61,28 +61,12 @@ export const CameraAvailabilityBadge: React.FC<CameraAvailabilityBadgeProps> = (
     );
   }
 
-  if (todayInfo.status === 'turnover') {
-    return (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenCalendar?.();
-        }}
-        className="text-[10px] font-black text-[#553C9A] bg-[#EDE8FC] hover:bg-[#E0D7FA] px-2.5 py-1 rounded-full border border-[#C9B8F0] hover:border-[#1A1A2E] inline-flex items-center gap-1.5 shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] transition-all cursor-pointer group/badge"
-        title="Returns at 12 PM Noon. Available for pickup from 2:00 PM!"
-      >
-        <Sparkles className="w-3 h-3 text-[#6B46C1]" />
-        <span>Ready Today 2 PM</span>
-        <ChevronRight className="w-3 h-3 text-[#553C9A] opacity-70 group-hover/badge:translate-x-0.5 transition-transform" />
-      </button>
-    );
-  }
+
 
   // Booked today: Find next free date
   let nextFreeText = 'Soon';
   const next7Days = getCameraNext7DaysAvailability(camera.id, todayStr, bookings);
-  const nextOpen = next7Days.find(d => d.status === 'available' || d.status === 'turnover');
+  const nextOpen = next7Days.find(d => d.status === 'available');
   if (nextOpen) {
     const [, m, d] = nextOpen.dateStr.split('-').map(Number);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -130,7 +114,7 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
     return getCameraNext7DaysAvailability(camera.id, todayStr, bookings);
   }, [camera.id, todayStr, bookings]);
 
-  const availableCount = days.filter(d => d.status === 'available' || d.status === 'turnover').length;
+  const availableCount = days.filter(d => d.status === 'available').length;
 
   return (
     <div className="mt-3.5 p-3.5 sm:p-4 rounded-2xl bg-white border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] space-y-2.5 transition-all">
@@ -164,7 +148,6 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
         {days.map((day) => {
           const isToday = day.dateStr === todayStr;
           const isAvailable = day.status === 'available';
-          const isTurnover = day.status === 'turnover';
           const isBooked = day.status === 'booked';
 
           return (
@@ -183,8 +166,6 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
               className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center transition-all select-none ${
                 isToday
                   ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 cursor-pointer font-black'
-                  : isTurnover
-                  ? 'bg-[#EDE8FC] text-[#553C9A] border-2 border-[#C9B8F0] hover:border-[#1A1A2E] shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 cursor-pointer font-black'
                   : isBooked
                   ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/70 font-bold opacity-75 cursor-not-allowed'
                   : 'bg-[#FAFAF7] text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer font-extrabold'
@@ -200,8 +181,6 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
               <div className="h-1.5 flex items-center justify-center mt-1">
                 {isToday ? (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#DD6B20]" />
-                ) : isTurnover ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#6B46C1]" />
                 ) : isBooked ? (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#E53E3E]" />
                 ) : (
@@ -223,12 +202,7 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
                 <span>{hoveredDay.dateStr}: 100% Free • Click to Book</span>
               </span>
             )}
-            {hoveredDay.status === 'turnover' && (
-              <span className="text-[#553C9A] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#6B46C1]" />
-                <span>{hoveredDay.dateStr}: Ready from 2:00 PM • Click to Book</span>
-              </span>
-            )}
+
             {hoveredDay.status === 'booked' && (
               <span className="text-[#C53030] flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-[#E53E3E]" />
@@ -472,7 +446,6 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
                 const dayInfo = item.dayInfo;
                 const isPast = dayInfo.status === 'past';
                 const isBooked = dayInfo.status === 'booked';
-                const isTurnover = dayInfo.status === 'turnover';
                 const isAvailable = dayInfo.status === 'available';
                 const isToday = item.dateStr === todayStr;
                 const isSelected = item.dateStr === selectedDate;
@@ -497,8 +470,6 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
                         ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rounded-2xl font-black scale-105 z-10'
                         : isToday
                         ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[3px_3px_0px_#1A1A2E] rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer'
-                        : isTurnover
-                        ? 'bg-[#EDE8FC] text-[#553C9A] border-2 border-[#C9B8F0] hover:border-[#1A1A2E] shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer'
                         : isBooked
                         ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-2xl font-bold cursor-not-allowed opacity-75'
                         : isPast
@@ -515,8 +486,6 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
                           <span className="w-1.5 h-1.5 rounded-full bg-[#553C9A]" />
                         ) : isToday ? (
                           <span className="w-1.5 h-1.5 rounded-full bg-[#DD6B20]" />
-                        ) : isTurnover ? (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#6B46C1]" />
                         ) : isBooked ? (
                           <span className="w-1.5 h-1.5 rounded-full bg-[#E53E3E]" />
                         ) : isAvailable ? (
@@ -540,10 +509,7 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
                   <span className="w-2.5 h-2.5 rounded-full bg-[#38A169]" />
                   <span>Available</span>
                 </span>
-                <span className="flex items-center gap-1.5 font-bold text-[#553C9A]">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#6B46C1]" />
-                  <span>Turnover (2 PM)</span>
-                </span>
+
                 <span className="flex items-center gap-1.5 font-bold text-[#C53030]">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#E53E3E]" />
                   <span>Reserved</span>
@@ -579,17 +545,10 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
               </div>
 
               <div className="flex items-center gap-2">
-                {selectedDayInfo.status === 'turnover' ? (
-                  <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-[#6B46C1]" />
-                    <span>Afternoon Pickup (2 PM)</span>
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8] flex items-center gap-1">
-                    <Check className="w-3 h-3 text-[#2F855A]" />
-                    <span>100% Available</span>
-                  </span>
-                )}
+                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8] flex items-center gap-1">
+                  <Check className="w-3 h-3 text-[#2F855A]" />
+                  <span>100% Available</span>
+                </span>
 
                 <button
                   type="button"

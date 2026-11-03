@@ -256,7 +256,6 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
 
           const isPast = dayInfo.status === 'past';
           const isBooked = dayInfo.status === 'booked';
-          const isTurnover = dayInfo.status === 'turnover';
           const isAvailable = dayInfo.status === 'available';
           const isToday = item.dateStr === todayStr;
 
@@ -288,8 +287,6 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
                   ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rounded-2xl font-black scale-105 z-10'
                   : isToday
                   ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[3px_3px_0px_#1A1A2E] rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer'
-                  : isTurnover
-                  ? 'bg-[#EDE8FC] text-[#553C9A] border-2 border-[#C9B8F0] hover:border-[#1A1A2E] shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer'
                   : isBooked
                   ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-2xl font-bold cursor-not-allowed opacity-75'
                   : isPast
@@ -306,8 +303,6 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
                     <span className="w-1.5 h-1.5 rounded-full bg-[#553C9A]" />
                   ) : isToday ? (
                     <span className="w-1.5 h-1.5 rounded-full bg-[#DD6B20]" />
-                  ) : isTurnover ? (
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#6B46C1]" />
                   ) : isBooked ? (
                     <span className="w-1.5 h-1.5 rounded-full bg-[#E53E3E]" />
                   ) : isAvailable ? (
@@ -336,10 +331,6 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
           <span className="flex items-center gap-1.5 font-bold text-[#2F855A]">
             <span className="w-2.5 h-2.5 rounded-full bg-[#38A169]" />
             <span>Available</span>
-          </span>
-          <span className="flex items-center gap-1.5 font-bold text-[#553C9A]">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#6B46C1]" />
-            <span>Turnover (2 PM)</span>
           </span>
           <span className="flex items-center gap-1.5 font-bold text-[#C53030]">
             <span className="w-2.5 h-2.5 rounded-full bg-[#E53E3E]" />
@@ -383,13 +374,6 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
           <span className="text-xs font-black px-3 py-1 rounded-full bg-[#EDE8FC] text-[#553C9A] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E]">
             {rentalType === 'same-day' ? (startDate ? '1 Day Shoot' : 'Select Date') : daysCount > 0 ? `${daysCount} ${daysCount === 1 ? 'Day' : 'Days'} Total` : 'Select Dates'}
           </span>
-
-          {isStartTurnover && (
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] flex items-center gap-1">
-              <Clock className="w-3 h-3 text-[#B45309]" />
-              <span>Afternoon Pickup (2 PM)</span>
-            </span>
-          )}
         </div>
       </div>
 

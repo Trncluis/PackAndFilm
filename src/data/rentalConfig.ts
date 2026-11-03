@@ -20,8 +20,8 @@ export const RENTAL_CONFIG = {
 
   // Operating Hours
   operatingHours: '8:00 AM – 11:00 PM',
-  turnoverBufferHours: 2,
-  scheduleNote: 'Standard operating hours: 8:00 AM – 11:00 PM daily. Handovers are coordinated upon booking. On same-day transition dates, pickup begins from 2:00 PM and return is by 12:00 PM.',
+  turnoverBufferHours: 0,
+  scheduleNote: 'Standard operating hours: 8:00 AM – 11:00 PM daily. Handovers are coordinated upon booking.',
   startHourStr: '8:00 AM',
   endHourStr: '11:00 PM',
 
