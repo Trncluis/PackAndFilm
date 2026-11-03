@@ -2487,12 +2487,9 @@ export default function App() {
                   01
                 </div>
                 <h3 className="text-lg font-black text-[#1A1A2E] mb-1">Two (2) Valid IDs</h3>
-                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed mb-3">
+                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed">
                   Primary government IDs (Passport, Driver’s License, UMID, National ID, PRC) or secondary supporting IDs.
                 </p>
-                <div className="p-2.5 rounded-xl bg-white border border-[#E8E4F0] text-[11px] font-bold text-[#553C9A]">
-                  🎓 Students: Student ID + COR accepted!
-                </div>
               </div>
             </div>
 
@@ -2502,12 +2499,9 @@ export default function App() {
                   02
                 </div>
                 <h3 className="text-lg font-black text-[#1A1A2E] mb-1">Authorization Slip &amp; Selfie</h3>
-                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed mb-3">
+                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed">
                   A handwritten note with date, 3 specimen signatures, and a selfie holding your IDs. Verified directly from your phone.
                 </p>
-                <div className="p-2.5 rounded-xl bg-white border border-[#E8E4F0] text-[11px] font-bold text-[#DD6B20]">
-                  📸 Live webcam &amp; mobile camera capture
-                </div>
               </div>
             </div>
 
@@ -2517,12 +2511,9 @@ export default function App() {
                   03
                 </div>
                 <h3 className="text-lg font-black text-[#1A1A2E] mb-1">Proof of Billing / Delivery</h3>
-                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed mb-3">
+                <p className="text-xs text-[#6B6B8A] font-medium leading-relaxed">
                   Residential utility bill or 2 e-commerce delivery screenshots (Shopee, Lazada, TikTok) matching your delivery address.
                 </p>
-                <div className="p-2.5 rounded-xl bg-white border border-[#E8E4F0] text-[11px] font-bold text-emerald-700">
-                  🔒 Protected under Data Privacy Act 2012
-                </div>
               </div>
             </div>
           </div>
@@ -3093,7 +3084,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => navigateTo('terms')}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1A1A2E] text-white text-xs font-black shadow-[3px_3px_0px_#6B46C1] hover:bg-[#2A2A42] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer whitespace-nowrap"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#1A1A2E] text-white text-xs font-black hover:bg-[#6B46C1] hover:shadow-[3px_3px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 active:shadow-none transition-all cursor-pointer whitespace-nowrap"
             >
               Read Full Agreement →
             </button>
@@ -3216,9 +3207,9 @@ export default function App() {
               Quick Links
             </div>
             <ul className="space-y-2 text-xs text-gray-300">
-              <li><button type="button" onClick={() => navigateTo('book')} className="hover:text-white transition-colors cursor-pointer text-left">Book Camera (/book)</button></li>
-              <li><button type="button" onClick={() => navigateTo('requirements')} className="hover:text-white transition-colors cursor-pointer text-left">Requirements Handbook (/requirements)</button></li>
-              <li><button type="button" onClick={() => navigateTo('terms')} className="hover:text-white transition-colors cursor-pointer text-left">Terms &amp; Conditions (/terms)</button></li>
+              <li><button type="button" onClick={() => navigateTo('book')} className="hover:text-white transition-colors cursor-pointer text-left">Book Camera</button></li>
+              <li><button type="button" onClick={() => navigateTo('requirements')} className="hover:text-white transition-colors cursor-pointer text-left">Requirements Handbook</button></li>
+              <li><button type="button" onClick={() => navigateTo('terms')} className="hover:text-white transition-colors cursor-pointer text-left">Terms &amp; Conditions</button></li>
               <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'catalog' })} className="hover:text-white transition-colors cursor-pointer text-left">Camera Fleet Showroom</button></li>
               <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'pricing' })} className="hover:text-white transition-colors cursor-pointer text-left">Pricing Calculator</button></li>
               <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'faq' })} className="hover:text-white transition-colors cursor-pointer text-left">FAQ</button></li>

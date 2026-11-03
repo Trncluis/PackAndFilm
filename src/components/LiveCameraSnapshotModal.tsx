@@ -331,7 +331,7 @@ export const LiveCameraSnapshotModal: React.FC<LiveCameraSnapshotModalProps> = (
                 <button
                   type="button"
                   onClick={() => handleSnapWithCountdown(false)}
-                  className="px-6 py-3 rounded-full bg-[#1A1A2E] text-white text-xs font-black hover:bg-[#6B46C1] shadow-[3px_3px_0px_#6B46C1] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer flex items-center gap-2 group"
+                  className="px-6 py-3 rounded-full bg-[#1A1A2E] text-white text-xs font-black hover:bg-[#6B46C1] hover:shadow-[3px_3px_0px_#1A1A2E] active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer flex items-center gap-2 group"
                 >
                   <Camera className="w-4 h-4 text-[#F5C6A8] group-hover:scale-110 transition-transform" />
                   <span>Snap Photo Now</span>

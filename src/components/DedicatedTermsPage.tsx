@@ -90,7 +90,7 @@ export const DedicatedTermsPage: React.FC<DedicatedTermsPageProps> = ({ onNaviga
             <button
               type="button"
               onClick={() => onNavigate('book')}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#1A1A2E] hover:bg-[#2A2A42] text-white text-xs font-black shadow-[3px_3px_0px_#6B46C1] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#1A1A2E] hover:bg-[#6B46C1] text-white text-xs font-black hover:shadow-[3px_3px_0px_#1A1A2E] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer"
             >
               <Camera className="w-3.5 h-3.5 text-[#F5C6A8]" />
               <span>Book Camera</span>
@@ -279,7 +279,7 @@ export const DedicatedTermsPage: React.FC<DedicatedTermsPageProps> = ({ onNaviga
           <button
             type="button"
             onClick={() => onNavigate('book')}
-            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#1A1A2E] hover:bg-[#2A2A42] text-white text-xs font-black shadow-[3px_3px_0px_#6B46C1] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer text-center whitespace-nowrap"
+            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#1A1A2E] hover:bg-[#6B46C1] text-white text-xs font-black hover:shadow-[3px_3px_0px_#1A1A2E] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer text-center whitespace-nowrap"
           >
             Acknowledge & Book Now →
           </button>
