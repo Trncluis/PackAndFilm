@@ -1478,6 +1478,7 @@ export default function App() {
       bookingRef: newRef,
       customerName: booking.fullName || 'Valued Renter',
       contactNumber: booking.mobileNumber || 'Not provided',
+      email: booking.email || '',
       socialMediaHandle: booking.socialHandle || '@renter',
       cameraRented: modalCamera.name,
       cameraId: modalCamera.id,
@@ -1496,7 +1497,7 @@ export default function App() {
       termsAccepted: booking.termsAccepted,
       termsVersion: booking.termsVersion || RENTAL_CONFIG.termsVersion,
       termsAcceptedAt: booking.termsAcceptedAt || new Date().toISOString(),
-      notes: `Rental Type: ${booking.rentalType || (booking.startDate === booking.endDate ? 'same-day' : 'multi-day')} • Pickup: ${booking.pickupTimeSlot} • Return: ${booking.returnTimeSlot} • Emergency Contacts: ${emergencyContactsText}`,
+      notes: `Rental Type: ${booking.rentalType || (booking.startDate === booking.endDate ? 'same-day' : 'multi-day')} • Pickup: ${booking.pickupTimeSlot} • Return: ${booking.returnTimeSlot} • Email: ${booking.email || 'N/A'} • Emergency Contacts: ${emergencyContactsText}`,
       // KYC Uploaded Files passed to Google Apps Script -> Google Drive:
       id1File: booking.id1File,
       id1BackFile: booking.id1BackFile,

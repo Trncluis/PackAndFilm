@@ -603,6 +603,7 @@ function getHeaderIndexMap(sheet) {
     timestamp: findCol(["timestamp"], 1),
     customerName: findCol(["customer name"], 2),
     contactNumber: findCol(["contact number"], 3),
+    email: findCol(["email address", "email", "customer email"], -1),
     socialMediaHandle: findCol(["social media handle"], 4),
     cameraRented: findCol(["camera rented"], 5),
     startDate: findCol(["start date"], 6),
@@ -701,6 +702,7 @@ function mapBookingRecord(r, i, colMap, formulas, bookingsSheet) {
     timestamp: r[colMap.timestamp] ? Utilities.formatDate(new Date(r[colMap.timestamp]), "GMT+8", "yyyy-MM-dd HH:mm") : "",
     customerName: r[colMap.customerName] || "",
     contactNumber: r[colMap.contactNumber] || "",
+    email: (colMap.email !== undefined && colMap.email >= 0 && r[colMap.email]) ? String(r[colMap.email]).trim() : (function() { const m = String(r[colMap.notes] || "").match(/Email:\s*([^\s•\n;]+)/i); return m ? m[1].trim() : ""; })(),
     socialMediaHandle: r[colMap.socialMediaHandle] || "",
     cameraRented: r[colMap.cameraRented] || "",
     startDate: r[colMap.startDate] ? Utilities.formatDate(new Date(r[colMap.startDate]), "GMT+8", "yyyy-MM-dd") : "",
@@ -1544,6 +1546,7 @@ function doPost(e) {
         bookingsSheet.getRange(existingRowIndex, colMap.timestamp + 1).setValue(new Date());
         bookingsSheet.getRange(existingRowIndex, colMap.customerName + 1).setValue(body.customerName);
         bookingsSheet.getRange(existingRowIndex, colMap.contactNumber + 1).setValue(body.contactNumber);
+        if (colMap.email !== undefined && colMap.email >= 0 && body.email) bookingsSheet.getRange(existingRowIndex, colMap.email + 1).setValue(body.email);
         bookingsSheet.getRange(existingRowIndex, colMap.socialMediaHandle + 1).setValue(body.socialMediaHandle);
         bookingsSheet.getRange(existingRowIndex, colMap.cameraRented + 1).setValue(body.cameraRented);
         bookingsSheet.getRange(existingRowIndex, colMap.startDate + 1).setValue(body.startDate);

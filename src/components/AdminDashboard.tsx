@@ -27,6 +27,13 @@ import {
   Clock
 } from 'lucide-react';
 
+export function parseBookingEmail(notes?: string, email?: string): string {
+  if (email && email.trim()) return email.trim();
+  if (!notes) return '';
+  const match = notes.match(/Email:\s*([^\s•\n;]+)/i);
+  return match ? match[1].trim() : '';
+}
+
 export function parseBookingNotesSchedule(notes?: string, startDate?: string, endDate?: string) {
   const isSameDay = !!(startDate && endDate && startDate === endDate);
   const pickupMatch = notes ? notes.match(/Pickup:\s*([^•\n;]+)/i) : null;
@@ -46,6 +53,7 @@ export interface AdminBookingItem {
   timestamp?: string;
   customerName: string;
   contactNumber: string;
+  email?: string;
   socialMediaHandle: string;
   cameraRented: string;
   cameraId?: string;
@@ -985,6 +993,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         (b.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.bookingRef || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.contactNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (parseBookingEmail(b.notes, b.email)).toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.cameraRented || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.socialMediaHandle || '').toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -1431,6 +1441,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className="flex items-center gap-2 text-[11px] text-[#6B6B8A]">
                         <span>Contact: <strong>{b.contactNumber}</strong></span>
                         <span>•</span>
+                        <span>Email: <strong className="text-[#553C9A]">{parseBookingEmail(b.notes, b.email) || 'N/A'}</strong></span>
+                        <span>•</span>
                         <span>GCash Ref: <strong>{b.gcashRefNumber || 'N/A'}</strong></span>
                       </div>
 
@@ -1571,7 +1583,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-[#6B6B8A] mt-0.5">
-                    Customer: <strong>{selectedBooking.customerName}</strong> ({selectedBooking.socialMediaHandle}) • Camera: <strong>{selectedBooking.cameraRented}</strong>
+                    Customer: <strong>{selectedBooking.customerName}</strong> ({selectedBooking.socialMediaHandle}) • Email: <strong className="text-[#553C9A]">{parseBookingEmail(selectedBooking.notes, selectedBooking.email) || 'Not provided'}</strong> • Contact: <strong>{selectedBooking.contactNumber}</strong> • Camera: <strong>{selectedBooking.cameraRented}</strong>
                   </p>
                 </div>
 
@@ -1629,6 +1641,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </a>
                   </div>
                 )}
+
+                {/* Renter Contact & Identity Profile */}
+                <div className="p-4 rounded-2xl bg-white border-2 border-[#1A1A2E] shadow-xs space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-[#553C9A]" />
+                      <h4 className="font-black text-xs text-[#1A1A2E]">
+                        Renter Contact & Identity Profile
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]">
+                      Primary Renter
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 pt-1">
+                    <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                      <span className="text-[10px] font-bold text-[#6B6B8A] uppercase block">Full Name</span>
+                      <span className="font-extrabold text-xs text-[#1A1A2E] mt-0.5 block truncate">
+                        {selectedBooking.customerName || 'Valued Renter'}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                      <span className="text-[10px] font-bold text-[#6B6B8A] uppercase block">Email Address</span>
+                      {parseBookingEmail(selectedBooking.notes, selectedBooking.email) ? (
+                        <a
+                          href={`mailto:${parseBookingEmail(selectedBooking.notes, selectedBooking.email)}`}
+                          className="font-extrabold text-xs text-[#553C9A] hover:underline mt-0.5 block truncate"
+                          title={parseBookingEmail(selectedBooking.notes, selectedBooking.email)}
+                        >
+                          {parseBookingEmail(selectedBooking.notes, selectedBooking.email)}
+                        </a>
+                      ) : (
+                        <span className="font-bold text-xs text-gray-400 mt-0.5 block">Not provided</span>
+                      )}
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                      <span className="text-[10px] font-bold text-[#6B6B8A] uppercase block">Phone / Mobile</span>
+                      <a
+                        href={`tel:${selectedBooking.contactNumber}`}
+                        className="font-extrabold text-xs text-[#1A1A2E] hover:text-[#553C9A] mt-0.5 block"
+                      >
+                        {selectedBooking.contactNumber || 'N/A'}
+                      </a>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                      <span className="text-[10px] font-bold text-[#6B6B8A] uppercase block">Social Media Handle</span>
+                      <span className="font-extrabold text-xs text-[#6B46C1] mt-0.5 block truncate">
+                        {selectedBooking.socialMediaHandle || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Submitted Documents Artifact Cards Grid */}
                 <div className="space-y-3">
