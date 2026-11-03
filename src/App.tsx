@@ -5672,7 +5672,7 @@ export default function App() {
                           {modalCamera.name}
                         </div>
                         <div className="text-[11px] text-[#6B6B8A] font-medium">
-                          ₱{modalQuote.rate || 500}/day tier • 4K Vlog Ready
+                          ₱{modalQuote.rate || modalCamera.standardRate}/day • {modalQuote.tierLabel}
                         </div>
                       </div>
                     </div>
@@ -5702,7 +5702,7 @@ export default function App() {
                     {/* Itemized Line Items */}
                     <div className="space-y-1.5 text-xs text-[#1A1A2E] pt-2 border-t border-[#C9B8F0]">
                       <div className="flex items-center justify-between text-[#6B6B8A]">
-                        <span>Rental Rate ({modalQuote.days}d × ₱{modalQuote.rate || 500})</span>
+                        <span>Rental Rate ({modalQuote.days}d × ₱{modalQuote.rate || modalCamera.standardRate})</span>
                         <span className="font-bold text-[#1A1A2E]">₱{(modalQuote.rentalTotal || 0).toLocaleString()}</span>
                       </div>
                       {(modalQuote.meetupFee || 0) > 0 && (
