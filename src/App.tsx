@@ -1457,7 +1457,7 @@ export default function App() {
 
     const c1Name = booking.emergencyContact1Name;
     const c1Phone = booking.emergencyContact1Phone;
-    const c1Rel = booking.emergencyContact1Rel || (booking.isStudentExemption ? 'Parent / Legal Guardian' : 'Family Member');
+    const c1Rel = booking.emergencyContact1Rel || (booking.isStudentExemption ? 'Parent / Legal Guardian' : 'Emergency Contact');
     const c1Social = booking.emergencyContact1Social;
 
     const emergencyContactsText = [

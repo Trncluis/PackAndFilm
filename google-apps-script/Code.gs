@@ -2050,8 +2050,8 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
 
   function buildDescription(type) {
     const timingNote = type === "pickup"
-      ? "Pickup Schedule: Flexible 8:00 AM – 8:00 PM (or from 2:00 PM if consecutive turnover from prior rental)."
-      : "Return Schedule: Flexible 8:00 AM – 8:00 PM (or by 11:30 AM if consecutive turnover for next rental).";
+      ? "Pickup Schedule: Flexible 8:00 AM – 11:00 PM (or from 2:00 PM if consecutive turnover from prior rental)."
+      : "Return Schedule: Flexible 8:00 AM – 11:00 PM (or by 11:30 AM if consecutive turnover for next rental).";
 
     return [
       "PackAndFilm Equipment Reservation",
@@ -2059,7 +2059,7 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
       "Camera: " + cameraRented,
       "Handover Method: " + handoverMethod,
       timingNote,
-      "Operating Window: 8:00 AM – 8:00 PM Daily",
+      "Operating Window: 8:00 AM – 11:00 PM Daily",
       "Standard Inspection: Check lens, gimbal alignment, battery health, and SD storage.",
       "",
       "[SYSTEM:PackAndFilm | REF:" + bookingRef + " | TYPE:" + type + "]"
@@ -2354,7 +2354,7 @@ function dailyRentalNotificationDigest() {
       pickupsToday.length === 0 ? "  • None scheduled today" : pickupsToday.map(p => "  • " + p.ref + " - " + p.customer + " (" + p.camera + ")").join("\n"),
       "",
       "🔄 EQUIPMENT RETURNS DUE TODAY (" + returnsToday.length + "):",
-      returnsToday.length === 0 ? "  • None due today" : returnsToday.map(r => "  • " + r.ref + " - " + r.customer + " (" + r.camera + ") - Deadline 8:00 PM").join("\n"),
+      returnsToday.length === 0 ? "  • None due today" : returnsToday.map(r => "  • " + r.ref + " - " + r.customer + " (" + r.camera + ") - Deadline 11:00 PM").join("\n"),
       "",
       "⚠️ OVERDUE RENTALS REQUIRING ATTENTION (" + overdueRentals.length + "):",
       overdueRentals.length === 0 ? "  • All active rentals are on schedule" : overdueRentals.map(o => "  • " + o.ref + " - " + o.customer + " (" + o.camera + ") - Due: " + o.returnDate).join("\n"),

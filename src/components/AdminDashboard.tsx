@@ -1415,7 +1415,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         {(schedule.pickupTime || schedule.returnTime) && (
                           <div className="text-[10px] font-bold text-[#553C9A] flex items-center gap-1 mt-0.5">
                             <Clock className="w-3 h-3 text-[#6B46C1] shrink-0" />
-                            <span>{schedule.pickupTime || '8:00 AM'} → {schedule.returnTime || '8:00 PM'}</span>
+                            <span>{schedule.pickupTime || '8:00 AM'} → {schedule.returnTime || '11:00 PM'}</span>
                           </div>
                         )}
                       </div>
@@ -1874,7 +1874,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
                           <span className="text-[10px] font-bold text-[#6B6B8A] uppercase block">Preferred Return</span>
                           <span className="font-extrabold text-xs text-[#C05621] mt-0.5 block">
-                            {modalSched.returnTime || '8:00 PM'}
+                            {modalSched.returnTime || '11:00 PM'}
                           </span>
                         </div>
                       </div>
