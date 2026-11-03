@@ -3213,7 +3213,6 @@ export default function App() {
               <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'catalog' })} className="hover:text-white transition-colors cursor-pointer text-left">Camera Fleet Showroom</button></li>
               <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'pricing' })} className="hover:text-white transition-colors cursor-pointer text-left">Pricing Calculator</button></li>
               <li><button type="button" onClick={() => navigateTo('home', { scrollTo: 'faq' })} className="hover:text-white transition-colors cursor-pointer text-left">FAQ</button></li>
-              <li><button type="button" onClick={() => navigateTo('admin')} className="hover:text-white transition-colors cursor-pointer text-left text-gray-500">Admin Console</button></li>
             </ul>
           </div>
 
