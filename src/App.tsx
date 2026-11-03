@@ -89,7 +89,7 @@ interface BookingState {
   rentalType: 'same-day' | 'multi-day';
   startDate: string;
   endDate: string;
-  handoverMode: 'meetup' | 'courier';
+  handoverMode: 'meetup' | 'courier' | '';
   meetupLocation: string;
   fullName: string;
   mobileNumber: string;
@@ -361,10 +361,10 @@ export default function App() {
     return {
       cameraId: paramCam || '',
       rentalType: isSameDayInitial ? 'same-day' : 'multi-day',
-      startDate: paramStart || todayStr,
-      endDate: paramEnd || nextDay,
-      handoverMode: 'meetup',
-      meetupLocation: PASIG_MEETUP_HUBS[0],
+      startDate: paramStart || '',
+      endDate: paramEnd || '',
+      handoverMode: '',
+      meetupLocation: '',
       fullName: '',
       mobileNumber: '',
       email: '',
@@ -372,13 +372,13 @@ export default function App() {
       gcashAccountNumber: '',
       deliveryAddress: '',
       socialHandle: '',
-      shootType: 'Travel / Vacation Vlogging',
-      id1Type: 'Philippine Passport',
+      shootType: '',
+      id1Type: '',
       id1File: hasMockFiles ? 'data:image/png;base64,mock_id1' : null,
       id1Name: hasMockFiles ? 'mock_passport.jpg' : '',
       id1BackFile: hasMockFiles ? 'data:image/png;base64,mock_id1back' : null,
       id1BackName: hasMockFiles ? 'mock_passport_back.jpg' : '',
-      id2Type: 'Company ID / Secondary Gov ID',
+      id2Type: '',
       id2File: hasMockFiles ? 'data:image/png;base64,mock_id2' : null,
       id2Name: hasMockFiles ? 'mock_secondary_id.jpg' : '',
       id2BackFile: hasMockFiles ? 'data:image/png;base64,mock_id2back' : null,
@@ -391,13 +391,13 @@ export default function App() {
       billOwnerIdName: '',
       emergencyContact1Name: '',
       emergencyContact1Phone: '',
-      emergencyContact1Rel: 'Family Member',
+      emergencyContact1Rel: '',
       contact1IdFile: hasMockFiles ? 'data:image/png;base64,mock_contact1_id' : null,
       contact1IdName: hasMockFiles ? 'parent_guardian_gov_id.jpg' : '',
       emergencyContact1Social: '',
       emergencyContact2Name: '',
       emergencyContact2Phone: '',
-      emergencyContact2Rel: 'Friend / Colleague',
+      emergencyContact2Rel: '',
       contact2IdFile: null,
       contact2IdName: '',
       emergencyContact2Social: '',
@@ -412,8 +412,8 @@ export default function App() {
       termsAcceptedAt: '',
       bookingRef: '',
       driveFolderUrl: null,
-      pickupTimeSlot: '10:00 AM',
-      returnTimeSlot: '8:00 PM',
+      pickupTimeSlot: '',
+      returnTimeSlot: '',
       isFlightOrTrip: false,
       flightOrTripDetails: '',
     };
@@ -425,11 +425,12 @@ export default function App() {
   );
 
   // Calculate Duration and Price Helper dynamically reading from target camera & duration tiers
-  const calculateQuote = useCallback((start: string, end: string, mode: 'meetup' | 'courier', camera: CameraItem = selectedCamera) => {
+  const calculateQuote = useCallback((start: string, end: string, mode: 'meetup' | 'courier' | '', camera: CameraItem = selectedCamera) => {
     // Helper to get daily rate and tier label based on duration from the camera's own configuration
     const getDailyRateInfo = (d: number) => {
+      const safeDays = Math.max(1, d);
       if (camera.pricingTiers && camera.pricingTiers.length > 0) {
-        const matched = camera.pricingTiers.find(t => d >= t.minDays && d <= t.maxDays);
+        const matched = camera.pricingTiers.find(t => safeDays >= t.minDays && safeDays <= t.maxDays);
         if (matched) {
           const isBulk = matched.rate < camera.standardRate;
           return { rate: matched.rate, isBulk, tierLabel: `${matched.label} (${matched.sublabel || `₱${matched.rate}/day`})` };
@@ -437,18 +438,21 @@ export default function App() {
       }
 
       // Fallback for future cameras without specific tiers
-      const isBulk = d >= 3;
+      const isBulk = safeDays >= 3;
       const rate = isBulk ? camera.bulkRate : camera.standardRate;
       return { rate, isBulk, tierLabel: isBulk ? 'Bulk Rate' : 'Standard Rate' };
     };
 
-    let days = 1;
+    // Model B: Inclusive Calendar Day Calculation
+    let days = 0;
     if (start && end) {
-      const d1 = new Date(start);
-      const d2 = new Date(end);
-      const diffTime = d2.getTime() - d1.getTime();
-      days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (days <= 0 || isNaN(days)) days = 1;
+      const [y1, m1, d1] = start.split('-').map(Number);
+      const [y2, m2, d2] = end.split('-').map(Number);
+      const date1 = new Date(y1, m1 - 1, d1);
+      const date2 = new Date(y2, m2 - 1, d2);
+      const diffTime = date2.getTime() - date1.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      days = Math.max(1, diffDays + 1);
     }
 
     const rateInfo = getDailyRateInfo(days);
@@ -456,12 +460,12 @@ export default function App() {
     // Uniform, per-camera configured deposit (strictly ₱1,000 for active units)
     const deposit = camera.depositAmount || camera.meetupDeposit || RENTAL_CONFIG.securityDeposit;
 
-    // Meetup handling fee: ₱200 for meet-up transactions; ₱0 for Grab Express (renter pays rider directly)
+    // Meetup handling fee: ₱200 for meet-up transactions; ₱0 for Grab Express or unselected
     const meetupHandlingFee = mode === 'meetup' ? RENTAL_CONFIG.meetupHandlingFee : 0;
     const downpayment = DOWNPAYMENT_FEE; // ₱300 non-refundable reservation fee credited to rental
     const remainingRentalBalance = Math.max(0, rentalTotal - downpayment);
-    const paymentOnHandover = remainingRentalBalance + deposit + meetupHandlingFee;
-    const totalPackageValue = rentalTotal + deposit + meetupHandlingFee;
+    const paymentOnHandover = days > 0 ? (remainingRentalBalance + deposit + meetupHandlingFee) : (deposit + meetupHandlingFee);
+    const totalPackageValue = days > 0 ? (rentalTotal + deposit + meetupHandlingFee) : 0;
     const refundAfterReturn = deposit;
     const balanceDue = paymentOnHandover;
 
@@ -900,20 +904,20 @@ export default function App() {
 
   // Synchronize preferred pickup/return time slots with turnover status & same-day ordering
   useEffect(() => {
-    if (modalConflict.isStartTurnover) {
+    if (booking.pickupTimeSlot && modalConflict.isStartTurnover) {
       const currentH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
       if (currentH < 14) {
         setBooking(b => ({ ...b, pickupTimeSlot: '2:00 PM' }));
       }
     }
-    if (modalConflict.isEndTurnover) {
+    if (booking.returnTimeSlot && modalConflict.isEndTurnover) {
       const currentH = ALL_HOURS.find(x => x.value === booking.returnTimeSlot)?.h || 20;
       if (currentH > 12) {
         setBooking(b => ({ ...b, returnTimeSlot: '12:00 PM' }));
       }
     }
     const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
-    if (isSameDay) {
+    if (isSameDay && booking.pickupTimeSlot && booking.returnTimeSlot) {
       const pickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
       const returnH = ALL_HOURS.find(x => x.value === booking.returnTimeSlot)?.h || 20;
       if (returnH <= pickupH) {
@@ -946,7 +950,7 @@ export default function App() {
   // Toggle Between Same-Day vs Multi-Day Rental Mode
   const handleRentalTypeToggle = (type: 'same-day' | 'multi-day') => {
     if (type === 'same-day') {
-      const baseDate = booking.startDate || todayStr;
+      const baseDate = booking.startDate || '';
       setBooking(prev => ({
         ...prev,
         rentalType: 'same-day',
@@ -954,12 +958,16 @@ export default function App() {
         endDate: baseDate,
       }));
     } else {
-      const baseStart = booking.startDate || todayStr;
+      const baseStart = booking.startDate || '';
       let nextEnd = booking.endDate;
       if (!nextEnd || nextEnd <= baseStart) {
-        const d = new Date(baseStart);
-        d.setDate(d.getDate() + 2);
-        nextEnd = d.toISOString().split('T')[0];
+        if (baseStart) {
+          const [y, m, d] = baseStart.split('-').map(Number);
+          const nextD = new Date(y, m - 1, d + 1);
+          nextEnd = nextD.toISOString().split('T')[0];
+        } else {
+          nextEnd = '';
+        }
       }
       setBooking(prev => ({
         ...prev,
@@ -1016,11 +1024,12 @@ export default function App() {
     const errors: Record<string, string> = {};
 
     const stepFieldOrder: Record<number, string[]> = {
-      1: ['cameraId', 'startDate', 'endDate', 'dateConflict'],
-      2: booking.handoverMode === 'meetup' ? ['meetupLocation'] : ['deliveryAddress'],
-      3: [
+      1: ['cameraId', 'startDate', 'endDate', 'dateConflict', 'handoverMode', 'meetupLocation', 'deliveryAddress', 'pickupTimeSlot', 'returnTimeSlot'],
+      2: [
+        'id1Type',
         'id1File',
         'id1BackFile',
+        'id2Type',
         'id2File',
         ...(booking.isStudentExemption ? [] : ['id2BackFile']),
         'authorizationSlipFile',
@@ -1028,7 +1037,7 @@ export default function App() {
         'deliveryReceiptsFile',
         ...(booking.isBillUnderOtherName ? ['billOwnerIdFile'] : []),
       ],
-      4: [
+      3: [
         'fullName',
         'mobileNumber',
         'email',
@@ -1036,12 +1045,13 @@ export default function App() {
         'socialHandle',
         'emergencyContact1Name',
         'emergencyContact1Phone',
+        'emergencyContact1Rel',
         'emergencyContact1Social',
         ...(booking.isStudentExemption ? ['contact1IdFile'] : []),
         'gcashAccountName',
         'gcashAccountNumber',
       ],
-      5: ['gcashRefNumber', 'receiptFile', 'termsAccepted'],
+      4: ['gcashRefNumber', 'receiptFile', 'termsAccepted'],
     };
 
     if (stepNumber === 1) {
@@ -1064,8 +1074,9 @@ export default function App() {
       if (modalConflict.hasConflict) {
         errors.dateConflict = modalConflict.message || 'The selected dates conflict with an active booking.';
       }
-    } else if (stepNumber === 2) {
-      if (booking.handoverMode === 'meetup') {
+      if (!booking.handoverMode) {
+        errors.handoverMode = 'Please select your preferred handover option (Meet-up Hub or Grab Express Delivery).';
+      } else if (booking.handoverMode === 'meetup') {
         if (!booking.meetupLocation || !booking.meetupLocation.trim()) {
           errors.meetupLocation = 'Please select your preferred meetup station (SM East Ortigas, Bridgetowne, or Opus Mall).';
         }
@@ -1074,8 +1085,17 @@ export default function App() {
           errors.deliveryAddress = 'Please enter a complete delivery address for Grab Express (min. 8 characters).';
         }
       }
-    } else if (stepNumber === 3) {
+      if (!booking.pickupTimeSlot) {
+        errors.pickupTimeSlot = 'Please select your preferred pickup time.';
+      }
+      if (!booking.returnTimeSlot) {
+        errors.returnTimeSlot = 'Please select your preferred return time.';
+      }
+    } else if (stepNumber === 2) {
       // 1. Personal Identification
+      if (!booking.id1Type) {
+        errors.id1Type = 'Please select your Primary Valid ID type.';
+      }
       if (!booking.id1File) {
         errors.id1File = 'Primary Valid ID (Front) upload is required.';
       }
@@ -1088,6 +1108,9 @@ export default function App() {
           errors.id2File = 'Student ID and Current Certificate of Registration (COR) upload is required.';
         }
       } else {
+        if (!booking.id2Type) {
+          errors.id2Type = 'Please select your Secondary Valid ID type.';
+        }
         if (!booking.id2File) {
           errors.id2File = 'Secondary Valid ID (Front) upload is required.';
         }
@@ -1113,7 +1136,7 @@ export default function App() {
       if (booking.isBillUnderOtherName && !booking.billOwnerIdFile) {
         errors.billOwnerIdFile = 'Valid government ID of the person named on the bill is required for verification.';
       }
-    } else if (stepNumber === 4) {
+    } else if (stepNumber === 3) {
       if (!booking.fullName || booking.fullName.trim().length < 3) {
         errors.fullName = 'Full legal name (as printed on your primary ID) is required.';
       }
@@ -1136,11 +1159,14 @@ export default function App() {
       if (!booking.emergencyContact1Name || !booking.emergencyContact1Name.trim()) {
         errors.emergencyContact1Name = booking.isStudentExemption
           ? 'Parent or Legal Guardian full legal name is required for Student Exemption.'
-          : 'Emergency Contact 1 (Family Member / Guardian) full legal name is required.';
+          : 'Emergency Contact 1 full legal name is required.';
       }
       const c1PhoneDigits = (booking.emergencyContact1Phone || '').replace(/\D/g, '');
       if (!c1PhoneDigits || c1PhoneDigits.length < 10) {
         errors.emergencyContact1Phone = 'Emergency Contact 1 active contact number is required.';
+      }
+      if (!booking.emergencyContact1Rel || !booking.emergencyContact1Rel.trim()) {
+        errors.emergencyContact1Rel = 'Emergency Contact 1 relationship is required.';
       }
       if (!booking.emergencyContact1Social || !booking.emergencyContact1Social.trim()) {
         errors.emergencyContact1Social = 'FB/IG profile link or handle for Emergency Contact 1 is required.';
@@ -1159,7 +1185,7 @@ export default function App() {
       if (!gcashDigits || gcashDigits.length < 10) {
         errors.gcashAccountNumber = 'Valid GCash Mobile Number is required for your deposit refund.';
       }
-    } else if (stepNumber === 5) {
+    } else if (stepNumber === 4) {
       const cleanRef = (booking.gcashRefNumber || '').replace(/\s+/g, '');
       if (!cleanRef || cleanRef.length < 9) {
         errors.gcashRefNumber = 'Please enter your valid GCash reference number (typically 13 digits).';
@@ -1264,7 +1290,7 @@ export default function App() {
 
   // Launch Confetti when Step 6 reached
   useEffect(() => {
-    if (modalStep === 6 && isModalOpen) {
+    if (modalStep === 5 && isModalOpen) {
       const end = Date.now() + 2.5 * 1000;
       const colors = ['#C9B8F0', '#F5C6A8', '#A8DBC8', '#FFD1DC', '#FFE8A3'];
 
@@ -1570,7 +1596,7 @@ export default function App() {
         driveFolderUrl: driveLink,
       }));
       setBookingSubmitError(null);
-      setModalStep(6);
+      setModalStep(5);
       showToast('Reservation & documents secured in Google Drive!', 'success');
     } catch (err: any) {
       console.error('Error submitting booking to Google Sheets:', err);
@@ -3357,10 +3383,10 @@ export default function App() {
                 <span className="text-[#6B6B8A] text-xs font-bold hidden sm:inline">/</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-black text-[#1A1A2E]">
-                    {modalStep === 6 ? 'Reservation Confirmed' : booking.cameraId ? `Rent ${modalCamera.shortName || 'Camera'}` : 'Select Camera & Dates'}
+                    {modalStep === 5 ? 'Reservation Confirmed' : booking.cameraId ? `Rent ${modalCamera.shortName || 'Camera'}` : 'Select Camera & Dates'}
                   </span>
                   <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]">
-                    Step {modalStep} of {modalStep === 6 ? 6 : 5}
+                    Step {modalStep} of {modalStep === 5 ? 5 : 4}
                   </span>
                 </div>
               </div>
@@ -3390,12 +3416,11 @@ export default function App() {
           <div className="bg-white border-b border-[#E8E4F0] px-4 sm:px-8 py-3 hidden md:block">
             <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 overflow-x-auto">
               {[
-                { step: 1, label: 'Gear & Dates' },
-                { step: 2, label: 'Handover Mode' },
-                { step: 3, label: 'ID Verification' },
-                { step: 4, label: 'Renter Details' },
-                { step: 5, label: 'Payment & Review' },
-                { step: 6, label: 'Confirmed' }
+                { step: 1, label: 'Gear, Dates & Handover' },
+                { step: 2, label: 'ID Verification' },
+                { step: 3, label: 'Renter Details' },
+                { step: 4, label: 'Payment & Review' },
+                { step: 5, label: 'Confirmed' }
               ].map((s) => {
                 const isDone = modalStep > s.step;
                 const isCurrent = modalStep === s.step;
@@ -3429,7 +3454,7 @@ export default function App() {
           <div className="md:hidden w-full bg-[#E8E4F0] h-1.5">
             <div
               className="bg-gradient-to-r from-[#C9B8F0] via-[#F5C6A8] to-[#A8DBC8] h-full transition-all duration-300"
-              style={{ width: `${(modalStep / 6) * 100}%` }}
+              style={{ width: `${(modalStep / 5) * 100}%` }}
             />
           </div>
 
@@ -3438,7 +3463,7 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
               {/* Left Column: Form Card */}
-              <div className={`lg:col-span-8 ${modalStep === 6 ? 'lg:col-span-12 max-w-3xl mx-auto w-full' : ''}`}>
+              <div className={`lg:col-span-8 ${modalStep === 5 ? 'lg:col-span-12 max-w-3xl mx-auto w-full' : ''}`}>
                 <div className="bg-white rounded-[32px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] p-5 sm:p-8 flex flex-col">
                   {/* Step Body */}
                   <div ref={modalBodyRef} className="space-y-6 flex-1">
@@ -3612,7 +3637,7 @@ export default function App() {
                                 </span>
                               </div>
                               <p className="text-[10px] text-[#6B6B8A] mt-0.5 truncate leading-tight">
-                                8 AM – 12 AM • ₱{modalCamera.standardRate}/day flat
+                                8:00 AM – 11:00 PM • Single Day Shoot
                               </p>
                             </div>
                           </div>
@@ -3714,7 +3739,7 @@ export default function App() {
                       {/* 2-Column Side-by-Side Handover Time Slots */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         {/* Pickup Time */}
-                        <div className="p-4 sm:p-5 rounded-2xl bg-white border-2 border-[#1A1A2E] space-y-3 shadow-[3px_3px_0px_#1A1A2E]">
+                        <div data-field-key="pickupTimeSlot" className="p-4 sm:p-5 rounded-2xl bg-white border-2 border-[#1A1A2E] space-y-3 shadow-[3px_3px_0px_#1A1A2E]">
                           <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
                               1. Preferred Pickup Time
@@ -3735,14 +3760,20 @@ export default function App() {
                               label="Preferred Pickup Time"
                               isRequired={true}
                               size="sm"
+                              placeholder="Select Preferred Pickup Time"
                               value={booking.pickupTimeSlot}
                               options={pickupTimeOptions}
+                              hasError={!!validationErrors.pickupTimeSlot}
+                              errorMessage={validationErrors.pickupTimeSlot}
                               headerNotice={
                                 modalConflict.isStartTurnover
                                   ? "Available from 2:00 PM for afternoon pickup."
                                   : undefined
                               }
-                              onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                              onChange={(val) => {
+                                setBooking(b => ({ ...b, pickupTimeSlot: val }));
+                                clearFieldError('pickupTimeSlot');
+                              }}
                             />
 
                             <HourlyTimelineSelector
@@ -3750,13 +3781,16 @@ export default function App() {
                               value={booking.pickupTimeSlot}
                               hours={pickupQuickHours}
                               earliestBadge={modalConflict.isStartTurnover ? "2 PM Earliest" : undefined}
-                              onChange={(val) => setBooking(b => ({ ...b, pickupTimeSlot: val }))}
+                              onChange={(val) => {
+                                setBooking(b => ({ ...b, pickupTimeSlot: val }));
+                                clearFieldError('pickupTimeSlot');
+                              }}
                             />
                           </div>
                         </div>
 
                         {/* Return Time */}
-                        <div className="p-4 sm:p-5 rounded-2xl bg-white border-2 border-[#1A1A2E] space-y-3 shadow-[3px_3px_0px_#1A1A2E]">
+                        <div data-field-key="returnTimeSlot" className="p-4 sm:p-5 rounded-2xl bg-white border-2 border-[#1A1A2E] space-y-3 shadow-[3px_3px_0px_#1A1A2E]">
                           <div className="flex items-center justify-between pb-2 border-b border-[#E8E4F0]">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#6B6B8A]">
                               2. Preferred Return Time
@@ -3777,14 +3811,20 @@ export default function App() {
                               label="Preferred Return Time"
                               isRequired={true}
                               size="sm"
+                              placeholder="Select Preferred Return Time"
                               value={booking.returnTimeSlot}
                               options={returnTimeOptions}
+                              hasError={!!validationErrors.returnTimeSlot}
+                              errorMessage={validationErrors.returnTimeSlot}
                               headerNotice={
                                 modalConflict.isEndTurnover
                                   ? "Morning return by 12:00 PM applies for this date."
                                   : "Return to meetup hub or dispatch courier before 11:00 PM."
                               }
-                              onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                              onChange={(val) => {
+                                setBooking(b => ({ ...b, returnTimeSlot: val }));
+                                clearFieldError('returnTimeSlot');
+                              }}
                             />
 
                             <HourlyTimelineSelector
@@ -3792,7 +3832,10 @@ export default function App() {
                               value={booking.returnTimeSlot}
                               hours={returnQuickHours}
                               earliestBadge={modalConflict.isEndTurnover ? "12 PM Return" : undefined}
-                              onChange={(val) => setBooking(b => ({ ...b, returnTimeSlot: val }))}
+                              onChange={(val) => {
+                                setBooking(b => ({ ...b, returnTimeSlot: val }));
+                                clearFieldError('returnTimeSlot');
+                              }}
                             />
                           </div>
                         </div>
@@ -3869,66 +3912,126 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Summary Card */}
-                      <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-[#6B6B8A]">Rental Duration</span>
-                          <span className="font-bold text-[#1A1A2E]">
-                            {modalQuote.days} {modalQuote.days === 1 ? 'Day' : 'Days'} • {modalQuote.tierLabel}
+                                            {/* Handover Mode Section */}
+                      <div className="space-y-4 pt-4 border-t border-[#E8E4F0]" data-field-key="handoverMode">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase text-[#6B6B8A]">
+                            Select Your Preferred Handover Option <span className="text-red-500 font-bold">*</span>
+                          </span>
+                          <span className="text-[11px] font-extrabold text-[#553C9A] bg-[#EDE8FC] px-2 py-0.5 rounded-full">
+                            8:00 AM – 11:00 PM ONLY
                           </span>
                         </div>
 
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-[#6B6B8A]">
-                            Rental Rate {modalQuote.isBulk && '(Tier Discount Active!)'}
-                          </span>
-                          <span className="font-bold text-[#1A1A2E]">₱{modalQuote.rate}/day</span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-[#6B6B8A]">Base Rental Cost</span>
-                          <span className="font-bold text-[#1A1A2E]">₱{modalQuote.rentalTotal.toLocaleString()}</span>
-                        </div>
-
-                        {booking.handoverMode === 'meetup' && (
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-semibold text-[#6B6B8A]">Meet-up Handling Fee</span>
-                            <span className="font-bold text-[#553C9A]">₱200</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Meetup Option */}
+                          <div
+                            onClick={() => {
+                              setBooking(b => ({ ...b, handoverMode: 'meetup' }));
+                              clearFieldError('handoverMode');
+                            }}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${booking.handoverMode === 'meetup'
+                              ? 'border-[#1A1A2E] bg-[#EDE8FC] shadow-[3px_3px_0px_#1A1A2E]'
+                              : 'border-[#E8E4F0] bg-white hover:border-[#C9B8F0]'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-black text-sm text-[#1A1A2E]">Meet-up (₱200 Fee)</span>
+                              {booking.handoverMode === 'meetup' && <Check className="w-4 h-4 text-[#553C9A]" />}
+                            </div>
+                            <p className="mt-1 text-xs text-[#6B6B8A]">
+                              SM East Ortigas, Bridgetowne, or Opus Mall.
+                            </p>
+                            <div className="mt-3 text-xs font-bold text-[#553C9A] flex items-center justify-between">
+                              <span>₱200 handling fee applies</span>
+                              <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">
+                                ₱{modalQuote.deposit.toLocaleString()} Deposit
+                              </span>
+                            </div>
                           </div>
+
+                          {/* Courier Option */}
+                          <div
+                            onClick={() => {
+                              setBooking(b => ({ ...b, handoverMode: 'courier' }));
+                              clearFieldError('handoverMode');
+                            }}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${booking.handoverMode === 'courier'
+                              ? 'border-[#1A1A2E] bg-[#FEF0E7] shadow-[3px_3px_0px_#1A1A2E]'
+                              : 'border-[#E8E4F0] bg-white hover:border-[#F5C6A8]'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-black text-sm text-[#1A1A2E]">Grab Express Delivery</span>
+                              {booking.handoverMode === 'courier' && <Check className="w-4 h-4 text-[#C05621]" />}
+                            </div>
+                            <p className="mt-1 text-xs text-[#6B6B8A]">
+                              Grab Express ONLY. Owner books rider for release & return; renter shoulders fees.
+                            </p>
+                            <div className="mt-3 text-xs font-bold text-[#C05621] flex items-center justify-between">
+                              <span>Metro Manila delivery</span>
+                              <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">
+                                ₱{modalQuote.deposit.toLocaleString()} Deposit
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {validationErrors.handoverMode && (
+                          <p className="text-xs text-red-600 font-bold flex items-center gap-1">
+                            <span>⚠️</span> {validationErrors.handoverMode}
+                          </p>
                         )}
 
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-[#6B6B8A]">Refundable Security Deposit</span>
-                            <span className="text-[10px] text-[#2F855A] font-extrabold bg-[#E8F7F1] px-1.5 py-0.2 rounded border border-[#A8DBC8]">
-                              100% Refundable
-                            </span>
+                        {/* Location Specific Input */}
+                        {booking.handoverMode === 'meetup' && (
+                          <div data-field-key="meetupLocation">
+                            <CustomSelect
+                              label="Choose Meet-up Hub (₱200 Handling Fee):"
+                              isRequired={true}
+                              placeholder="-- Select Meet-up Hub --"
+                              value={booking.meetupLocation}
+                              options={PASIG_MEETUP_HUBS.map(hub => ({ value: hub, label: `${hub} (₱200 handling fee)` }))}
+                              hasError={!!validationErrors.meetupLocation}
+                              errorMessage={validationErrors.meetupLocation}
+                              onChange={(val) => {
+                                setBooking(b => ({ ...b, meetupLocation: val }));
+                                clearFieldError('meetupLocation');
+                              }}
+                            />
+                            <p className="mt-1.5 text-[11px] text-[#6B6B8A]">
+                              Available at SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 11:00 PM). Exact landmark & time coordinated prior to meet-up.
+                            </p>
                           </div>
-                          <span className="font-bold text-[#2F855A]">
-                            ₱{modalQuote.deposit.toLocaleString()}
-                          </span>
-                        </div>
-
-                        <div className="pt-2 border-t border-[#E8E4F0] flex items-center justify-between text-xs font-black">
-                          <span className="text-[#1A1A2E]">Total Package Value</span>
-                          <span className="text-sm text-[#1A1A2E]">₱{modalQuote.total.toLocaleString()}</span>
-                        </div>
-
-                        {/* Step 1 Clear Payment Breakdown */}
-                        <div className="pt-2 border-t border-dashed border-[#E8E4F0] grid grid-cols-2 gap-2 text-[11px]">
-                          <div className="p-2.5 rounded-xl bg-[#007DFE]/10 border border-[#007DFE]/20">
-                            <span className="block font-black text-xs text-[#007DFE]">1. Pay Now via GCash</span>
-                            <span className="block font-black text-sm text-[#007DFE] mt-0.5">₱{DOWNPAYMENT_FEE}</span>
-                            <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">Credited toward rental fee</span>
+                        )}
+                        {booking.handoverMode === 'courier' && (
+                          <div data-field-key="deliveryAddress">
+                            <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5 flex items-center gap-1">
+                              <span>Delivery Address for Grab Express Delivery:</span>
+                              <span className="text-red-500 font-bold">*</span>
+                            </label>
+                            <textarea
+                              rows={2}
+                              placeholder="House/Condo Unit, Street, Barangay, City, Landmark (Metro Manila)"
+                              value={booking.deliveryAddress}
+                              onChange={(e) => {
+                                setBooking(b => ({ ...b, deliveryAddress: e.target.value }));
+                                clearFieldError('deliveryAddress');
+                              }}
+                              className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs sm:text-sm font-medium transition-colors ${validationErrors.deliveryAddress
+                                ? 'border-red-400 bg-[#FFF5F5] focus:outline-none ring-2 ring-red-200'
+                                : 'border-[#E8E4F0] focus:border-[#1A1A2E]'
+                                }`}
+                            />
+                            {validationErrors.deliveryAddress && (
+                              <p className="mt-1 text-xs text-red-600 font-bold flex items-center gap-1">
+                                <span>⚠️</span> {validationErrors.deliveryAddress}
+                              </p>
+                            )}
+                            <p className="mt-1 text-[11px] text-[#6B6B8A]">
+                              Grab Express ONLY (8:00 AM – 11:00 PM). Owner books the rider for release & return; renter shoulders delivery fees.
+                            </p>
                           </div>
-                          <div className="p-2.5 rounded-xl bg-[#FAFAF7] border border-[#1A1A2E]/20">
-                            <span className="block font-black text-xs text-[#1A1A2E]">2. Pay on Handover</span>
-                            <span className="block font-black text-sm text-[#1A1A2E] mt-0.5">₱{modalQuote.paymentOnHandover.toLocaleString()}</span>
-                            <span className="block text-[10px] text-[#6B6B8A] mt-0.5 leading-tight">
-                              ₱{modalQuote.remainingRentalBalance.toLocaleString()} bal + ₱{modalQuote.deposit.toLocaleString()} dep{modalQuote.meetupFee > 0 ? ' + ₱200 meetup' : ''}
-                            </span>
-                          </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -3946,119 +4049,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* ───────────────── STEP 2: HANDOVER MODE ───────────────── */}
+              {/* ───────────────── STEP 2: RENTAL REQUIREMENTS & VERIFICATION ───────────────── */}
               {modalStep === 2 && (
-                <div className="space-y-5 animate-fadeIn">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase text-[#6B6B8A]">
-                      Select Your Preferred Handover Option
-                    </span>
-                    <span className="text-[11px] font-extrabold text-[#553C9A] bg-[#EDE8FC] px-2 py-0.5 rounded-full">
-                      8:00 AM – 11:00 PM ONLY
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Meetup Option */}
-                    <div
-                      onClick={() => setBooking(b => ({ ...b, handoverMode: 'meetup' }))}
-                      className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${booking.handoverMode === 'meetup'
-                        ? 'border-[#1A1A2E] bg-[#EDE8FC] shadow-[3px_3px_0px_#1A1A2E]'
-                        : 'border-[#E8E4F0] bg-white hover:border-[#C9B8F0]'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-black text-sm text-[#1A1A2E]">Meet-up (₱200 Fee)</span>
-                        {booking.handoverMode === 'meetup' && <Check className="w-4 h-4 text-[#553C9A]" />}
-                      </div>
-                      <p className="mt-1 text-xs text-[#6B6B8A]">
-                        SM East Ortigas, Bridgetowne, or Opus Mall.
-                      </p>
-                      <div className="mt-3 text-xs font-bold text-[#553C9A] flex items-center justify-between">
-                        <span>₱200 handling fee applies</span>
-                        <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">
-                          ₱{modalQuote.deposit.toLocaleString()} Deposit
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Courier Option */}
-                    <div
-                      onClick={() => setBooking(b => ({ ...b, handoverMode: 'courier' }))}
-                      className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${booking.handoverMode === 'courier'
-                        ? 'border-[#1A1A2E] bg-[#FEF0E7] shadow-[3px_3px_0px_#1A1A2E]'
-                        : 'border-[#E8E4F0] bg-white hover:border-[#F5C6A8]'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-black text-sm text-[#1A1A2E]">Grab Express Delivery</span>
-                        {booking.handoverMode === 'courier' && <Check className="w-4 h-4 text-[#C05621]" />}
-                      </div>
-                      <p className="mt-1 text-xs text-[#6B6B8A]">
-                        Grab Express ONLY. Owner books rider for release & return; renter shoulders fees.
-                      </p>
-                      <div className="mt-3 text-xs font-bold text-[#C05621] flex items-center justify-between">
-                        <span>Metro Manila delivery</span>
-                        <span className="text-[10px] text-[#2F855A] bg-[#E8F7F1] px-1.5 py-0.5 rounded">
-                          ₱{modalQuote.deposit.toLocaleString()} Deposit
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Location Specific Input */}
-                  {booking.handoverMode === 'meetup' ? (
-                    <div data-field-key="meetupLocation">
-                      <CustomSelect
-                        label="Choose Meet-up Hub (₱200 Handling Fee):"
-                        isRequired={true}
-                        value={booking.meetupLocation}
-                        options={PASIG_MEETUP_HUBS.map(hub => ({ value: hub, label: `${hub} (₱200 handling fee)` }))}
-                        hasError={!!validationErrors.meetupLocation}
-                        errorMessage={validationErrors.meetupLocation}
-                        onChange={(val) => {
-                          setBooking(b => ({ ...b, meetupLocation: val }));
-                          clearFieldError('meetupLocation');
-                        }}
-                      />
-                      <p className="mt-1.5 text-[11px] text-[#6B6B8A]">
-                        Available at SM East Ortigas, Bridgetowne, or Opus Mall (8:00 AM – 11:00 PM). Exact landmark & time coordinated prior to meet-up.
-                      </p>
-                    </div>
-                  ) : (
-                    <div data-field-key="deliveryAddress">
-                      <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5 flex items-center gap-1">
-                        <span>Delivery Address for Grab Express Delivery:</span>
-                        <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <textarea
-                        rows={2}
-                        placeholder="House/Condo Unit, Street, Barangay, City, Landmark (Metro Manila)"
-                        value={booking.deliveryAddress}
-                        onChange={(e) => {
-                          setBooking(b => ({ ...b, deliveryAddress: e.target.value }));
-                          clearFieldError('deliveryAddress');
-                        }}
-                        className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs sm:text-sm font-medium transition-colors ${validationErrors.deliveryAddress
-                          ? 'border-red-400 bg-[#FFF5F5] focus:outline-none ring-2 ring-red-200'
-                          : 'border-[#E8E4F0] focus:border-[#1A1A2E]'
-                          }`}
-                      />
-                      {validationErrors.deliveryAddress && (
-                        <p className="mt-1 text-xs text-red-600 font-bold flex items-center gap-1">
-                          <span>⚠️</span> {validationErrors.deliveryAddress}
-                        </p>
-                      )}
-                      <p className="mt-1 text-[11px] text-[#6B6B8A]">
-                        Grab Express ONLY (8:00 AM – 11:00 PM). Owner books the rider for release & return; renter shoulders delivery fees.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ───────────────── STEP 3: RENTAL REQUIREMENTS & VERIFICATION ───────────────── */}
-              {modalStep === 3 && (
                 <div className="space-y-4 animate-fadeIn">
 
                   {/* Reassurance Banner */}
@@ -4114,9 +4106,10 @@ export default function App() {
                           <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>
                         )}
                       </span>
-                      <div className="w-full sm:w-56">
+                      <div className="w-full sm:w-56" data-field-key="id1Type">
                         <CustomSelect
                           value={booking.id1Type}
+                          placeholder="Select Primary ID"
                           options={booking.isStudentExemption ? [
                             { value: 'Valid Student ID', label: 'Valid Student ID' }
                           ] : [
@@ -4127,6 +4120,8 @@ export default function App() {
                             { value: 'Postal ID / SSS / Voter', label: 'Postal ID / SSS / Voter' }
                           ]}
                           size="sm"
+                          hasError={!!validationErrors.id1Type}
+                          errorMessage={validationErrors.id1Type}
                           onChange={(val) => {
                             setBooking(b => ({ ...b, id1Type: val }));
                             clearFieldError('id1Type');
@@ -4215,7 +4210,7 @@ export default function App() {
                   {/* 1B. Secondary ID (Front & Back) OR Current COR */}
                   <div className={`p-3.5 rounded-2xl bg-white border-2 space-y-2.5 transition-colors ${validationErrors.id2File || validationErrors.id2BackFile ? 'border-red-400 bg-[#FFF5F5]/40 shadow-sm' : 'border-[#E8E4F0]'
                     }`}>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <span className="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
                         <span>1B. {booking.isStudentExemption ? 'Current Certificate of Registration (COR)' : 'Secondary Valid ID (Front & Back)'}</span>
                         <span className="text-red-500 font-bold">*</span>
@@ -4223,9 +4218,32 @@ export default function App() {
                           <span className="text-[10px] font-bold text-[#38A169] bg-[#E8F7F1] px-1.5 py-0.5 rounded">Uploaded ✓</span>
                         )}
                       </span>
-                      <span className="text-[10px] text-[#6B6B8A] font-semibold">
-                        {booking.isStudentExemption ? 'Current Semester' : 'Address & Signature'}
-                      </span>
+                      {booking.isStudentExemption ? (
+                        <span className="text-[10px] text-[#6B6B8A] font-semibold">
+                          Current Semester
+                        </span>
+                      ) : (
+                        <div className="w-full sm:w-56" data-field-key="id2Type">
+                          <CustomSelect
+                            value={booking.id2Type}
+                            placeholder="Select Secondary ID"
+                            size="sm"
+                            options={[
+                              { value: 'Company ID / Work ID', label: 'Company / Work ID' },
+                              { value: 'Secondary Gov ID (PhilHealth/NBI/Postal)', label: 'Secondary Gov ID' },
+                              { value: 'Student ID', label: 'Student ID' },
+                              { value: 'Credit / Debit Card (Engraved Name)', label: 'Bank / Debit Card' },
+                              { value: 'Barangay ID / Police Clearance', label: 'Barangay / Police ID' },
+                            ]}
+                            hasError={!!validationErrors.id2Type}
+                            errorMessage={validationErrors.id2Type}
+                            onChange={(val) => {
+                              setBooking(b => ({ ...b, id2Type: val }));
+                              clearFieldError('id2Type');
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {booking.isStudentExemption ? (
@@ -4605,8 +4623,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* ───────────────── STEP 4: RENTER CONTACT DETAILS ───────────────── */}
-              {modalStep === 4 && (
+              {/* ───────────────── STEP 3: RENTER CONTACT DETAILS ───────────────── */}
+              {modalStep === 3 && (
                 <div className="space-y-4 animate-fadeIn">
                   <div data-field-key="fullName">
                     <label className="block text-xs font-bold text-[#1A1A2E] mb-1">
@@ -4688,6 +4706,7 @@ export default function App() {
                       <CustomSelect
                         label="Shoot / Event Purpose"
                         isRequired={true}
+                        placeholder="Select Shoot / Event Purpose"
                         value={booking.shootType}
                         options={[
                           { value: 'Travel / Vacation Vlogging', label: 'Travel / Vacation Vlogging' },
@@ -4817,8 +4836,14 @@ export default function App() {
                               setBooking(b => ({ ...b, emergencyContact1Rel: e.target.value }));
                               clearFieldError('emergencyContact1Rel');
                             }}
-                            className="w-full px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
+                            className={`w-full px-3 py-2 rounded-xl bg-white border text-xs font-semibold focus:border-[#1A1A2E] ${validationErrors.emergencyContact1Rel
+                              ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                              : 'border-[#E8E4F0]'
+                              }`}
                           />
+                          {validationErrors.emergencyContact1Rel && (
+                            <p className="mt-1 text-xs text-red-600 font-bold">⚠️ {validationErrors.emergencyContact1Rel}</p>
+                          )}
                         </div>
 
                         <div data-field-key="emergencyContact1Social">
@@ -4998,8 +5023,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* ───────────────── STEP 5: GCASH DOWNPAYMENT DRAWER ───────────────── */}
-              {modalStep === 5 && (
+              {/* ───────────────── STEP 4: GCASH DOWNPAYMENT & TERMS AGREEMENT ───────────────── */}
+              {modalStep === 4 && (
                 <div className="space-y-4 animate-fadeIn relative">
                   {bookingSubmitError && (
                     <div className="p-4 rounded-2xl bg-[#FFF5F5] border-2 border-red-300 text-red-700 flex items-start gap-3 animate-fadeIn shadow-xs">
@@ -5338,8 +5363,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* ───────────────── STEP 6: CONFIRMATION SUCCESS SCREEN ───────────────── */}
-              {modalStep === 6 && (
+              {/* ───────────────── STEP 5: CONFIRMATION SUCCESS SCREEN ───────────────── */}
+              {modalStep === 5 && (
                 <div className="space-y-6 text-center animate-fadeIn py-2">
 
                   {/* Big Mascot Celebration */}
@@ -5502,8 +5527,8 @@ export default function App() {
 
             </div>
 
-            {/* Modal Navigation Buttons (Steps 1 to 5) */}
-            {modalStep < 6 && (
+            {/* Modal Navigation Buttons (Steps 1 to 4) */}
+            {modalStep < 5 && (
               <div className="px-6 py-4 bg-white border-t border-[#E8E4F0] flex items-center justify-between">
                 {modalStep > 1 ? (
                   <button
@@ -5548,7 +5573,7 @@ export default function App() {
                         </>
                       ) : (
                         <>
-                          <span>Next: Handover</span>
+                          <span>Next: ID Verification</span>
                           <ChevronRight className="w-4 h-4" />
                         </>
                       )}
@@ -5565,7 +5590,7 @@ export default function App() {
                       }}
                       className="px-6 py-2.5 rounded-full bg-[#1A1A2E] text-white text-xs font-bold hover:bg-[#6B46C1] transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>Next: Quick KYC</span>
+                      <span>Next: Contact Details</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   )}
@@ -5580,32 +5605,17 @@ export default function App() {
                       }}
                       className="px-6 py-2.5 rounded-full bg-[#1A1A2E] text-white text-xs font-bold hover:bg-[#6B46C1] transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>Next: Contact Details</span>
+                      <span>Next: Payment & Terms</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   )}
 
                   {modalStep === 4 && (
                     <button
-                      type="button"
-                      onClick={() => {
-                        if (validateStep(4)) {
-                          setModalStep(5);
-                        }
-                      }}
-                      className="px-6 py-2.5 rounded-full bg-[#1A1A2E] text-white text-xs font-bold hover:bg-[#6B46C1] transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                      <span>Next: GCash Downpayment</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  )}
-
-                  {modalStep === 5 && (
-                    <button
                       disabled={isSubmittingBooking}
                       type="button"
                       onClick={() => {
-                        if (validateStep(5)) {
+                        if (validateStep(4)) {
                           handleFinalizeBooking();
                         }
                       }}
@@ -5672,19 +5682,19 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <span className="text-[#6B6B8A]">Dates:</span>
                         <span className="font-bold">
-                          {booking.startDate || calcStartDate} → {booking.endDate || calcEndDate}
+                          {booking.startDate && booking.endDate ? `${booking.startDate} → ${booking.endDate}` : 'Select dates'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-[#6B6B8A]">Duration:</span>
                         <span className="font-bold text-[#553C9A]">
-                          {modalQuote.days} {modalQuote.days === 1 ? 'Day (24h)' : 'Days'}
+                          {modalQuote.days > 0 ? `${modalQuote.days} ${modalQuote.days === 1 ? 'Day' : 'Days'}` : 'Select dates'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-[#6B6B8A]">Handover:</span>
                         <span className="font-bold">
-                          {booking.handoverMode === 'meetup' ? `Meetup (${booking.meetupLocation})` : 'Grab Express Delivery'}
+                          {booking.handoverMode === 'meetup' ? `Meetup (${booking.meetupLocation || 'Choose hub'})` : booking.handoverMode === 'courier' ? 'Grab Express Delivery' : 'Choose handover mode'}
                         </span>
                       </div>
                     </div>

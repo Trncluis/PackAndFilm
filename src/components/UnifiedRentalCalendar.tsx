@@ -175,12 +175,13 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
   };
 
   const calculateDaysCount = () => {
-    if (!startDate || !endDate) return 1;
-    if (startDate === endDate) return 1;
-    const s = new Date(startDate);
-    const e = new Date(endDate);
+    if (!startDate || !endDate) return 0;
+    const [y1, m1, d1] = startDate.split('-').map(Number);
+    const [y2, m2, d2] = endDate.split('-').map(Number);
+    const s = new Date(y1, m1 - 1, d1);
+    const e = new Date(y2, m2 - 1, d2);
     const diff = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(1, diff);
+    return Math.max(1, diff + 1);
   };
 
   const daysCount = calculateDaysCount();
@@ -373,7 +374,7 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-black px-3 py-1 rounded-full bg-[#EDE8FC] text-[#553C9A] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E]">
-            {rentalType === 'same-day' ? '1 Day Shoot' : `${daysCount} ${daysCount === 1 ? 'Day' : 'Days'} Total`}
+            {rentalType === 'same-day' ? (startDate ? '1 Day Shoot' : 'Select Date') : daysCount > 0 ? `${daysCount} ${daysCount === 1 ? 'Day' : 'Days'} Total` : 'Select Dates'}
           </span>
 
           {isStartTurnover && (
