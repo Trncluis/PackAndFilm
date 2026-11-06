@@ -1931,15 +1931,13 @@ export default function App() {
                   <div className="w-3 h-3 rounded-full bg-[#38A169]" />
                 </div>
 
-                {/* Interactive Carousel Toggle Tabs */}
-                <div className="flex items-center bg-[#F4F2F8] p-1 rounded-xl border border-[#E8E4F0] gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setHeroSlideId('dji-pocket-3')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                {/* Visual Status Indicator: Active Camera Showcase */}
+                <div className="flex items-center bg-[#F4F2F8] p-1 rounded-xl border border-[#E8E4F0] gap-1 select-none pointer-events-none">
+                  <div
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all flex items-center gap-1.5 ${
                       heroSlideId === 'dji-pocket-3'
                         ? 'bg-white text-[#1A1A2E] shadow-xs border border-[#E8E4F0]'
-                        : 'text-[#6B6B8A] hover:text-[#1A1A2E]'
+                        : 'text-[#8C8CA1]'
                     }`}
                   >
                     <span
@@ -1950,15 +1948,13 @@ export default function App() {
                       }`}
                     />
                     DJI Pocket 3
-                  </button>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setHeroSlideId('canon-g7x-mark-iii')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  <div
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all flex items-center gap-1.5 ${
                       heroSlideId === 'canon-g7x-mark-iii'
                         ? 'bg-white text-[#1A1A2E] shadow-xs border border-[#E8E4F0]'
-                        : 'text-[#6B6B8A] hover:text-[#1A1A2E]'
+                        : 'text-[#8C8CA1]'
                     }`}
                   >
                     <span
@@ -1969,7 +1965,7 @@ export default function App() {
                       }`}
                     />
                     Canon G7 X
-                  </button>
+                  </div>
                 </div>
               </div>
 
@@ -2030,26 +2026,20 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Carousel Slide Indicator Dots */}
-              <div className="flex items-center justify-center gap-1.5 pb-3">
-                <button
-                  type="button"
-                  onClick={() => setHeroSlideId('dji-pocket-3')}
-                  aria-label="View DJI Osmo Pocket 3"
-                  className={`h-1.5 rounded-full transition-all cursor-pointer ${
+              {/* Showcase Slide Progress Indicator Dots (Purely Decorative) */}
+              <div className="flex items-center justify-center gap-1.5 pb-3 pointer-events-none select-none" aria-hidden="true">
+                <div
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
                     heroSlideId === 'dji-pocket-3'
                       ? 'w-6 bg-[#1A1A2E]'
-                      : 'w-2 bg-[#E8E4F0] hover:bg-[#6B6B8A]'
+                      : 'w-2 bg-[#E8E4F0]'
                   }`}
                 />
-                <button
-                  type="button"
-                  onClick={() => setHeroSlideId('canon-g7x-mark-iii')}
-                  aria-label="View Canon PowerShot G7 X Mark III"
-                  className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                <div
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
                     heroSlideId === 'canon-g7x-mark-iii'
                       ? 'w-6 bg-[#1A1A2E]'
-                      : 'w-2 bg-[#E8E4F0] hover:bg-[#6B6B8A]'
+                      : 'w-2 bg-[#E8E4F0]'
                   }`}
                 />
               </div>

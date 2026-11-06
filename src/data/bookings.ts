@@ -1,3 +1,5 @@
+import { getCameraCapacity } from './cameras';
+
 export interface BookingRecord {
   id: string;
   cameraId: string;
@@ -24,7 +26,7 @@ export interface CameraConflictResult {
   returnWindow?: string;
 }
 
-// Check date collision specifically for the selected camera
+// Check date collision specifically for the selected camera considering multi-unit capacity
 export const checkCameraDateConflict = (
   cameraId: string,
   startStr: string,
@@ -41,26 +43,45 @@ export const checkCameraDateConflict = (
     };
   }
 
+  const capacity = getCameraCapacity(cameraId);
   // Filter bookings belonging to currently selected camera
   const cameraBookings = bookingsList.filter((b) => b.cameraId === cameraId);
 
-  for (const booked of cameraBookings) {
-    const s1 = booked.startDate;
-    const e1 = booked.endDate;
-    const s2 = startStr;
-    const e2 = endStr;
+  // Iterate day-by-day across requested [startStr, endStr]
+  const [startY, startM, startD] = startStr.split('-').map(Number);
+  const [endY, endM, endD] = endStr.split('-').map(Number);
+  const startDate = new Date(startY, startM - 1, startD);
+  const endDate = new Date(endY, endM - 1, endD);
 
-    // Disjoint: One booking completely ends before the other starts
-    if (e1 < s2 || e2 < s1) {
-      continue;
+  let curDate = new Date(startDate.getTime());
+  while (curDate <= endDate) {
+    const yStr = curDate.getFullYear();
+    const mStr = String(curDate.getMonth() + 1).padStart(2, '0');
+    const dStr = String(curDate.getDate()).padStart(2, '0');
+    const dateStr = `${yStr}-${mStr}-${dStr}`;
+
+    const activeBookingsOnDate = cameraBookings.filter(
+      (b) => b.startDate <= dateStr && dateStr <= b.endDate
+    );
+
+    // Over capacity on this date
+    if (activeBookingsOnDate.length >= capacity) {
+      const cameraName = cameraId === 'canon-g7x-mark-iii'
+        ? 'Canon PowerShot G7 X Mark III'
+        : 'DJI Osmo Pocket 3';
+
+      const unitText = capacity > 1
+        ? `All ${capacity} units of the ${cameraName} are`
+        : `The ${cameraName} is`;
+
+      return {
+        hasConflict: true,
+        conflictingBooking: activeBookingsOnDate[0],
+        message: `${unitText} fully booked for dates including ${dateStr}. Please select a different rental window.`
+      };
     }
 
-    // Any overlapping date is a genuine conflict (full day reserved)
-    return {
-      hasConflict: true,
-      conflictingBooking: booked,
-      message: `This camera unit is already reserved for these dates (${booked.startDate} to ${booked.endDate}). Please select a different rental window.`
-    };
+    curDate.setDate(curDate.getDate() + 1);
   }
 
   return {
@@ -131,32 +152,34 @@ export function getCameraDayAvailability(
     };
   }
 
+  const capacity = getCameraCapacity(cameraId);
   const cameraBookings = bookingsList.filter(b => b.cameraId === cameraId);
+  const activeBookings = cameraBookings.filter(b => b.startDate <= dateStr && dateStr <= b.endDate);
 
-  // If this date is within ANY booking for this camera (startDate <= dateStr <= endDate), it is reserved
-  const reservedBooking = cameraBookings.find(b => b.startDate <= dateStr && dateStr <= b.endDate);
-  if (reservedBooking) {
+  if (activeBookings.length >= capacity) {
     return {
       dateStr,
       dayName,
       dayNum,
       status: 'booked',
       label: 'Booked',
-      tooltip: reservedBooking.startDate === reservedBooking.endDate
-        ? `Reserved for Same-Day rental on ${dateStr}`
-        : `Reserved from ${reservedBooking.startDate} to ${reservedBooking.endDate}`,
-      conflictingBooking: reservedBooking
+      tooltip: `Fully reserved on ${dateStr} (${activeBookings.length}/${capacity} units booked)`,
+      conflictingBooking: activeBookings[0]
     };
   }
 
-  // Otherwise fully available
+  const remaining = capacity - activeBookings.length;
+  const isOneLeft = remaining === 1 && capacity > 1;
+
   return {
     dateStr,
     dayName,
     dayNum,
     status: 'available',
-    label: 'Available',
-    tooltip: `Available for rental on ${dateStr}`
+    label: isOneLeft ? '1 Left' : 'Available',
+    tooltip: isOneLeft
+      ? `1 unit remaining on ${dateStr}`
+      : `Available for rental on ${dateStr}`
   };
 }
 

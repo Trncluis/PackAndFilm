@@ -14,6 +14,7 @@ export interface CameraItem {
   badge: string;
   isAvailable: boolean;
   statusText?: string;
+  totalUnits?: number;
   depositAmount: number; // Uniform 1000 for active units
   standardRate: number;  // 1-day rate
   bulkRate: number;      // 6+ days rate
@@ -38,10 +39,21 @@ export interface CameraItem {
   }[];
 }
 
+
+export const CAMERA_INVENTORY: Record<string, number> = {
+  'dji-pocket-3': 1,
+  'canon-g7x-mark-iii': 2,
+};
+
+export const getCameraCapacity = (cameraId: string): number => {
+  return CAMERA_INVENTORY[cameraId] ?? 1;
+};
+
 export const CAMERAS: CameraItem[] = [
   {
     id: 'dji-pocket-3',
     name: 'DJI Osmo Pocket 3 Standard Kit',
+    totalUnits: 1,
     shortName: 'Osmo Pocket 3',
     tagline: '1-inch sensor, 4K/120fps mechanical gimbal & rotatable OLED screen',
     badge: 'Available Now',

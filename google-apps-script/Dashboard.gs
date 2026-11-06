@@ -499,7 +499,13 @@ function formatAndBeautifyWorkbook() {
       Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
     ]);
     fSheet.appendRow([
-      "PNF-G7X-01", "Canon PowerShot G7 X Mark III Creator Vlogging Kit", "G7X398201", "Available",
+      "PNF-G7X-01", "Canon PowerShot G7 X Mark III Creator Vlogging Kit (Unit 1)", "G7X398201", "Available",
+      500, 900, 1350, 1000,
+      "2x NB-13L Batteries, Dedicated Charger, 32GB SD, OTG Reader, Wrist Strap, Padded Bag",
+      Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
+    ]);
+    fSheet.appendRow([
+      "PNF-G7X-02", "Canon PowerShot G7 X Mark III Creator Vlogging Kit (Unit 2)", "G7X-UNIT2-TBA", "Available",
       500, 900, 1350, 1000,
       "2x NB-13L Batteries, Dedicated Charger, 32GB SD, OTG Reader, Wrist Strap, Padded Bag",
       Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
@@ -1263,7 +1269,13 @@ function syncFleetInventory() {
       Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
     ],
     [
-      "PNF-G7X-01", "Canon PowerShot G7 X Mark III Creator Vlogging Kit", "G7X398201", "Available",
+      "PNF-G7X-01", "Canon PowerShot G7 X Mark III Creator Vlogging Kit (Unit 1)", "G7X398201", "Available",
+      500, 900, 1350, 1000,
+      "2x NB-13L Batteries, Dedicated Charger, 32GB SD, OTG Reader, Wrist Strap, Padded Bag",
+      Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")
+    ],
+    [
+      "PNF-G7X-02", "Canon PowerShot G7 X Mark III Creator Vlogging Kit (Unit 2)", "G7X-UNIT2-TBA", "Available",
       500, 900, 1350, 1000,
       "2x NB-13L Batteries, Dedicated Charger, 32GB SD, OTG Reader, Wrist Strap, Padded Bag",
       Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd")

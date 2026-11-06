@@ -1517,11 +1517,13 @@ function doPost(e) {
         })).setMimeType(ContentService.MimeType.JSON);
       }
 
-      // Check against active bookings in Bookings sheet
+      // Check against active bookings in Bookings sheet (Multi-Unit Capacity Aware)
       const bSheetCheck = ss.getSheetByName("Bookings");
       if (bSheetCheck && bSheetCheck.getLastRow() > 1) {
         const checkColMap = getHeaderIndexMap(bSheetCheck);
         const bRows = bSheetCheck.getDataRange().getValues().slice(1);
+        const requestedCamCapacity = (reqCamId.includes("g7x") || reqCamId.includes("canon")) ? 2 : 1;
+        const overlappingBookings = [];
 
         for (let i = 0; i < bRows.length; i++) {
           const rowRef = String(bRows[i][checkColMap.bookingRef] || "").trim();
@@ -1555,14 +1557,40 @@ function doPost(e) {
               : "";
 
             if (bookedStart && bookedEnd) {
-              // Full-day reservation buffer: any date overlap is a strict collision
               if (reqStart <= bookedEnd && bookedStart <= reqEnd) {
+                overlappingBookings.push({
+                  bookingRef: rowRef,
+                  start: bookedStart,
+                  end: bookedEnd
+                });
+              }
+            }
+          }
+        }
+
+        // Multi-unit capacity check: reject only if overlapping bookings on any single day reach or exceed total physical units
+        if (overlappingBookings.length >= requestedCamCapacity) {
+          const reqStartDateObj = parseManilaDateOnly(reqStart);
+          const reqEndDateObj = parseManilaDateOnly(reqEnd);
+          if (reqStartDateObj && reqEndDateObj) {
+            let curD = new Date(reqStartDateObj.getTime());
+            while (curD <= reqEndDateObj) {
+              const curDStr = Utilities.formatDate(curD, "Asia/Manila", "yyyy-MM-dd");
+              const activeOnDay = overlappingBookings.filter(b => b.start <= curDStr && curDStr <= b.end);
+              if (activeOnDay.length >= requestedCamCapacity) {
+                const camName = (reqCamId.includes("g7x") || reqCamId.includes("canon"))
+                  ? "Canon PowerShot G7 X Mark III"
+                  : "DJI Osmo Pocket 3";
+                const unitNotice = requestedCamCapacity > 1
+                  ? "All " + requestedCamCapacity + " units of " + camName + " are"
+                  : camName + " is";
                 return ContentService.createTextOutput(JSON.stringify({
                   status: "error",
                   code: "DATE_CONFLICT",
-                  message: "The requested rental dates (" + reqStart + " to " + reqEnd + ") conflict with an existing reservation for this camera (" + bookedStart + " to " + bookedEnd + "). Please select different dates."
+                  message: unitNotice + " fully booked for dates overlapping " + curDStr + ". Please select different rental dates."
                 })).setMimeType(ContentService.MimeType.JSON);
               }
+              curD.setDate(curD.getDate() + 1);
             }
           }
         }
