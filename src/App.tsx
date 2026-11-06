@@ -1,3 +1,4 @@
+import { processDocumentFile, validateBatchPayloadSize } from './utils/documentProcessor';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -42,7 +43,9 @@ import {
   Sun,
   CalendarRange,
   Home,
-  Scale
+  Scale,
+  Printer,
+  Lock
 } from 'lucide-react';
 
 import { CAMERAS, CameraItem } from './data/cameras';
@@ -141,6 +144,29 @@ interface BookingState {
   returnTimeSlot: string;
   isFlightOrTrip: boolean;
   flightOrTripDetails: string;
+}
+
+
+export interface ConfirmedReceiptData {
+  bookingRef: string;
+  timestamp: string;
+  customerName: string;
+  cameraRented: string;
+  startDate: string;
+  endDate: string;
+  rentalDays: number;
+  pickupTimeSlot: string;
+  returnTimeSlot: string;
+  handoverMethod: string;
+  meetupLocation?: string;
+  deliveryAddress?: string;
+  rentalTotal: number;
+  meetupFee: number;
+  securityDeposit: number;
+  grandTotal: number;
+  downpaymentPaid: number;
+  balanceDue: number;
+  gcashRefNumber: string;
 }
 
 export type ActiveView = 'home' | 'book' | 'requirements' | 'terms' | 'admin';
@@ -246,13 +272,30 @@ export default function App() {
   // Listen to browser navigation changes (Back/Forward buttons & hashchanges)
   useEffect(() => {
     const handleLocationChange = () => {
-      setActiveView(getInitialView());
+      const view = getInitialView();
+      setActiveView(view);
+      if (view === 'book') {
+        setIsModalOpen(true);
+      } else if (view === 'home') {
+        setIsModalOpen(false);
+      }
     };
+
+    const handleTestReceipt = (e: any) => {
+      if (e.detail) {
+        setConfirmedReceipt(e.detail);
+        setModalStep(5);
+        setIsModalOpen(true);
+      }
+    };
+
     window.addEventListener('popstate', handleLocationChange);
     window.addEventListener('hashchange', handleLocationChange);
+    window.addEventListener('pnf_test_receipt', handleTestReceipt);
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('pnf_test_receipt', handleTestReceipt);
     };
   }, []);
 
@@ -287,8 +330,11 @@ export default function App() {
   const [calcHandover, setCalcHandover] = useState<'meetup' | 'courier'>('meetup');
 
   // Modal State
+  const [confirmedReceipt, setConfirmedReceipt] = useState<ConfirmedReceiptData | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(() => {
     if (typeof window !== 'undefined') {
+      const v = getInitialView();
+      if (v === 'book') return true;
       const p = new URLSearchParams(window.location.search);
       return p.get('open_modal') === 'true' || !!p.get('step');
     }
@@ -463,8 +509,8 @@ export default function App() {
     const meetupHandlingFee = mode === 'meetup' ? RENTAL_CONFIG.meetupHandlingFee : 0;
     const downpayment = DOWNPAYMENT_FEE; // ₱300 non-refundable reservation fee credited to rental
     const remainingRentalBalance = Math.max(0, rentalTotal - downpayment);
-    const paymentOnHandover = days > 0 ? (remainingRentalBalance + deposit + meetupHandlingFee) : (deposit + meetupHandlingFee);
-    const totalPackageValue = days > 0 ? (rentalTotal + deposit + meetupHandlingFee) : 0;
+    const totalPackageValue = rentalTotal + deposit + meetupHandlingFee;
+    const paymentOnHandover = Math.max(0, totalPackageValue - downpayment);
     const refundAfterReturn = deposit;
     const balanceDue = paymentOnHandover;
 
@@ -1303,7 +1349,7 @@ export default function App() {
     });
   };
 
-  // Real File Upload Handler (reads actual images / documents selected by the user)
+  // Real File Upload Handler (Format-aware validation & calibrated compression)
   const handleRealFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     field:
@@ -1326,15 +1372,21 @@ export default function App() {
     if (!file) return;
 
     try {
-      const dataUrl = await processUploadFile(file);
+      const result = await processDocumentFile(file);
+      if (!result.success) {
+        showToast(result.error || 'Invalid file format or size.', 'error');
+        setValidationErrors(prev => ({ ...prev, [field]: result.error || 'Invalid file' }));
+        return;
+      }
+
       setBooking(prev => ({
         ...prev,
-        [field]: dataUrl,
-        ...(nameField ? { [nameField]: file.name } : {}),
+        [field]: result.base64,
+        ...(nameField ? { [nameField]: result.fileName } : {}),
       }));
       clearFieldError(field);
-    } catch {
-      showToast('Error reading file. Please try again.', 'error');
+    } catch (err: any) {
+      showToast(err?.message || 'Error processing file. Please try again.', 'error');
     }
   };
 
@@ -1433,7 +1485,7 @@ export default function App() {
       renterTag: booking.socialHandle || (booking.fullName ? `@${booking.fullName.toLowerCase().replace(/[^a-z0-9_.]/g, '')}` : '@renter'),
       startDate: booking.startDate,
       endDate: booking.endDate,
-      hub: booking.handoverMode === 'meetup' ? `Meetup: ${booking.meetupLocation}` : 'Grab Express Delivery (Metro Manila)',
+      hub: booking.handoverMode === 'meetup' ? `Meetup: ${booking.meetupLocation}` : 'Grab Express Delivery (PackAndFilm books rider)',
       status: 'Deposit Paid'
     };
 
@@ -1449,7 +1501,7 @@ export default function App() {
       startDate: booking.startDate,
       endDate: booking.endDate,
       rentalDays: modalQuote.days,
-      handoverMethod: booking.handoverMode === 'meetup' ? `Meetup (${booking.meetupLocation} - ₱200 Fee)` : 'Grab Express Delivery (Renter shoulders fee)',
+      handoverMethod: booking.handoverMode === 'meetup' ? `Meetup (${booking.meetupLocation} - ₱200 Fee)` : 'Grab Express Delivery (PackAndFilm books rider • Renter shoulders courier fee)',
       address: booking.handoverMode === 'meetup' ? booking.meetupLocation : (booking.deliveryAddress || 'Metro Manila'),
       shootType: booking.shootType || 'Travel / Vacation Vlogging',
       rentalTotal: modalQuote.rentalTotal,
@@ -1478,7 +1530,16 @@ export default function App() {
       receiptFile: booking.receiptFile
     };
 
-    // Pre-flight check: Re-verify date availability before submitting
+    // Pre-flight check 1: Validate cumulative payload size to prevent Apps Script memory crashes
+    const batchCheck = validateBatchPayloadSize(payload);
+    if (!batchCheck.isSafe) {
+      const errorMsg = batchCheck.error || 'Total document upload size exceeds server limits. Please upload smaller files.';
+      setBookingSubmitError(errorMsg);
+      showToast(errorMsg, 'error');
+      return;
+    }
+
+    // Pre-flight check 2: Re-verify date availability before submitting
     const currentConflict = checkCameraDateConflict(booking.cameraId, booking.startDate, booking.endDate, bookings);
     if (currentConflict.hasConflict) {
       const conflictMsg = currentConflict.message || 'The selected dates conflict with an existing confirmed booking. Please choose different dates.';
@@ -1525,18 +1586,38 @@ export default function App() {
         throw new Error(resJson.message || 'The reservation server rejected the booking. Please review your details and try again.');
       }
 
-      const driveLink = resJson.driveFolderUrl || null;
+      // Bind authoritative confirmed data returned by backend:
+      const receiptData: ConfirmedReceiptData = {
+        bookingRef: resJson.bookingRef || newRef,
+        timestamp: resJson.timestamp || new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }),
+        customerName: resJson.customerName || booking.fullName || 'Valued Renter',
+        cameraRented: resJson.cameraRented || modalCamera.name,
+        startDate: resJson.startDate || booking.startDate,
+        endDate: resJson.endDate || booking.endDate,
+        rentalDays: Number(resJson.rentalDays || modalQuote.days),
+        pickupTimeSlot: resJson.pickupTimeSlot || booking.pickupTimeSlot || '8:00 AM – 11:00 PM',
+        returnTimeSlot: resJson.returnTimeSlot || booking.returnTimeSlot || '8:00 AM – 11:00 PM',
+        handoverMethod: resJson.handoverMethod || (booking.handoverMode === 'meetup' ? 'Meetup' : 'Grab Express Delivery'),
+        meetupLocation: resJson.meetupLocation || (booking.handoverMode === 'meetup' ? (booking.meetupLocation || 'Pasig Hub') : ''),
+        deliveryAddress: resJson.deliveryAddress || (booking.handoverMode === 'courier' ? (booking.deliveryAddress || 'Metro Manila') : ''),
+        rentalTotal: Number(resJson.rentalTotal !== undefined ? resJson.rentalTotal : modalQuote.rentalTotal),
+        meetupFee: Number(resJson.meetupFee !== undefined ? resJson.meetupFee : modalQuote.meetupFee),
+        securityDeposit: Number(resJson.securityDeposit !== undefined ? resJson.securityDeposit : modalQuote.deposit),
+        grandTotal: Number(resJson.grandTotal !== undefined ? resJson.grandTotal : (modalQuote.rentalTotal + modalQuote.meetupFee + modalQuote.deposit)),
+        downpaymentPaid: Number(resJson.downpaymentPaid !== undefined ? resJson.downpaymentPaid : DOWNPAYMENT_FEE),
+        balanceDue: Number(resJson.balanceDue !== undefined ? resJson.balanceDue : modalQuote.balanceDue),
+        gcashRefNumber: resJson.gcashRefNumber || booking.gcashRefNumber || 'N/A'
+      };
 
-      // Real confirmed booking verified by backend:
+      setConfirmedReceipt(receiptData);
       setBookings(prev => [newBookingRecord, ...prev]);
       setBooking(prev => ({
         ...prev,
         bookingRef: newRef,
-        driveFolderUrl: driveLink,
       }));
       setBookingSubmitError(null);
       setModalStep(5);
-      showToast('Reservation & documents secured in Google Drive!', 'success');
+      showToast('Reservation confirmed & secured!', 'success');
     } catch (err: any) {
       console.error('Error submitting booking to Google Sheets:', err);
       const errorMsg = err?.message || 'Failed to submit reservation to Google Sheets. Please check your connection and try again.';
@@ -4759,135 +4840,190 @@ export default function App() {
               {modalStep === 5 && (
                 <div className="space-y-6 text-center animate-fadeIn py-2">
 
-                  {/* Big Mascot Celebration */}
-                  <div className="relative w-24 h-24 mx-auto">
-                    <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-[#A8DBC8] via-[#C9B8F0] to-[#F5C6A8] p-1 shadow-lg">
-                      <div className="w-full h-full bg-white rounded-[22px] p-2 flex items-center justify-center">
+                  {/* Mascot Header */}
+                  <div className="relative w-20 h-20 mx-auto">
+                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-[#A8DBC8] via-[#C9B8F0] to-[#F5C6A8] p-1 shadow-md">
+                      <div className="w-full h-full bg-white rounded-[20px] p-2 flex items-center justify-center">
                         <img
                           src="/logo.png"
-                          alt="PackAndFilm Mascot"
+                          alt="PackAndFilm"
                           className="w-full h-full object-contain"
                         />
                       </div>
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#38A169] border-2 border-white flex items-center justify-center shadow-md">
-                      <CheckCircle2 className="w-5 h-5 text-white" />
+                    <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#38A169] border-2 border-white flex items-center justify-center shadow-md">
+                      <CheckCircle2 className="w-4 h-4 text-white" />
                     </div>
                   </div>
 
                   <div>
                     <h3 className="text-2xl font-black text-[#1A1A2E] tracking-tight">
-                      You&apos;re Officially Booked!
+                      Reservation Confirmed!
                     </h3>
-                    <p className="mt-1 text-sm text-[#6B6B8A] font-medium">
-                      Your {modalCamera.name} has been reserved.
+                    <p className="mt-1 text-xs text-[#6B6B8A] font-medium">
+                      Your equipment is secured on our calendar.
                     </p>
                   </div>
 
-                  {/* Booking Reference Pill */}
-                  <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-white border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E]">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">Booking Reference</span>
-                      <span className="font-mono font-black text-base text-[#1A1A2E]">{booking.bookingRef}</span>
+                  {/* Reference & Print Action Bar */}
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E]">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-[#6B6B8A] block">Reference</span>
+                        <span className="font-mono font-black text-sm text-[#1A1A2E]">{confirmedReceipt?.bookingRef || booking.bookingRef}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCopyRef}
+                        className="p-1 rounded-lg bg-[#FAFAF7] hover:bg-[#EDE8FC] text-xs font-bold text-[#553C9A] flex items-center gap-1 transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>{copiedRef ? 'Copied' : 'Copy'}</span>
+                      </button>
                     </div>
+
                     <button
                       type="button"
-                      onClick={handleCopyRef}
-                      className="p-1.5 rounded-lg bg-[#FAFAF7] hover:bg-[#EDE8FC] text-xs font-bold text-[#553C9A] flex items-center gap-1"
+                      onClick={() => window.print()}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-[#553C9A] text-white font-extrabold text-xs shadow-[3px_3px_0px_#1A1A2E] border-2 border-[#1A1A2E] hover:bg-[#44307D] transition-all cursor-pointer"
                     >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>{copiedRef ? 'Copied' : 'Copy'}</span>
+                      <Printer className="w-4 h-4" />
+                      <span>Print / Save as PDF</span>
                     </button>
                   </div>
 
-                  {/* Booking Summary Card */}
-                  <div className="bg-white rounded-2xl border border-[#E8E4F0] p-4 text-left text-xs space-y-2.5">
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">Camera Model:</span>
-                      <span className="font-bold text-[#553C9A]">{modalCamera.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">Renter Name:</span>
-                      <span className="font-bold text-[#1A1A2E]">{booking.fullName || 'Valued Creator'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">Rental Dates:</span>
-                      <span className="font-bold text-[#1A1A2E]">{booking.startDate} to {booking.endDate} ({modalQuote.days} days)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">Handover Mode:</span>
-                      <span className="font-bold text-[#1A1A2E]">
-                        {booking.handoverMode === 'meetup'
-                          ? `${booking.meetupLocation || 'Pasig Meetup Hub'} (₱200 Meetup Fee)`
-                          : 'Grab Express Delivery (Renter shoulders fee)'}
-                      </span>
-                    </div>
-                    {booking.handoverMode === 'meetup' && (
-                      <div className="flex justify-between">
-                        <span className="text-[#6B6B8A]">Meetup Handling Fee:</span>
-                        <span className="font-bold text-[#1A1A2E]">₱{modalQuote.meetupFee.toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="bg-[#FAFAF7] p-2.5 rounded-xl border border-[#E8E4F0] flex items-center justify-between text-xs">
+                  {/* ─────────────────────────────────────────────────────────────
+                      DIGITAL BOOKING RECEIPT (MODEL B SOURCE OF TRUTH)
+                  ───────────────────────────────────────────────────────────── */}
+                  <div id="pnf-booking-receipt" className="bg-white rounded-2xl border-2 border-[#1A1A2E] p-5 text-left text-xs space-y-4 shadow-[4px_4px_0px_#1A1A2E]">
+                    {/* Receipt Brand Banner */}
+                    <div className="border-b border-[#E8E4F0] pb-3 flex items-start justify-between">
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">Operating Window</span>
-                        <span className="font-bold text-[#1A1A2E]">8:00 AM – 11:00 PM</span>
+                        <span className="font-black text-base text-[#1A1A2E] tracking-tight block">PACK & FILM</span>
+                        <span className="text-[10px] text-[#6B6B8A] font-semibold block">Camera Rentals • @packandfilm.ph</span>
+                        <span className="text-[10px] text-[#553C9A] font-bold block mt-0.5">Official Booking Confirmation Receipt</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] uppercase font-bold text-[#6B6B8A] block">Handover Time</span>
-                        <span className="font-bold text-[#553C9A]">Coordinated via Chat</span>
+                        <span className="text-[10px] font-mono text-[#6B6B8A] block">{confirmedReceipt?.timestamp || new Date().toISOString().split('T')[0]}</span>
+                        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 inline-block mt-0.5">
+                          Deposit Paid ✓
+                        </span>
                       </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">Downpayment Paid:</span>
-                      <span className="font-bold text-[#007DFE]">₱{DOWNPAYMENT_FEE} (Ref: {booking.gcashRefNumber || 'Verified'} • Credited to rental)</span>
+
+                    {/* Renter Information */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs py-1 border-b border-[#E8E4F0]">
+                      <div>
+                        <span className="text-[#6B6B8A] text-[10px] uppercase font-bold block">Renter Name</span>
+                        <span className="font-bold text-[#1A1A2E]">{confirmedReceipt?.customerName || booking.fullName || 'Valued Renter'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#6B6B8A] text-[10px] uppercase font-bold block">Social Media / Contact</span>
+                        <span className="font-bold text-[#1A1A2E]">{booking.socialHandle || '@renter'} • {booking.mobileNumber || ''}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">Remaining Rental Balance:</span>
-                      <span className="font-bold text-[#1A1A2E]">₱{modalQuote.remainingRentalBalance.toLocaleString()}</span>
+
+                    {/* Equipment & Schedule */}
+                    <div className="space-y-2 py-1 border-b border-[#E8E4F0]">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[#6B6B8A]">Camera Model:</span>
+                        <span className="font-black text-sm text-[#553C9A]">{confirmedReceipt?.cameraRented || modalCamera.name}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[#6B6B8A]">Rental Dates:</span>
+                        <span className="font-bold text-[#1A1A2E]">
+                          {confirmedReceipt?.startDate || booking.startDate} to {confirmedReceipt?.endDate || booking.endDate} ({confirmedReceipt?.rentalDays || modalQuote.days} {Number(confirmedReceipt?.rentalDays || modalQuote.days) === 1 ? 'Day' : 'Days'})
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0]">
+                        <div>
+                          <span className="text-[10px] font-bold text-[#6B6B8A] block">Pickup Schedule:</span>
+                          <span className="font-bold text-[#1A1A2E]">
+                            {confirmedReceipt?.startDate || booking.startDate} at {confirmedReceipt?.pickupTimeSlot || booking.pickupTimeSlot || '8:00 AM – 11:00 PM'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-[#6B6B8A] block">Return Schedule:</span>
+                          <span className="font-bold text-[#1A1A2E]">
+                            {confirmedReceipt?.endDate || booking.endDate} at {confirmedReceipt?.returnTimeSlot || booking.returnTimeSlot || '8:00 AM – 11:00 PM'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px] text-[#6B6B8A]">
+                        <span>Operating Window:</span>
+                        <span className="font-bold text-[#1A1A2E]">8:00 AM – 11:00 PM Daily</span>
+                      </div>
+                      <div className="pt-1">
+                        <span className="text-[#6B6B8A] text-[10px] uppercase font-bold block">Handover Method</span>
+                        {(confirmedReceipt ? confirmedReceipt.handoverMethod.toLowerCase().includes('meetup') : booking.handoverMode === 'meetup') ? (
+                          <span className="font-bold text-[#1A1A2E]">
+                            Meetup Hub: {confirmedReceipt?.meetupLocation || booking.meetupLocation || 'Pasig Hub'} (₱200 Meetup Fee)
+                          </span>
+                        ) : (
+                          <div>
+                            <span className="font-bold text-[#1A1A2E] block">
+                              Grab Express Delivery {confirmedReceipt?.deliveryAddress || booking.deliveryAddress ? `(${confirmedReceipt?.deliveryAddress || booking.deliveryAddress})` : '(Metro Manila)'}
+                            </span>
+                            <span className="text-[11px] text-[#6B6B8A] block mt-0.5">
+                              PackAndFilm books Grab Express directly for gear dispatch and return. Renter shoulders actual courier charges.
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">Refundable Security Deposit:</span>
-                      <span className="font-bold text-[#2F855A]">
-                        ₱{modalQuote.deposit.toLocaleString()} (100% Refundable)
-                      </span>
+
+                    {/* Authoritative Model B Financial Statement */}
+                    <div className="space-y-2 pt-1">
+                      <div className="flex justify-between text-[#6B6B8A]">
+                        <span>Camera Rental Rate ({confirmedReceipt?.rentalDays || modalQuote.days}d × ₱{modalQuote.rate || modalCamera.standardRate}):</span>
+                        <span className="font-bold text-[#1A1A2E]">₱{(confirmedReceipt?.rentalTotal ?? modalQuote.rentalTotal).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-[#6B6B8A]">
+                        <span>Meetup Fee:</span>
+                        <span className="font-bold text-[#1A1A2E]">₱{(confirmedReceipt?.meetupFee ?? modalQuote.meetupFee).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-[#6B6B8A]">
+                        <span>Security Deposit (Refundable):</span>
+                        <span className="font-bold text-[#2F855A]">₱{(confirmedReceipt?.securityDeposit ?? modalQuote.deposit).toLocaleString()}</span>
+                      </div>
+
+                      <div className="pt-2 border-t border-[#E8E4F0] flex justify-between font-black text-sm text-[#1A1A2E]">
+                        <span>Grand Package Total:</span>
+                        <span>₱{(confirmedReceipt?.grandTotal ?? (modalQuote.rentalTotal + modalQuote.meetupFee + modalQuote.deposit)).toLocaleString()}</span>
+                      </div>
+
+                      <div className="flex justify-between text-xs font-bold text-emerald-700 bg-emerald-50 p-2 rounded-xl border border-emerald-200">
+                        <span>Less Downpayment Paid (Credited):</span>
+                        <span>-₱{(confirmedReceipt?.downpaymentPaid ?? DOWNPAYMENT_FEE).toLocaleString()}</span>
+                      </div>
+
+                      <div className="flex justify-between text-sm font-black text-[#553C9A] bg-[#EDE8FC] p-2.5 rounded-xl border border-[#C9B8F0]">
+                        <span>Balance Due at Handover:</span>
+                        <span>₱{(confirmedReceipt?.balanceDue ?? modalQuote.balanceDue).toLocaleString()}</span>
+                      </div>
+
+                      {confirmedReceipt?.gcashRefNumber && confirmedReceipt.gcashRefNumber !== 'N/A' && (
+                        <div className="text-[11px] text-[#6B6B8A] pt-1">
+                          Downpayment GCash Reference: <span className="font-mono font-bold text-[#1A1A2E]">{confirmedReceipt.gcashRefNumber}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex justify-between pt-1.5 border-t border-[#E8E4F0]">
-                      <span className="font-black text-[#1A1A2E]">Total Due on Handover:</span>
-                      <span className="font-black text-sm text-[#1A1A2E]">₱{modalQuote.paymentOnHandover.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-[11px] text-[#2F855A]">
-                      <span className="font-bold">Security Deposit Refund:</span>
-                      <span className="font-black">
-                        ₱{modalQuote.refundAfterReturn.toLocaleString()} (Within 24h of return via GCash)
-                      </span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t border-[#E8E4F0]">
-                      <span className="text-[#6B6B8A]">Terms & Conditions:</span>
-                      <span className="font-bold text-[#38A169] flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Accepted ({booking.termsVersion || '2026 Edition'})</span>
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#6B6B8A]">KYC Status:</span>
-                      <span className="font-extrabold text-[#553C9A] bg-[#EDE8FC] px-2 py-0.5 rounded-full">
-                        Pending 15-Min Quick Review
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-[11px] text-[#234E52] bg-[#E8F7F1] p-2 rounded-xl border border-[#A8DBC8]">
-                      <span className="font-bold flex items-center gap-1.5">
-                        <CheckCheck className="w-3.5 h-3.5 text-[#38A169]" />
-                        <span>KYC Verification Documents:</span>
-                      </span>
-                      <span className="font-extrabold text-[#2F855A]">
-                        {booking.driveFolderUrl ? 'Vaulted in Google Drive ✓' : 'Encrypted & Uploaded ✓'}
-                      </span>
+
+                    {/* Terms & Privacy Notes */}
+                    <div className="pt-3 border-t border-[#E8E4F0] space-y-1.5 text-[11px] text-[#6B6B8A]">
+                      <div className="flex items-start gap-1.5 text-[#2F855A]">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>₱1,000 security deposit is 100% refunded via GCash within 24 hours after gear return and safe inspection.</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#553C9A]" />
+                        <span>Confidential KYC verification documents and emergency contacts are encrypted and securely vaulted in Google Drive.</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Direct Contact Buttons */}
-                  <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center">
+                  {/* Direct Action Buttons */}
+                  <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center no-print">
                     <a
                       href="https://www.instagram.com/packandfilm.ph/"
                       target="_blank"
@@ -4907,13 +5043,15 @@ export default function App() {
                       <span>Chat on Facebook Page</span>
                     </a>
                     <button
-                      onClick={() => setIsModalOpen(false)}
-                      className="py-3 px-5 rounded-2xl bg-[#FAFAF7] border-2 border-[#1A1A2E] text-[#1A1A2E] font-bold text-xs hover:bg-[#EDE8FC] transition-colors"
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        navigateTo('home');
+                      }}
+                      className="py-3 px-5 rounded-2xl bg-[#FAFAF7] border-2 border-[#1A1A2E] text-[#1A1A2E] font-bold text-xs hover:bg-[#EDE8FC] transition-colors cursor-pointer"
                     >
                       Done & Return
                     </button>
                   </div>
-
                 </div>
               )}
 

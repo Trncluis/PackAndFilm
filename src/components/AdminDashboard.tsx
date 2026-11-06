@@ -64,7 +64,9 @@ export interface AdminBookingItem {
   address: string;
   shootType: string;
   rentalTotal: number | string;
+  meetupFee?: number | string;
   securityDeposit: number | string;
+  grandTotal?: number | string;
   downpaymentPaid: number | string;
   balanceDue: number | string;
   gcashRefNumber: string;
@@ -1432,6 +1434,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="font-bold text-[#1A1A2E]">
                           <span>Paid: ₱{b.downpaymentPaid}</span>
                           <span className="text-[#6B6B8A]"> • Due: ₱{b.balanceDue}</span>
+                          {b.meetupFee !== undefined && Number(b.meetupFee) > 0 && (
+                            <span className="text-[#6B6B8A]"> • Meetup Fee: ₱{b.meetupFee}</span>
+                          )}
+                          {b.grandTotal !== undefined && (
+                            <span className="text-[#553C9A] font-black"> • Grand Total: ₱{b.grandTotal}</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2045,6 +2053,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 />
               ) : previewDoc.isVideo ? (
                 <video src={previewDoc.url} controls autoPlay className="max-h-[72vh] rounded-xl" />
+              ) : (previewDoc.url.toLowerCase().includes('.heic') || previewDoc.url.startsWith('data:image/heic') || previewDoc.url.startsWith('data:image/heif')) ? (
+                <div className="flex flex-col items-center justify-center p-8 text-center bg-white rounded-2xl max-w-md border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E]">
+                  <FileText className="w-12 h-12 text-[#553C9A] mb-3" />
+                  <h4 className="font-black text-lg text-[#1A1A2E]">HEIC Document Vaulted</h4>
+                  <p className="text-xs text-[#6B6B8A] mt-1 mb-4">
+                    This document was uploaded in iOS HEIC format and is safely stored in Google Drive. Direct in-browser canvas decoding is unavailable on this browser.
+                  </p>
+                  {previewDoc.url.startsWith('http') ? (
+                    <a
+                      href={previewDoc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-[#553C9A] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 hover:bg-[#44307D] transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Open in Google Drive
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-[#2F855A] font-bold bg-[#E8F7F1] px-3 py-1.5 rounded-lg border border-[#A8DBC8]">
+                      Stored as Binary in Google Drive ✓
+                    </span>
+                  )}
+                </div>
               ) : (
                 <img
                   src={previewDoc.url}

@@ -100,3 +100,43 @@
   background: #B6A2E5;
 }
 
+
+/* ─────────────────────────────────────────────────────────────
+ * PackAndFilm Print Stylesheet (Single-Click PDF / Print Receipt)
+ * ───────────────────────────────────────────────────────────── */
+@media print {
+  @page {
+    margin: 12mm;
+    size: auto;
+  }
+
+  /* Hide everything on page by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Only make receipt card and its contents visible */
+  #pnf-booking-receipt,
+  #pnf-booking-receipt * {
+    visibility: visible !important;
+  }
+
+  /* Isolate receipt card to top of page without backgrounds */
+  #pnf-booking-receipt {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 24px !important;
+    border: 2px solid #1A1A2E !important;
+    box-shadow: none !important;
+    background: #FFFFFF !important;
+    border-radius: 16px !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

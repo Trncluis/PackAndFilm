@@ -578,6 +578,85 @@ function ensureColumns(sheet, requiredCols) {
  * Guarantees zero breakage regardless of whether the sheet is using the modernized
  * 27-column layout (Col 20 = Customer Documents Folder) or legacy layouts.
  */
+
+/**
+ * Ensures PackAndFilm v3.4 29-column schema:
+ * Columns 1-27 remain strictly preserved.
+ * Column 28 = "Meetup Fee", Column 29 = "Grand Total".
+ */
+function ensureV34Schema(sheet) {
+  ensureColumns(sheet, 29);
+  const colCount = Math.max(sheet.getLastColumn(), 29);
+  const headers = sheet.getRange(1, 1, 1, colCount).getValues()[0];
+  const h28 = headers[27]; // 0-indexed 27 = Column 28
+  const h29 = headers[28]; // 0-indexed 28 = Column 29
+  if (!h28 || String(h28).trim() === "") {
+    sheet.getRange(1, 28).setValue("Meetup Fee");
+  }
+  if (!h29 || String(h29).trim() === "") {
+    sheet.getRange(1, 29).setValue("Grand Total");
+  }
+}
+
+const CAMERA_TIERS = {
+  "dji-pocket-3": [
+    { min: 1, max: 2, rate: 450 },
+    { min: 3, max: 5, rate: 400 },
+    { min: 6, max: 9999, rate: 350 }
+  ],
+  "canon-g7x-mark-iii": [
+    { min: 1, max: 2, rate: 550 },
+    { min: 3, max: 5, rate: 500 },
+    { min: 6, max: 9999, rate: 450 }
+  ],
+  "kodak-pixpro-fz55": [
+    { min: 1, max: 2, rate: 350 },
+    { min: 3, max: 5, rate: 300 },
+    { min: 6, max: 9999, rate: 250 }
+  ]
+};
+
+/**
+ * Authoritative Model B Accounting Engine.
+ * Recalculates all financial line items independently from authoritative camera tiers.
+ */
+function calculateAuthoritativeModelB(cameraId, days, handoverMethodStr) {
+  const normCam = String(cameraId || "dji-pocket-3").toLowerCase();
+  let key = "dji-pocket-3";
+  if (normCam.includes("g7x") || normCam.includes("canon")) key = "canon-g7x-mark-iii";
+  else if (normCam.includes("fz55") || normCam.includes("kodak")) key = "kodak-pixpro-fz55";
+
+  const tiers = CAMERA_TIERS[key] || CAMERA_TIERS["dji-pocket-3"];
+  const d = Math.max(1, parseInt(days, 10) || 1);
+  let rate = tiers[0].rate;
+  for (let i = 0; i < tiers.length; i++) {
+    if (d >= tiers[i].min && d <= tiers[i].max) {
+      rate = tiers[i].rate;
+      break;
+    }
+  }
+
+  const rentalTotal = rate * d;
+  const isMeetup = String(handoverMethodStr || "").toLowerCase().includes("meetup");
+  const meetupFee = isMeetup ? 200 : 0;
+  const securityDeposit = 1000;
+  const grandTotal = rentalTotal + meetupFee + securityDeposit;
+  const downpaymentPaid = 300;
+  const balanceDue = grandTotal - downpaymentPaid;
+
+  return {
+    rate: rate,
+    days: d,
+    rentalTotal: rentalTotal,
+    meetupFee: meetupFee,
+    securityDeposit: securityDeposit,
+    grandTotal: grandTotal,
+    downpaymentPaid: downpaymentPaid,
+    balanceDue: balanceDue,
+    isMeetup: isMeetup
+  };
+}
+
 function getHeaderIndexMap(sheet) {
   ensureColumns(sheet, 27);
   const colCount = Math.max(sheet.getLastColumn(), 27);
@@ -626,7 +705,9 @@ function getHeaderIndexMap(sheet) {
     billingUrl: findCol(["billing proof", "proof of billing", "delivery receipt"], 23),
     selfieVideoUrl: findCol(["selfie video", "selfie verification", "selfie"], 24),
     receiptUrl: findCol(["payment receipt", "receipt url"], 25),
-    guardianIdUrl: findCol(["guardian id", "parent / guardian"], 26)
+    guardianIdUrl: findCol(["guardian id", "parent / guardian"], 26),
+    meetupFee: findCol(["meetup fee"], 27),
+    grandTotal: findCol(["grand total", "package total"], 28)
   };
 }
 
@@ -715,6 +796,12 @@ function mapBookingRecord(r, i, colMap, formulas, bookingsSheet) {
     securityDeposit: r[colMap.securityDeposit] || 0,
     downpaymentPaid: r[colMap.downpaymentPaid] || 0,
     balanceDue: r[colMap.balanceDue] || 0,
+    meetupFee: (colMap.meetupFee !== undefined && colMap.meetupFee >= 0 && r[colMap.meetupFee] !== "" && r[colMap.meetupFee] !== undefined)
+      ? Number(r[colMap.meetupFee])
+      : (String(r[colMap.handoverMethod] || "").toLowerCase().includes("meetup") ? 200 : 0),
+    grandTotal: (colMap.grandTotal !== undefined && colMap.grandTotal >= 0 && r[colMap.grandTotal] !== "" && r[colMap.grandTotal] !== undefined)
+      ? Number(r[colMap.grandTotal])
+      : ((Number(r[colMap.rentalTotal]) || 0) + (String(r[colMap.handoverMethod] || "").toLowerCase().includes("meetup") ? 200 : 0) + (Number(r[colMap.securityDeposit]) || 1000)),
     gcashRefNumber: r[colMap.gcashRefNumber] || "",
     status: r[colMap.status] || "Pending Verification",
     notes: r[colMap.notes] || "",
@@ -1506,7 +1593,7 @@ function doPost(e) {
       if (!bookingsSheet) {
         bookingsSheet = ss.insertSheet("Bookings");
       }
-      ensureColumns(bookingsSheet, 27);
+      ensureV34Schema(bookingsSheet);
 
       if (bookingsSheet.getLastRow() === 0 || bookingsSheet.getRange(1, 1).getValue() === "") {
         const standardHeaders = [
@@ -1522,6 +1609,16 @@ function doPost(e) {
       }
 
       const colMap = getHeaderIndexMap(bookingsSheet);
+      if (colMap.meetupFee === -1 || colMap.grandTotal === -1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          code: "SCHEMA_MISMATCH",
+          message: "Database schema requires Meetup Fee (Col 28) and Grand Total (Col 29) headers. Booking was not recorded to prevent financial discrepancy."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // Authoritative Model B Calculation
+      const authFinance = calculateAuthoritativeModelB(body.cameraId, body.rentalDays, body.handoverMethod);
 
       // Duplicate Prevention Check: If a row with this bookingRef already exists, update in place!
       const bData = bookingsSheet.getDataRange().getValues();
@@ -1547,10 +1644,12 @@ function doPost(e) {
         bookingsSheet.getRange(existingRowIndex, colMap.handoverMethod + 1).setValue(body.handoverMethod);
         bookingsSheet.getRange(existingRowIndex, colMap.address + 1).setValue(body.address || "Meetup Point");
         bookingsSheet.getRange(existingRowIndex, colMap.shootType + 1).setValue(body.shootType);
-        bookingsSheet.getRange(existingRowIndex, colMap.rentalTotal + 1).setValue(body.rentalTotal);
-        bookingsSheet.getRange(existingRowIndex, colMap.securityDeposit + 1).setValue(body.securityDeposit);
-        bookingsSheet.getRange(existingRowIndex, colMap.downpaymentPaid + 1).setValue(body.downpaymentPaid);
-        bookingsSheet.getRange(existingRowIndex, colMap.balanceDue + 1).setValue(body.balanceDue);
+        bookingsSheet.getRange(existingRowIndex, colMap.rentalTotal + 1).setValue(authFinance.rentalTotal);
+        bookingsSheet.getRange(existingRowIndex, colMap.securityDeposit + 1).setValue(authFinance.securityDeposit);
+        bookingsSheet.getRange(existingRowIndex, colMap.downpaymentPaid + 1).setValue(authFinance.downpaymentPaid);
+        bookingsSheet.getRange(existingRowIndex, colMap.balanceDue + 1).setValue(authFinance.balanceDue);
+        if (colMap.meetupFee >= 0) bookingsSheet.getRange(existingRowIndex, colMap.meetupFee + 1).setValue(authFinance.meetupFee);
+        if (colMap.grandTotal >= 0) bookingsSheet.getRange(existingRowIndex, colMap.grandTotal + 1).setValue(authFinance.grandTotal);
         bookingsSheet.getRange(existingRowIndex, colMap.gcashRefNumber + 1).setValue(body.gcashRefNumber);
         bookingsSheet.getRange(existingRowIndex, colMap.status + 1).setValue("Deposit Paid");
         if (body.notes) {
@@ -1587,10 +1686,10 @@ function doPost(e) {
           body.handoverMethod,
           body.address || "Meetup Point",
           body.shootType,
-          body.rentalTotal,
-          body.securityDeposit,
-          body.downpaymentPaid,
-          body.balanceDue,
+          authFinance.rentalTotal,
+          authFinance.securityDeposit,
+          authFinance.downpaymentPaid,
+          authFinance.balanceDue,
           body.gcashRefNumber,
           "Deposit Paid",
           formattedNote,
@@ -1601,7 +1700,9 @@ function doPost(e) {
           billingUrl || "",    // Col 24: Proof of Address URL (hidden column)
           selfieVideoUrl || "",// Col 25: Selfie Verification URL (hidden column)
           receiptUrl || "",    // Col 26: Payment Receipt URL (hidden column)
-          guardianIdUrl || ""  // Col 27: Guardian ID URL (hidden column)
+          guardianIdUrl || "", // Col 27: Guardian ID URL (hidden column)
+          authFinance.meetupFee,  // Col 28: Meetup Fee
+          authFinance.grandTotal  // Col 29: Grand Total
         ]);
 
         const newRowIndex = bookingsSheet.getLastRow();
@@ -1654,11 +1755,28 @@ function doPost(e) {
         ]);
       }
 
-      // Return success along with the Google Drive dedicated folder URL
+      // Return sanitized customer booking confirmation (Zero exposure of Drive URLs or private verification details)
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
         bookingRef: body.bookingRef,
-        driveFolderUrl: driveFolderUrl
+        timestamp: Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm"),
+        customerName: body.customerName,
+        cameraRented: body.cameraRented,
+        startDate: body.startDate,
+        endDate: body.endDate,
+        rentalDays: authFinance.days,
+        pickupTimeSlot: body.pickupTimeSlot || "",
+        returnTimeSlot: body.returnTimeSlot || "",
+        handoverMethod: authFinance.isMeetup ? "Meetup" : "Grab Express Delivery",
+        meetupLocation: authFinance.isMeetup ? (body.meetupLocation || body.address || "Pasig Hub") : "",
+        deliveryAddress: !authFinance.isMeetup ? (body.deliveryAddress || body.address || "") : "",
+        rentalTotal: authFinance.rentalTotal,
+        meetupFee: authFinance.meetupFee,
+        securityDeposit: authFinance.securityDeposit,
+        grandTotal: authFinance.grandTotal,
+        downpaymentPaid: authFinance.downpaymentPaid,
+        balanceDue: authFinance.balanceDue,
+        gcashRefNumber: body.gcashRefNumber || ""
       })).setMimeType(ContentService.MimeType.JSON);
 
     } finally {
@@ -2037,16 +2155,28 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
     return { status: "error", message: "Invalid rental dates" };
   }
 
+  const customerName = String(bookingRow[colMap.customerName] || "").trim();
+  const contactNumber = String(bookingRow[colMap.contactNumber] || "").trim();
+  const socialHandle = String(bookingRow[colMap.socialMediaHandle] || "").trim();
   const cameraRented = String(bookingRow[colMap.cameraRented] || "DJI Osmo Pocket 3");
   const handoverMethod = String(bookingRow[colMap.handoverMethod] || "Meetup / Pasig Hub");
+
+  const namePart = customerName ? " | " + customerName : "";
+  const pickupTitle = "Rental Start" + namePart + " | " + bookingRef;
+  const returnTitle = "Rental Return" + namePart + " | " + bookingRef;
 
   function buildDescription(type) {
     const timingNote = type === "pickup"
       ? "Pickup Schedule: Flexible 8:00 AM – 11:00 PM."
       : "Return Schedule: Flexible 8:00 AM – 11:00 PM.";
 
+    const renterLine = customerName
+      ? "Renter: " + customerName + (contactNumber ? " (" + contactNumber + ")" : "") + (socialHandle ? " • " + socialHandle : "")
+      : "Renter: Not specified";
+
     return [
       "PackAndFilm Equipment Reservation",
+      renterLine,
       "Booking Ref: " + bookingRef,
       "Camera: " + cameraRented,
       "Handover Method: " + handoverMethod,
@@ -2067,7 +2197,7 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
       try { pEvent = cal.getEventById(pickupEventId); } catch (e) { }
     }
     if (!pEvent) {
-      pEvent = cal.createAllDayEvent("Rental Start | " + bookingRef, startDateObj);
+      pEvent = cal.createAllDayEvent(pickupTitle, startDateObj);
       pEvent.setTag("system", "PackAndFilm");
       pEvent.setTag("bookingRef", bookingRef);
       pEvent.setTag("eventType", "pickup");
@@ -2079,7 +2209,7 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
         cSheet.getRange(cRowIdx, 7).setValue(pEvent.getId());
       }
     } else {
-      pEvent.setTitle("Rental Start | " + bookingRef);
+      pEvent.setTitle(pickupTitle);
       pEvent.setDescription(buildDescription("pickup"));
     }
 
@@ -2087,7 +2217,7 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
       try { rEvent = cal.getEventById(returnEventId); } catch (e) { }
     }
     if (!rEvent) {
-      rEvent = cal.createAllDayEvent("Camera Return | " + bookingRef, endDateObj);
+      rEvent = cal.createAllDayEvent(returnTitle, endDateObj);
       rEvent.setTag("system", "PackAndFilm");
       rEvent.setTag("bookingRef", bookingRef);
       rEvent.setTag("eventType", "return");
@@ -2099,7 +2229,7 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
         cSheet.getRange(cRowIdx, 8).setValue(rEvent.getId());
       }
     } else {
-      rEvent.setTitle("Camera Return | " + bookingRef);
+      rEvent.setTitle(returnTitle);
       rEvent.setDescription(buildDescription("return"));
     }
 
