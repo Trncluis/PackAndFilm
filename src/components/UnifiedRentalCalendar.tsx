@@ -194,7 +194,7 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
   const daysCount = calculateDaysCount();
 
   return (
-    <div className="rounded-[28px] border-2 border-[#1A1A2E] bg-white shadow-[6px_6px_0px_0px_#1A1A2E] p-4 sm:p-6 space-y-4 isolate">
+    <div className="rounded-[28px] border-2 border-[#1A1A2E] bg-white shadow-[6px_6px_0px_0px_#1A1A2E] p-4 sm:p-6 space-y-4 isolate max-w-lg mx-auto">
       
       {/* Calendar Header with Navigation */}
       <div className="flex items-center justify-between pb-3.5 border-b-2 border-[#E8E4F0]">
@@ -238,7 +238,7 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
       </div>
 
       {/* Weekday Column Headers */}
-      <div className="grid grid-cols-7 gap-1 text-center">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center">
         {daysOfWeek.map((d) => (
           <span
             key={d}
@@ -250,7 +250,7 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
       </div>
 
       {/* Big Interactive Days Grid with Neo-Brutalist Component Shadows */}
-      <div className="grid grid-cols-7 gap-y-2.5 gap-x-1 sm:gap-x-2">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2">
         {allCalendarDays.map((item, idx) => {
           const dayInfo = getCameraDayAvailability(cameraId, item.dateStr, todayStr, bookings);
 
@@ -274,31 +274,31 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
               disabled={isDisabled}
               onClick={() => handleDateClick(item.dateStr, dayInfo)}
               title={dayInfo.tooltip}
-              className={`relative h-11 sm:h-12 rounded-2xl flex flex-col items-center justify-center transition-all select-none ${
+              className={`relative w-full aspect-square rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-0.5 sm:p-1 transition-all select-none ${
                 !item.isCurrentMonth
                   ? 'text-[#CBD5E0] cursor-not-allowed opacity-40 font-medium'
                   : isRangeStart
-                  ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] rounded-l-2xl rounded-r-none font-black z-10'
+                  ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] rounded-l-xl sm:rounded-l-2xl rounded-r-none font-black z-10'
                   : isRangeEnd
-                  ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] rounded-r-2xl rounded-l-none font-black z-10'
+                  ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] rounded-r-xl sm:rounded-r-2xl rounded-l-none font-black z-10'
                   : isRangeMiddle
                   ? 'bg-[#EDE8FC] text-[#553C9A] border-y-2 border-[#1A1A2E] rounded-none font-black'
                   : isSingleSelected
-                  ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rounded-2xl font-black scale-105 z-10'
+                  ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rounded-xl sm:rounded-2xl font-black scale-105 z-10'
                   : isToday
-                  ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[3px_3px_0px_#1A1A2E] rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer'
+                  ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[3px_3px_0px_#1A1A2E] rounded-xl sm:rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer'
                   : isBooked
-                  ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-2xl font-bold cursor-not-allowed opacity-75'
+                  ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-xl sm:rounded-2xl font-bold cursor-not-allowed opacity-75'
                   : isPast
                   ? 'text-[#CBD5E0] bg-gray-50/50 cursor-not-allowed font-medium'
-                  : 'text-[#1A1A2E] font-extrabold text-sm sm:text-base rounded-2xl border border-transparent hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                  : 'text-[#1A1A2E] font-extrabold text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-transparent hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
               }`}
             >
-              <span className="leading-none text-xs sm:text-sm">{item.day}</span>
+              <span className="leading-none text-xs sm:text-sm font-black">{item.day}</span>
 
               {/* Status Indicator Dots */}
               {item.isCurrentMonth && !isPast && (
-                <div className="h-1.5 flex items-center justify-center mt-1">
+                <div className="h-1.5 flex items-center justify-center mt-0.5 sm:mt-1">
                   {isSingleSelected || isRangeStart || isRangeEnd ? (
                     <span className="w-1.5 h-1.5 rounded-full bg-[#553C9A]" />
                   ) : isToday ? (

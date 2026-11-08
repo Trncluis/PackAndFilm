@@ -367,7 +367,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
           </div>
 
           {/* Days Grid with Connected Range Styling */}
-          <div className="grid grid-cols-7 gap-y-1 gap-x-0.5">
+          <div className="grid grid-cols-7 gap-1">
             {allCalendarDays.map((item, idx) => {
               const disabled = isDateDisabled(item.dateStr);
               const isSelected = value === item.dateStr;
@@ -399,23 +399,23 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = React.memo(({
                       ? 'Date unavailable'
                       : formatFriendlyDate(item.dateStr)
                   }
-                  className={`relative h-9 rounded-2xl font-bold text-xs flex flex-col items-center justify-center transition-all cursor-pointer select-none ${
+                  className={`relative w-full aspect-square rounded-xl font-black text-xs flex flex-col items-center justify-center p-0.5 transition-all cursor-pointer select-none ${
                     !item.isCurrentMonth
                       ? 'text-[#CBD5E0] cursor-not-allowed opacity-50 font-medium'
                       : isRangeStart
-                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-l-2xl rounded-r-none font-black shadow-xs z-10'
+                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-l-xl rounded-r-none font-black shadow-xs z-10'
                       : isRangeEnd
-                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-r-2xl rounded-l-none font-black shadow-xs z-10'
+                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-r-xl rounded-l-none font-black shadow-xs z-10'
                       : isRangeMiddle
                       ? 'bg-[#EDE8FC] text-[#553C9A] rounded-none font-black border-y-2 border-[#1A1A2E]'
                       : isSelected
-                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-2xl font-black shadow-[2px_2px_0px_#1A1A2E] scale-105 z-10'
+                      ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] rounded-xl font-black shadow-[2px_2px_0px_#1A1A2E] scale-105 z-10'
                       : isToday
-                      ? 'bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] rounded-2xl font-black hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E]'
+                      ? 'bg-[#FEF0E7] text-[#C05621] border border-[#F5C6A8] rounded-xl font-black hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E]'
                       : turnover
-                      ? 'bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E] rounded-2xl font-black'
+                      ? 'bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E] rounded-xl font-black'
                       : booked
-                      ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-2xl font-bold cursor-not-allowed opacity-75'
+                      ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-xl font-bold cursor-not-allowed opacity-75'
                       : disabled
                       ? 'text-[#CBD5E0] bg-gray-50/50 cursor-not-allowed font-medium'
                       : 'text-[#1A1A2E] font-extrabold hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:border hover:border-[#A8DBC8] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0'

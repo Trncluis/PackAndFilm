@@ -101,6 +101,16 @@ interface CameraWeekAvailabilityStripProps {
   onOpenMonthCalendar: (camera: CameraItem) => void;
 }
 
+const TWO_LETTER_DAYS: Record<string, string> = {
+  Sun: 'SU',
+  Mon: 'MO',
+  Tue: 'TU',
+  Wed: 'WE',
+  Thu: 'TH',
+  Fri: 'FR',
+  Sat: 'SA',
+};
+
 export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripProps> = ({
   camera,
   todayStr,
@@ -119,12 +129,12 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
   return (
     <div className="mt-3.5 p-3.5 sm:p-4 rounded-2xl bg-white border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] space-y-2.5 transition-all">
       {/* Strip Header with Icon Box & Neo-Brutalist Full Month Button */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <div className="w-6 h-6 rounded-lg bg-[#EDE8FC] border border-[#1A1A2E] flex items-center justify-center text-[#553C9A] shrink-0 shadow-2xs">
             <Calendar className="w-3.5 h-3.5 text-[#553C9A]" />
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-[#1A1A2E]">
+          <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-[#1A1A2E] truncate">
             Live 7-Day Availability
           </span>
         </div>
@@ -135,7 +145,7 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
             e.stopPropagation();
             onOpenMonthCalendar(camera);
           }}
-          className="px-2.5 py-1 rounded-full bg-white border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 text-[10px] font-black text-[#553C9A] flex items-center gap-1 transition-all cursor-pointer active:translate-y-0.5"
+          className="shrink-0 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-white border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 text-[10px] font-black text-[#553C9A] flex items-center gap-1 transition-all cursor-pointer active:translate-y-0.5 whitespace-nowrap"
           title="Open full interactive month calendar"
         >
           <span>Full Month</span>
@@ -143,18 +153,20 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
         </button>
       </div>
 
-      {/* 7-Day Interactive Day Strip Styled with Squircle Neo-Brutalist Badges */}
-      <div className="grid grid-cols-7 gap-1.5">
+      {/* 7-Day Interactive Day Strip Styled with Balanced Squircle Badges */}
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {days.map((day) => {
           const isToday = day.dateStr === todayStr;
           const isAvailable = day.status === 'available';
           const isBooked = day.status === 'booked';
+          const dayCode = TWO_LETTER_DAYS[day.dayName] || day.dayName.slice(0, 2).toUpperCase();
 
           return (
             <button
               key={day.dateStr}
               type="button"
               disabled={isBooked}
+              aria-label={isToday ? `Today, ${day.dayName} ${day.dayNum}` : `${day.dayName} ${day.dayNum}, ${day.status}`}
               onMouseEnter={() => setHoveredDay(day)}
               onMouseLeave={() => setHoveredDay(null)}
               onClick={(e) => {
@@ -163,22 +175,22 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
                   onSelectDate(camera.id, day.dateStr);
                 }
               }}
-              className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center transition-all select-none ${
+              className={`w-full min-w-0 aspect-[4/5] py-1.5 sm:py-2 px-0.5 rounded-xl sm:rounded-2xl flex flex-col items-center justify-between transition-all select-none ${
                 isToday
                   ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 cursor-pointer font-black'
                   : isBooked
-                  ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/70 font-bold opacity-75 cursor-not-allowed'
+                  ? 'bg-[#FFF5F5] text-[#C53030]/80 border border-[#FEB2B2]/70 font-bold opacity-75 cursor-not-allowed'
                   : 'bg-[#FAFAF7] text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer font-extrabold'
               }`}
-              title={day.tooltip}
+              title={isToday ? `Today (${day.dayName} ${day.dayNum}) • ${day.tooltip}` : day.tooltip}
             >
-              <span className="text-[9px] font-black uppercase leading-none tracking-tight">
-                {isToday ? 'Today' : day.dayName}
+              <span className="text-[10px] sm:text-[11px] font-black uppercase leading-none tracking-tight">
+                {isToday ? 'TD' : dayCode}
               </span>
-              <span className={`text-xs sm:text-sm font-black leading-tight mt-1 ${isBooked ? 'line-through opacity-70' : ''}`}>
+              <span className={`text-xs sm:text-sm font-black leading-none ${isBooked ? 'line-through opacity-70' : ''}`}>
                 {day.dayNum}
               </span>
-              <div className="h-1.5 flex items-center justify-center mt-1">
+              <div className="h-1.5 flex items-center justify-center">
                 {isToday ? (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#DD6B20]" />
                 ) : isBooked ? (
@@ -430,18 +442,18 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
           </div>
 
           {/* Calendar Grid Container styled matching UnifiedRentalCalendar */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_0px_#1A1A2E]">
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_0px_#1A1A2E] max-w-sm sm:max-w-md mx-auto">
             {/* Weekday Labels */}
-            <div className="grid grid-cols-7 gap-1 text-center mb-2.5">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center mb-2">
               {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((d) => (
-                <div key={d} className="text-[11px] font-black uppercase text-[#6B6B8A] tracking-wider py-1 select-none">
+                <div key={d} className="text-[10px] sm:text-[11px] font-black uppercase text-[#6B6B8A] tracking-wider py-1 select-none">
                   {d}
                 </div>
               ))}
             </div>
 
             {/* Date Cells */}
-            <div className="grid grid-cols-7 gap-1.5">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
               {calendarDays.map((item, idx) => {
                 const dayInfo = item.dayInfo;
                 const isPast = dayInfo.status === 'past';
@@ -463,25 +475,25 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
                       }
                     }}
                     title={dayInfo.tooltip}
-                    className={`relative h-11 sm:h-12 rounded-2xl flex flex-col items-center justify-center transition-all select-none ${
+                    className={`relative w-full aspect-square rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-0.5 sm:p-1 transition-all select-none ${
                       !item.isCurrentMonth
                         ? 'text-[#CBD5E0] cursor-not-allowed opacity-40 font-medium'
                         : isSelected
-                        ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rounded-2xl font-black scale-105 z-10'
+                        ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] font-black scale-105 z-10'
                         : isToday
-                        ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[3px_3px_0px_#1A1A2E] rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer'
+                        ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[2px_2px_0px_#1A1A2E] font-black hover:-translate-y-0.5 cursor-pointer'
                         : isBooked
-                        ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-2xl font-bold cursor-not-allowed opacity-75'
+                        ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 font-bold cursor-not-allowed opacity-75'
                         : isPast
                         ? 'text-[#CBD5E0] bg-gray-50/50 cursor-not-allowed font-medium'
-                        : 'text-[#1A1A2E] font-extrabold text-sm sm:text-base rounded-2xl border border-transparent hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                        : 'text-[#1A1A2E] font-extrabold text-xs sm:text-sm border border-transparent hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
                     }`}
                   >
-                    <span className="leading-none text-xs sm:text-sm">{item.day}</span>
+                    <span className="leading-none text-xs sm:text-sm font-black">{item.day}</span>
 
                     {/* Status Indicator Dots */}
                     {item.isCurrentMonth && !isPast && (
-                      <div className="h-1.5 flex items-center justify-center mt-1">
+                      <div className="h-1.5 flex items-center justify-center mt-0.5 sm:mt-1">
                         {isSelected ? (
                           <span className="w-1.5 h-1.5 rounded-full bg-[#553C9A]" />
                         ) : isToday ? (

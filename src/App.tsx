@@ -1821,9 +1821,11 @@ export default function App() {
       {/* ─────────────────────────────────────────────────────────────
           2. HERO SECTION
       ───────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden pt-8 pb-16 md:pt-16 md:pb-24 px-4 sm:px-8">
-        {/* Soft Pastel Background Blobs */}
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-r from-[#EDE8FC] via-[#FEF0E7] to-[#E8F7F1] rounded-full blur-3xl opacity-70 -z-10 pointer-events-none" />
+      <section className="relative pt-8 pb-16 md:pt-16 md:pb-24 px-4 sm:px-8">
+        {/* Soft Pastel Background Blobs Isolated Layer */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[700px] max-w-full h-[350px] bg-gradient-to-r from-[#EDE8FC] via-[#FEF0E7] to-[#E8F7F1] rounded-full blur-3xl opacity-70" />
+        </div>
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
 
@@ -2264,7 +2266,7 @@ export default function App() {
           </div>
 
           {/* Camera Selection Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {CAMERAS.map((cam) => {
               const isSelected = selectedCameraId === cam.id;
               const isAvailable = cam.isAvailable;
