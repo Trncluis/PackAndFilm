@@ -101,6 +101,8 @@ interface BookingState {
   deliveryAddress: string;
   socialHandle: string;
   shootType: string;
+  shootOccasion: string;
+  shootLocation: string;
   id1Type: string;
   id1File: string | null;
   id1Name: string;
@@ -418,6 +420,8 @@ export default function App() {
       deliveryAddress: '',
       socialHandle: '',
       shootType: '',
+      shootOccasion: '',
+      shootLocation: '',
       id1Type: '',
       id1File: hasMockFiles ? 'data:image/png;base64,mock_id1' : null,
       id1Name: hasMockFiles ? 'mock_passport.jpg' : '',
@@ -1053,8 +1057,9 @@ export default function App() {
         'fullName',
         'mobileNumber',
         'email',
-        'shootType',
         'socialHandle',
+        'shootOccasion',
+        'shootLocation',
         'emergencyContact1Name',
         'emergencyContact1Phone',
         'emergencyContact1Rel',
@@ -1160,8 +1165,11 @@ export default function App() {
       if (!booking.email || !emailPattern.test(booking.email.trim())) {
         errors.email = 'Please provide a valid email address.';
       }
-      if (!booking.shootType || !booking.shootType.trim()) {
-        errors.shootType = 'Please select your shoot or event purpose.';
+      if (!booking.shootOccasion || !booking.shootOccasion.trim()) {
+        errors.shootOccasion = 'Please state your occasion or shoot purpose (e.g. Concert, Vacation, Birthday).';
+      }
+      if (!booking.shootLocation || !booking.shootLocation.trim()) {
+        errors.shootLocation = 'Please specify where you will be shooting (e.g. MOA Arena, Boracay, BGC Studio).';
       }
       if (!booking.socialHandle || booking.socialHandle.trim().length < 2) {
         errors.socialHandle = 'Please provide your main personal active Facebook or Instagram account.';
@@ -1503,7 +1511,7 @@ export default function App() {
       rentalDays: modalQuote.days,
       handoverMethod: booking.handoverMode === 'meetup' ? `Meetup (${booking.meetupLocation} - ₱200 Fee)` : 'Grab Express Delivery (PackAndFilm books rider • Renter shoulders courier fee)',
       address: booking.handoverMode === 'meetup' ? booking.meetupLocation : (booking.deliveryAddress || 'Metro Manila'),
-      shootType: booking.shootType || 'Travel / Vacation Vlogging',
+      shootType: [booking.shootOccasion, booking.shootLocation].filter(Boolean).join(' • ') || booking.shootType || 'Personal Use',
       rentalTotal: modalQuote.rentalTotal,
       securityDeposit: modalQuote.deposit,
       meetupHandlingFee: modalQuote.meetupFee,
@@ -4165,54 +4173,93 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Shoot Purpose & Social Media Handle */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div data-field-key="shootType">
-                      <CustomSelect
-                        label="Shoot / Event Purpose"
-                        isRequired={true}
-                        placeholder="Select Shoot / Event Purpose"
-                        value={booking.shootType}
-                        options={[
-                          { value: 'Travel / Vacation Vlogging', label: 'Travel / Vacation Vlogging' },
-                          { value: 'Concert / Music Festival', label: 'Concert / Music Festival' },
-                          { value: 'Content Creation / TikTok / IG', label: 'Content Creation / TikTok / IG' },
-                          { value: 'Birthday / Event / Party', label: 'Birthday / Event / Party' },
-                          { value: 'Commercial / Brand Shoot', label: 'Commercial / Brand Shoot' },
-                          { value: 'Personal / Casual Use', label: 'Personal / Casual Use' },
-                        ]}
-                        onChange={(val) => {
-                          setBooking(b => ({ ...b, shootType: val }));
-                          clearFieldError('shootType');
-                        }}
-                        hasError={!!validationErrors.shootType}
-                        errorMessage={validationErrors.shootType}
-                      />
-                    </div>
+                  {/* Active Personal Social Media Account */}
+                  <div data-field-key="socialHandle">
+                    <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5">
+                      Active Personal Instagram or Facebook Account <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="@your_personal_handle or FB/IG profile link"
+                      value={booking.socialHandle}
+                      onChange={(e) => {
+                        setBooking(b => ({ ...b, socialHandle: e.target.value }));
+                        clearFieldError('socialHandle');
+                      }}
+                      className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${validationErrors.socialHandle
+                        ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                        : 'bg-white border-[#E8E4F0] focus:border-[#1A1A2E]'
+                        }`}
+                    />
+                    <p className="mt-1 text-[11px] text-[#6B6B8A]">
+                      Must be your main personal account. Locked/dummy/business-only accounts are not accepted.
+                    </p>
+                    {validationErrors.socialHandle && (
+                      <p className="mt-1 text-xs text-red-600 font-bold flex items-center gap-1">
+                        <span>⚠️</span> {validationErrors.socialHandle}
+                      </p>
+                    )}
+                  </div>
 
-                    <div data-field-key="socialHandle">
+                  {/* Shoot Purpose & Location (Unified Where & Why) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div data-field-key="shootOccasion">
                       <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5">
-                        Active Personal Instagram or Facebook Account <span className="text-red-500 font-bold">*</span>
+                        Occasion &amp; Shoot Purpose <span className="text-red-500 font-bold">*</span>
                       </label>
                       <input
                         type="text"
-                        placeholder="@your_personal_handle or FB/IG profile link"
-                        value={booking.socialHandle}
+                        placeholder="e.g. Concert, Vacation, Birthday, Brand Shoot"
+                        value={booking.shootOccasion || ''}
                         onChange={(e) => {
-                          setBooking(b => ({ ...b, socialHandle: e.target.value }));
-                          clearFieldError('socialHandle');
+                          const val = e.target.value;
+                          setBooking(b => ({
+                            ...b,
+                            shootOccasion: val,
+                            shootType: b.shootLocation ? `${val} • ${b.shootLocation}` : val
+                          }));
+                          clearFieldError('shootOccasion');
                         }}
-                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${validationErrors.socialHandle
+                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${validationErrors.shootOccasion
+                          ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
+                          : 'bg-white border-[#E8E4F0] focus:border-[#1A1A2E]'
+                          }`}
+                      />
+                      {validationErrors.shootOccasion && (
+                        <p className="mt-1 text-xs text-red-600 font-bold flex items-center gap-1">
+                          <span>⚠️</span> {validationErrors.shootOccasion}
+                        </p>
+                      )}
+                    </div>
+
+                    <div data-field-key="shootLocation">
+                      <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5">
+                        Shoot Location / Venue &amp; Destination <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Philippine Arena, Boracay, BGC Studio"
+                        value={booking.shootLocation || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setBooking(b => ({
+                            ...b,
+                            shootLocation: val,
+                            shootType: b.shootOccasion ? `${b.shootOccasion} • ${val}` : val
+                          }));
+                          clearFieldError('shootLocation');
+                        }}
+                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${validationErrors.shootLocation
                           ? 'border-red-400 bg-[#FFF5F5] ring-2 ring-red-200'
                           : 'bg-white border-[#E8E4F0] focus:border-[#1A1A2E]'
                           }`}
                       />
                       <p className="mt-1 text-[11px] text-[#6B6B8A]">
-                        Must be your main personal account. Locked/dummy/business-only accounts are not accepted.
+                        Catching a flight or leaving town? Include your flight departure schedule here for priority dispatch.
                       </p>
-                      {validationErrors.socialHandle && (
+                      {validationErrors.shootLocation && (
                         <p className="mt-1 text-xs text-red-600 font-bold flex items-center gap-1">
-                          <span>⚠️</span> {validationErrors.socialHandle}
+                          <span>⚠️</span> {validationErrors.shootLocation}
                         </p>
                       )}
                     </div>
@@ -4379,45 +4426,6 @@ export default function App() {
                         </div>
                       )}
                     </div>
-                  </div>
-
-                  {/* Flight & Out-of-Town Trip Departure Priority */}
-                  <div className="p-4 rounded-2xl bg-white border border-[#E8E4F0] space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Plane className="w-4 h-4 text-[#553C9A]" />
-                        <span className="text-xs font-bold text-[#1A1A2E]">
-                          Are you catching a flight or traveling out of town?
-                        </span>
-                      </div>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={booking.isFlightOrTrip}
-                          onChange={(e) => setBooking(b => ({ ...b, isFlightOrTrip: e.target.checked }))}
-                          className="w-4 h-4 text-[#553C9A] rounded border-[#C9B8F0] focus:ring-[#553C9A]"
-                        />
-                        <span className="text-xs font-bold text-[#553C9A]">Yes</span>
-                      </label>
-                    </div>
-
-                    {booking.isFlightOrTrip && (
-                      <div className="space-y-1.5 pt-2 border-t border-[#E8E4F0] animate-fadeIn">
-                        <label className="block text-[11px] font-semibold text-[#1A1A2E]">
-                          Flight / Travel Departure Time & Destination (Optional but Recommended)
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. NAIA Terminal 3 flight at 1:00 PM to Vietnam / Leaving Manila at 6:00 AM"
-                          value={booking.flightOrTripDetails}
-                          onChange={(e) => setBooking(b => ({ ...b, flightOrTripDetails: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-xs font-semibold focus:border-[#1A1A2E]"
-                        />
-                        <p className="text-[10px] text-[#6B6B8A] leading-snug">
-                          Sharing this allows our team to pre-pack, 100% fast-charge, and prioritize dispatching your gear well before you head to the airport.
-                        </p>
-                      </div>
-                    )}
                   </div>
 
                   {/* GCash details for security deposit return */}
