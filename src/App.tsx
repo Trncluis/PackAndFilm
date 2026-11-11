@@ -1546,6 +1546,8 @@ export default function App() {
       startDate: booking.startDate,
       endDate: booking.endDate,
       rentalDays: modalQuote.days,
+      pickupTimeSlot: booking.pickupTimeSlot,
+      returnTimeSlot: booking.returnTimeSlot,
       handoverMethod: booking.handoverMode === 'meetup' ? `Meetup (${booking.meetupLocation} - ₱200 Fee)` : 'Grab Express Delivery (PackAndFilm books rider • Renter shoulders courier fee)',
       address: booking.handoverMode === 'meetup' ? booking.meetupLocation : (booking.deliveryAddress || 'Metro Manila'),
       shootType: [booking.shootOccasion, booking.shootLocation].filter(Boolean).join(' • ') || booking.shootType || 'Personal Use',

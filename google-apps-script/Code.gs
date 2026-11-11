@@ -1583,8 +1583,35 @@ function doPost(e) {
         const requestedCamCapacity = (reqCamId.includes("g7x") || reqCamId.includes("canon")) ? 2 : 1;
         const TURNOVER_BUFFER = 2; // 2-hour buffer for SD wipe, lens cleaning & charging
 
-        const reqPickupH = parseHourFromTimeStr(body.pickupTimeSlot) !== null ? parseHourFromTimeStr(body.pickupTimeSlot) : 8;
-        const reqReturnH = parseHourFromTimeStr(body.returnTimeSlot) !== null ? parseHourFromTimeStr(body.returnTimeSlot) : 20;
+        // Extract requested pickup and return hours (check body properties and body.notes)
+        let reqPickupStr = body.pickupTimeSlot;
+        let reqReturnStr = body.returnTimeSlot;
+        if (!reqPickupStr && body.notes) {
+          const pMatch = String(body.notes).match(/Pickup:\s*([^•\n;]+)/i);
+          if (pMatch) reqPickupStr = pMatch[1].trim();
+        }
+        if (!reqReturnStr && body.notes) {
+          const rMatch = String(body.notes).match(/Return:\s*([^•\n;]+)/i);
+          if (rMatch) reqReturnStr = rMatch[1].trim();
+        }
+        const reqPickupH = parseHourFromTimeStr(reqPickupStr) !== null ? parseHourFromTimeStr(reqPickupStr) : 8;
+        const reqReturnH = parseHourFromTimeStr(reqReturnStr) !== null ? parseHourFromTimeStr(reqReturnStr) : 20;
+
+        // Build Calendar Sync lookup map to guarantee exact handover hours are known for existing bookings
+        const calTimeMap = {};
+        const cSheetCheck = ss.getSheetByName("Calendar Sync");
+        if (cSheetCheck && cSheetCheck.getLastRow() > 1) {
+          const cDataCheck = cSheetCheck.getDataRange().getValues().slice(1);
+          cDataCheck.forEach(crow => {
+            const cRef = String(crow[4] || "").trim();
+            if (cRef) {
+              calTimeMap[cRef] = {
+                pickup: String(crow[6] || "").trim(),
+                returnTime: String(crow[7] || "").trim()
+              };
+            }
+          });
+        }
 
         const overlappingBookings = [];
 
@@ -1624,8 +1651,14 @@ function doPost(e) {
                 const rowNotes = String(bRows[i][checkColMap.notes] || "");
                 const bPickupMatch = rowNotes.match(/Pickup:\s*([^•\n;]+)/i);
                 const bReturnMatch = rowNotes.match(/Return:\s*([^•\n;]+)/i);
-                const bPickupH = parseHourFromTimeStr(bPickupMatch ? bPickupMatch[1] : null) !== null ? parseHourFromTimeStr(bPickupMatch[1]) : 8;
-                const bReturnH = parseHourFromTimeStr(bReturnMatch ? bReturnMatch[1] : null) !== null ? parseHourFromTimeStr(bReturnMatch[1]) : 20;
+                const calEntry = calTimeMap[rowRef] || {};
+
+                // Use regex from notes, fallback to Calendar Sync column 7/8
+                const rawPickupStr = (bPickupMatch ? bPickupMatch[1] : null) || (calEntry.pickup && !calEntry.pickup.includes("@") ? calEntry.pickup : null);
+                const rawReturnStr = (bReturnMatch ? bReturnMatch[1] : null) || (calEntry.returnTime && !calEntry.returnTime.includes("@") ? calEntry.returnTime : null);
+
+                const bPickupH = parseHourFromTimeStr(rawPickupStr) !== null ? parseHourFromTimeStr(rawPickupStr) : 8;
+                const bReturnH = parseHourFromTimeStr(rawReturnStr) !== null ? parseHourFromTimeStr(rawReturnStr) : 20;
 
                 overlappingBookings.push({
                   bookingRef: rowRef,
