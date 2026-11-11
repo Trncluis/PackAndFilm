@@ -157,8 +157,9 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
       <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {days.map((day) => {
           const isToday = day.dateStr === todayStr;
-          const isAvailable = day.status === 'available';
           const isBooked = day.status === 'booked';
+          const isTurnover = Boolean(day.isTurnover);
+          const isAvailable = day.status === 'available' && !isTurnover;
           const dayCode = TWO_LETTER_DAYS[day.dayName] || day.dayName.slice(0, 2).toUpperCase();
 
           return (
@@ -166,7 +167,7 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
               key={day.dateStr}
               type="button"
               disabled={isBooked}
-              aria-label={isToday ? `Today, ${day.dayName} ${day.dayNum}` : `${day.dayName} ${day.dayNum}, ${day.status}`}
+              aria-label={isToday ? `Today (${day.dayName} ${day.dayNum}), ${day.status}` : `${day.dayName} ${day.dayNum}, ${day.status}`}
               onMouseEnter={() => setHoveredDay(day)}
               onMouseLeave={() => setHoveredDay(null)}
               onClick={(e) => {
@@ -176,25 +177,25 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
                 }
               }}
               className={`w-full min-w-0 aspect-[4/5] py-1.5 sm:py-2 px-0.5 rounded-xl sm:rounded-2xl flex flex-col items-center justify-between transition-all select-none ${
-                isToday
-                  ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 cursor-pointer font-black'
-                  : isBooked
-                  ? 'bg-[#FFF5F5] text-[#C53030]/80 border border-[#FEB2B2]/70 font-bold opacity-75 cursor-not-allowed'
-                  : 'bg-[#FAFAF7] text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer font-extrabold'
+                isBooked
+                  ? `bg-[#FFF5F5] text-[#C53030]/80 border border-[#FEB2B2]/70 font-bold opacity-75 cursor-not-allowed ${isToday ? 'ring-2 ring-[#E53E3E] ring-offset-1' : ''}`
+                  : isTurnover
+                  ? `bg-[#FFFBEB] text-[#92400E] border-2 border-[#FDE68A] hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 cursor-pointer font-black ${isToday ? 'ring-2 ring-[#B45309] ring-offset-1' : ''}`
+                  : `bg-[#FAFAF7] text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer font-extrabold ${isToday ? 'ring-2 ring-[#1A1A2E] ring-offset-1' : ''}`
               }`}
               title={isToday ? `Today (${day.dayName} ${day.dayNum}) • ${day.tooltip}` : day.tooltip}
             >
               <span className="text-[10px] sm:text-[11px] font-black uppercase leading-none tracking-tight">
-                {isToday ? 'TD' : dayCode}
+                {dayCode}
               </span>
               <span className={`text-xs sm:text-sm font-black leading-none ${isBooked ? 'line-through opacity-70' : ''}`}>
                 {day.dayNum}
               </span>
               <div className="h-1.5 flex items-center justify-center">
-                {isToday ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#DD6B20]" />
-                ) : isBooked ? (
+                {isBooked ? (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#E53E3E]" />
+                ) : isTurnover ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#D97706] ring-1 ring-[#B45309]" />
                 ) : (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#38A169]" />
                 )}
@@ -208,10 +209,17 @@ export const CameraWeekAvailabilityStrip: React.FC<CameraWeekAvailabilityStripPr
       <div className="pt-2 border-t-2 border-[#E8E4F0] flex items-center justify-between text-[10px] min-h-[26px]">
         {hoveredDay ? (
           <div className="flex items-center gap-1.5 font-black text-[#1A1A2E] truncate animate-fadeIn">
-            {hoveredDay.status === 'available' && (
+            {hoveredDay.status === 'available' && !hoveredDay.isTurnover && (
               <span className="text-[#2F855A] flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-[#38A169]" />
                 <span>{hoveredDay.dateStr}: 100% Free • Click to Book</span>
+              </span>
+            )}
+
+            {hoveredDay.isTurnover && (
+              <span className="text-[#92400E] flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-[#D97706]" />
+                <span>{hoveredDay.dateStr}: ⚡ Same-Day Turnaround ({hoveredDay.label}) • Click to Book</span>
               </span>
             )}
 
@@ -458,7 +466,8 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
                 const dayInfo = item.dayInfo;
                 const isPast = dayInfo.status === 'past';
                 const isBooked = dayInfo.status === 'booked';
-                const isAvailable = dayInfo.status === 'available';
+                const isTurnover = Boolean(dayInfo.isTurnover);
+                const isAvailable = dayInfo.status === 'available' && !isTurnover;
                 const isToday = item.dateStr === todayStr;
                 const isSelected = item.dateStr === selectedDate;
                 const isDisabled = !item.isCurrentMonth || isPast || isBooked;
@@ -474,35 +483,35 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
                         setSelectedDate(prev => prev === item.dateStr ? null : item.dateStr);
                       }
                     }}
-                    title={dayInfo.tooltip}
+                    title={isToday ? `Today (${dayInfo.label}) • ${dayInfo.tooltip}` : dayInfo.tooltip}
                     className={`relative w-full aspect-square rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-0.5 sm:p-1 transition-all select-none ${
                       !item.isCurrentMonth
                         ? 'text-[#CBD5E0] cursor-not-allowed opacity-40 font-medium'
                         : isSelected
                         ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] font-black scale-105 z-10'
-                        : isToday
-                        ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[2px_2px_0px_#1A1A2E] font-black hover:-translate-y-0.5 cursor-pointer'
                         : isBooked
-                        ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 font-bold cursor-not-allowed opacity-75'
+                        ? `bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 font-bold cursor-not-allowed opacity-75 ${isToday ? 'ring-2 ring-[#E53E3E] ring-offset-1' : ''}`
+                        : isTurnover
+                        ? `bg-[#FFFBEB] text-[#92400E] border-2 border-[#FDE68A] hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E] font-black hover:-translate-y-0.5 cursor-pointer ${isToday ? 'ring-2 ring-[#B45309] ring-offset-1' : ''}`
                         : isPast
                         ? 'text-[#CBD5E0] bg-gray-50/50 cursor-not-allowed font-medium'
-                        : 'text-[#1A1A2E] font-extrabold text-xs sm:text-sm border border-transparent hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                        : `text-[#1A1A2E] font-extrabold text-xs sm:text-sm border border-transparent hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer ${isToday ? 'ring-2 ring-[#1A1A2E] ring-offset-1 font-black' : ''}`
                     }`}
                   >
                     <span className="leading-none text-xs sm:text-sm font-black">{item.day}</span>
 
-                    {/* Status Indicator Dots */}
+                    {/* Status Indicator Dots: True Availability Determines Dot */}
                     {item.isCurrentMonth && !isPast && (
                       <div className="h-1.5 flex items-center justify-center mt-0.5 sm:mt-1">
                         {isSelected ? (
                           <span className="w-1.5 h-1.5 rounded-full bg-[#553C9A]" />
-                        ) : isToday ? (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#DD6B20]" />
                         ) : isBooked ? (
                           <span className="w-1.5 h-1.5 rounded-full bg-[#E53E3E]" />
-                        ) : isAvailable ? (
-                          <span className="w-1 h-1 rounded-full bg-[#38A169]/50" />
-                        ) : null}
+                        ) : isTurnover ? (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#D97706] ring-1 ring-[#B45309]" />
+                        ) : (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#38A169]" />
+                        )}
                       </div>
                     )}
                   </button>
@@ -519,16 +528,15 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
                 </span>
                 <span className="flex items-center gap-1.5 font-bold text-[#2F855A]">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#38A169]" />
-                  <span>Available</span>
+                  <span>Available (Full Day)</span>
                 </span>
-
+                <span className="flex items-center gap-1.5 font-bold text-[#92400E]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#D97706] border border-[#B45309]" />
+                  <span>Turnover (Late Pickup)</span>
+                </span>
                 <span className="flex items-center gap-1.5 font-bold text-[#C53030]">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#E53E3E]" />
                   <span>Reserved</span>
-                </span>
-                <span className="flex items-center gap-1.5 font-bold text-[#C05621]">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#DD6B20]" />
-                  <span>Today</span>
                 </span>
               </div>
 

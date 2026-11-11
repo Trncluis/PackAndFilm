@@ -256,7 +256,8 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
 
           const isPast = dayInfo.status === 'past';
           const isBooked = dayInfo.status === 'booked';
-          const isAvailable = dayInfo.status === 'available';
+          const isTurnover = Boolean(dayInfo.isTurnover);
+          const isAvailable = dayInfo.status === 'available' && !isTurnover;
           const isToday = item.dateStr === todayStr;
 
           const isRangeActive = Boolean(startDate && endDate && startDate !== endDate);
@@ -273,7 +274,7 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
               type="button"
               disabled={isDisabled}
               onClick={() => handleDateClick(item.dateStr, dayInfo)}
-              title={dayInfo.tooltip}
+              title={isToday ? `Today (${dayInfo.label}) • ${dayInfo.tooltip}` : dayInfo.tooltip}
               className={`relative w-full aspect-square rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-0.5 sm:p-1 transition-all select-none ${
                 !item.isCurrentMonth
                   ? 'text-[#CBD5E0] cursor-not-allowed opacity-40 font-medium'
@@ -285,29 +286,29 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
                   ? 'bg-[#EDE8FC] text-[#553C9A] border-y-2 border-[#1A1A2E] rounded-none font-black'
                   : isSingleSelected
                   ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rounded-xl sm:rounded-2xl font-black scale-105 z-10'
-                  : isToday
-                  ? 'bg-[#FEF0E7] text-[#C05621] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#F5C6A8] hover:shadow-[3px_3px_0px_#1A1A2E] rounded-xl sm:rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer'
                   : isBooked
-                  ? 'bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-xl sm:rounded-2xl font-bold cursor-not-allowed opacity-75'
+                  ? `bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-xl sm:rounded-2xl font-bold cursor-not-allowed opacity-75 ${isToday ? 'ring-2 ring-[#E53E3E] ring-offset-1' : ''}`
+                  : isTurnover
+                  ? `bg-[#FFFBEB] text-[#92400E] border-2 border-[#FDE68A] hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E] rounded-xl sm:rounded-2xl font-black hover:-translate-y-0.5 cursor-pointer ${isToday ? 'ring-2 ring-[#B45309] ring-offset-1' : ''}`
                   : isPast
                   ? 'text-[#CBD5E0] bg-gray-50/50 cursor-not-allowed font-medium'
-                  : 'text-[#1A1A2E] font-extrabold text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-transparent hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+                  : `bg-white text-[#1A1A2E] font-extrabold text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-transparent hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer ${isToday ? 'ring-2 ring-[#1A1A2E] ring-offset-1 font-black' : ''}`
               }`}
             >
               <span className="leading-none text-xs sm:text-sm font-black">{item.day}</span>
 
-              {/* Status Indicator Dots */}
+              {/* Status Indicator Dots: True Availability Determines Dot */}
               {item.isCurrentMonth && !isPast && (
                 <div className="h-1.5 flex items-center justify-center mt-0.5 sm:mt-1">
                   {isSingleSelected || isRangeStart || isRangeEnd ? (
                     <span className="w-1.5 h-1.5 rounded-full bg-[#553C9A]" />
-                  ) : isToday ? (
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#DD6B20]" />
                   ) : isBooked ? (
                     <span className="w-1.5 h-1.5 rounded-full bg-[#E53E3E]" />
-                  ) : isAvailable ? (
-                    <span className="w-1 h-1 rounded-full bg-[#38A169]/50" />
-                  ) : null}
+                  ) : isTurnover ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#D97706] ring-1 ring-[#B45309]" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#38A169]" />
+                  )}
                 </div>
               )}
             </button>
@@ -330,15 +331,15 @@ export const UnifiedRentalCalendar: React.FC<UnifiedRentalCalendarProps> = ({
           )}
           <span className="flex items-center gap-1.5 font-bold text-[#2F855A]">
             <span className="w-2.5 h-2.5 rounded-full bg-[#38A169]" />
-            <span>Available</span>
+            <span>Available (Full Day)</span>
+          </span>
+          <span className="flex items-center gap-1.5 font-bold text-[#92400E]">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#D97706] border border-[#B45309]" />
+            <span>Turnover (Late Pickup)</span>
           </span>
           <span className="flex items-center gap-1.5 font-bold text-[#C53030]">
             <span className="w-2.5 h-2.5 rounded-full bg-[#E53E3E]" />
             <span>Reserved</span>
-          </span>
-          <span className="flex items-center gap-1.5 font-bold text-[#C05621]">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#DD6B20]" />
-            <span>Today</span>
           </span>
         </div>
 

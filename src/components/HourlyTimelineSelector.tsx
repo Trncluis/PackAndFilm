@@ -6,6 +6,8 @@ export interface HourlySlotItem {
   label: string;
   shortLabel: string;
   h: number;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 interface HourlyTimelineSelectorProps {
@@ -132,16 +134,23 @@ export const HourlyTimelineSelector: React.FC<HourlyTimelineSelectorProps> = Rea
         >
           {hours.map((hour) => {
             const isSelected = value === hour.value;
+            const isDisabled = !!hour.disabled;
             return (
               <button
                 key={hour.value}
                 type="button"
                 data-value={hour.value}
-                onClick={() => onChange(hour.value)}
-                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer select-none ${
-                  isSelected
-                    ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] -translate-y-0.5 z-10'
-                    : 'bg-[#FAFAF7] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] text-[#1A1A2E] shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0'
+                disabled={isDisabled}
+                title={hour.disabledReason || hour.label}
+                onClick={() => {
+                  if (!isDisabled) onChange(hour.value);
+                }}
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all select-none ${
+                  isDisabled
+                    ? 'bg-gray-100 border-2 border-dashed border-gray-300 text-gray-400 line-through opacity-60 cursor-not-allowed'
+                    : isSelected
+                    ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] -translate-y-0.5 z-10 cursor-pointer'
+                    : 'bg-[#FAFAF7] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#EDE8FC] text-[#1A1A2E] shadow-2xs hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
                 }`}
               >
                 {hour.shortLabel}

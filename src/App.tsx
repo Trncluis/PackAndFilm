@@ -54,7 +54,11 @@ import {
   BookingRecord,
   checkCameraDateConflict,
   findNextFreeWindowForCamera,
-  getCameraDayAvailability
+  getCameraDayAvailability,
+  getCameraHourAvailabilityOnDate,
+  extractBookingTimes,
+  parseHourFromTimeStr,
+  TURNOVER_BUFFER_HOURS
 } from './data/bookings';
 import {
   PASIG_MEETUP_HUBS,
@@ -70,7 +74,6 @@ import {
 
 import { UnifiedRentalCalendar } from './components/UnifiedRentalCalendar';
 import { CustomSelect, SelectOption } from './components/CustomSelect';
-import { HourlyTimelineSelector } from './components/HourlyTimelineSelector';
 import { AdminDashboard } from './components/AdminDashboard';
 import { LiveCameraSnapshotModal } from './components/LiveCameraSnapshotModal';
 import {
@@ -642,6 +645,8 @@ export default function App() {
     const hub = String(row.handoverMethod || row['Handover Method'] || row.address || row.hub || 'Metro Manila');
     const status = (String(row.status || '').toLowerCase().includes('deposit') ? 'Deposit Paid' : 'Confirmed') as 'Confirmed' | 'Deposit Paid';
 
+    const times = extractBookingTimes(row);
+
     return {
       id,
       cameraId: matchedCameraId,
@@ -650,7 +655,12 @@ export default function App() {
       startDate,
       endDate,
       hub,
-      status
+      status,
+      pickupTimeSlot: times.pickupTime || undefined,
+      returnTimeSlot: times.returnTime || undefined,
+      pickupHour: times.pickupHour !== null ? times.pickupHour : undefined,
+      returnHour: times.returnHour !== null ? times.returnHour : undefined,
+      notes: row.notes || row['Notes'] || undefined,
     };
   };
 
@@ -855,8 +865,21 @@ export default function App() {
     [selectedCameraId, calcStartDate, calcEndDate, bookings]
   );
   const modalConflict = useMemo(
-    () => checkCameraDateConflict(booking.cameraId, booking.startDate, booking.endDate, bookings),
-    [booking.cameraId, booking.startDate, booking.endDate, bookings]
+    () => checkCameraDateConflict(
+      booking.cameraId,
+      booking.startDate,
+      booking.endDate,
+      bookings,
+      booking.pickupTimeSlot,
+      booking.returnTimeSlot
+    ),
+    [booking.cameraId, booking.startDate, booking.endDate, bookings, booking.pickupTimeSlot, booking.returnTimeSlot]
+  );
+
+  // Hourly availability on booking start date (evaluates 2-hour turnover buffer)
+  const startDayAvailability = useMemo(
+    () => getCameraHourAvailabilityOnDate(booking.cameraId, booking.startDate, bookings),
+    [booking.cameraId, booking.startDate, bookings]
   );
 
     // 16 Hourly Time Slots (8:00 AM to 11:00 PM)
@@ -879,21 +902,28 @@ export default function App() {
     { value: '11:00 PM', label: '11:00 PM', shortLabel: '11 PM', h: 23 },
   ], []);
 
-  // Dynamic Hourly Dropdown Options
+  // Dynamic Hourly Dropdown Options for Pickup
   const pickupTimeOptions = useMemo<SelectOption[]>(() => {
-    return ALL_HOURS.map((item) => ({
-      value: item.value,
-      label: item.label,
-      badge:
-        item.h === 8
+    return ALL_HOURS.map((item) => {
+      const isBlocked = booking.startDate ? !startDayAvailability.availableHours.includes(item.h) : false;
+      return {
+        value: item.value,
+        label: item.label,
+        disabled: isBlocked,
+        badge: isBlocked
+          ? 'Turnover Buffer'
+          : item.h === startDayAvailability.earliestPickupHour && startDayAvailability.isTurnoverDay
+          ? 'Earliest Available'
+          : item.h === 8
           ? 'Opening'
           : item.h === 10
           ? 'Popular'
           : item.h === 23
           ? 'Closing Cutoff (11 PM)'
           : undefined,
-    }));
-  }, [ALL_HOURS]);
+      };
+    });
+  }, [ALL_HOURS, booking.startDate, startDayAvailability]);
 
   const returnTimeOptions = useMemo<SelectOption[]>(() => {
     const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
@@ -917,18 +947,20 @@ export default function App() {
     }));
   }, [ALL_HOURS, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
 
-  // Visual timeline selector options
-  const pickupQuickHours = ALL_HOURS;
-
-  const returnQuickHours = useMemo(() => {
-    const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
-    const selectedPickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
-
-    if (isSameDay) {
-      return ALL_HOURS.filter(item => item.h > selectedPickupH);
+  // Auto-synchronize pickup time if current selection is blocked by a turnover buffer
+  useEffect(() => {
+    if (!booking.startDate || !booking.cameraId) return;
+    if (startDayAvailability.availableHours.length > 0) {
+      const currentH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h;
+      if (currentH === undefined || !startDayAvailability.availableHours.includes(currentH)) {
+        const earliestH = startDayAvailability.earliestPickupHour || startDayAvailability.availableHours[0];
+        const matchingHour = ALL_HOURS.find(x => x.h === earliestH);
+        if (matchingHour) {
+          setBooking(b => ({ ...b, pickupTimeSlot: matchingHour.value }));
+        }
+      }
     }
-    return ALL_HOURS;
-  }, [ALL_HOURS, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
+  }, [booking.startDate, booking.cameraId, startDayAvailability, ALL_HOURS]);
 
   // Synchronize return time on same-day rentals so return > pickup
   useEffect(() => {
@@ -1494,7 +1526,12 @@ export default function App() {
       startDate: booking.startDate,
       endDate: booking.endDate,
       hub: booking.handoverMode === 'meetup' ? `Meetup: ${booking.meetupLocation}` : 'Grab Express Delivery (PackAndFilm books rider)',
-      status: 'Deposit Paid'
+      status: 'Deposit Paid',
+      pickupTimeSlot: booking.pickupTimeSlot,
+      returnTimeSlot: booking.returnTimeSlot,
+      pickupHour: parseHourFromTimeStr(booking.pickupTimeSlot) ?? undefined,
+      returnHour: parseHourFromTimeStr(booking.returnTimeSlot) ?? undefined,
+      notes: `Rental Type: ${booking.rentalType || (booking.startDate === booking.endDate ? 'same-day' : 'multi-day')} • Pickup: ${booking.pickupTimeSlot} • Return: ${booking.returnTimeSlot}`
     };
 
     // Payload structure for Google Sheets & Google Drive
@@ -3247,6 +3284,16 @@ export default function App() {
                         isEndTurnover={modalConflict.isEndTurnover}
                       />
 
+                      {/* Same-Day Turnaround 2-Hour Buffer Alert Banner */}
+                      {startDayAvailability.isTurnoverDay && (
+                        <div className="p-3.5 rounded-2xl bg-[#EDE8FC] border-2 border-[#C9B8F0] shadow-2xs flex items-center gap-2.5 text-xs text-[#553C9A] font-bold animate-fadeIn">
+                          <Clock className="w-4 h-4 shrink-0 text-[#6B46C1]" />
+                          <span>
+                            ⚡ <strong>Same-Day Turnaround Available:</strong> A prior booking returns this unit at {startDayAvailability.turnoverReturnTime}. Our mandatory 2-hour buffer (inspection &amp; full battery recharge) is applied. This camera is ready for your pickup starting at <strong>{startDayAvailability.earliestPickupTime}</strong>!
+                          </span>
+                        </div>
+                      )}
+
                       {/* 2-Column Side-by-Side Handover Time Slots */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         {/* Pickup Time */}
@@ -3256,7 +3303,9 @@ export default function App() {
                               1. Preferred Pickup Time
                             </span>
                             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#E8F7F1] text-[#2F855A] border border-[#A8DBC8]">
-                              Ready from 8:00 AM
+                              {startDayAvailability.isTurnoverDay && startDayAvailability.earliestPickupTime
+                                ? `Turnover: Ready ${startDayAvailability.earliestPickupTime}`
+                                : 'Ready from 8:00 AM'}
                             </span>
                           </div>
 
@@ -3270,17 +3319,6 @@ export default function App() {
                               options={pickupTimeOptions}
                               hasError={!!validationErrors.pickupTimeSlot}
                               errorMessage={validationErrors.pickupTimeSlot}
-
-                              onChange={(val) => {
-                                setBooking(b => ({ ...b, pickupTimeSlot: val }));
-                                clearFieldError('pickupTimeSlot');
-                              }}
-                            />
-
-                            <HourlyTimelineSelector
-                              label="Quick Select Hour"
-                              value={booking.pickupTimeSlot}
-                              hours={pickupQuickHours}
 
                               onChange={(val) => {
                                 setBooking(b => ({ ...b, pickupTimeSlot: val }));
@@ -3312,17 +3350,6 @@ export default function App() {
                               hasError={!!validationErrors.returnTimeSlot}
                               errorMessage={validationErrors.returnTimeSlot}
                               headerNotice="Return to meetup hub or dispatch courier before 11:00 PM."
-                              onChange={(val) => {
-                                setBooking(b => ({ ...b, returnTimeSlot: val }));
-                                clearFieldError('returnTimeSlot');
-                              }}
-                            />
-
-                            <HourlyTimelineSelector
-                              label="Quick Select Hour"
-                              value={booking.returnTimeSlot}
-                              hours={returnQuickHours}
-
                               onChange={(val) => {
                                 setBooking(b => ({ ...b, returnTimeSlot: val }));
                                 clearFieldError('returnTimeSlot');

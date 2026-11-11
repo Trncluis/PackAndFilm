@@ -832,6 +832,27 @@ function mapBookingRecord(r, i, colMap, formulas, bookingsSheet) {
 }
 
 /**
+ * Helper to parse 12-hour or 24-hour time strings into numeric hour 0-23
+ */
+function parseHourFromTimeStr(timeStr) {
+  if (!timeStr) return null;
+  const s = String(timeStr).trim().toUpperCase();
+  const match12 = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+  if (match12) {
+    let hour = parseInt(match12[1], 10);
+    const isPM = match12[3] === 'PM';
+    if (isPM && hour < 12) hour += 12;
+    if (!isPM && hour === 12) hour = 0;
+    return hour;
+  }
+  const match24 = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (match24) {
+    return parseInt(match24[1], 10);
+  }
+  return null;
+}
+
+/**
  * 1. GET Request:
  * - Public: Fetches calendar bookings for conflict checking (no private customer details)
  * - Protected: Rejects unauthorized requests for admin booking records
@@ -889,7 +910,9 @@ function doGet(e) {
       cameraId: r[0],
       startDate: r[1] ? Utilities.formatDate(new Date(r[1]), "GMT+8", "yyyy-MM-dd") : "",
       endDate: r[2] ? Utilities.formatDate(new Date(r[2]), "GMT+8", "yyyy-MM-dd") : "",
-      status: r[5] || "Confirmed"
+      status: r[5] || "Confirmed",
+      pickupTimeSlot: r[6] || "",
+      returnTimeSlot: r[7] || ""
     })).filter(b => b.status === "Confirmed" || b.status === "Active Rental" || b.status === "Deposit Paid");
 
     return ContentService.createTextOutput(JSON.stringify({ status: "success", data: activeBookings }))
@@ -1517,12 +1540,17 @@ function doPost(e) {
         })).setMimeType(ContentService.MimeType.JSON);
       }
 
-      // Check against active bookings in Bookings sheet (Multi-Unit Capacity Aware)
+      // Check against active bookings in Bookings sheet (Multi-Unit Capacity & 2-Hour Turnover Buffer Aware)
       const bSheetCheck = ss.getSheetByName("Bookings");
       if (bSheetCheck && bSheetCheck.getLastRow() > 1) {
         const checkColMap = getHeaderIndexMap(bSheetCheck);
         const bRows = bSheetCheck.getDataRange().getValues().slice(1);
         const requestedCamCapacity = (reqCamId.includes("g7x") || reqCamId.includes("canon")) ? 2 : 1;
+        const TURNOVER_BUFFER = 2; // 2-hour buffer for SD wipe, lens cleaning & charging
+
+        const reqPickupH = parseHourFromTimeStr(body.pickupTimeSlot) !== null ? parseHourFromTimeStr(body.pickupTimeSlot) : 8;
+        const reqReturnH = parseHourFromTimeStr(body.returnTimeSlot) !== null ? parseHourFromTimeStr(body.returnTimeSlot) : 20;
+
         const overlappingBookings = [];
 
         for (let i = 0; i < bRows.length; i++) {
@@ -1558,17 +1586,25 @@ function doPost(e) {
 
             if (bookedStart && bookedEnd) {
               if (reqStart <= bookedEnd && bookedStart <= reqEnd) {
+                const rowNotes = String(bRows[i][checkColMap.notes] || "");
+                const bPickupMatch = rowNotes.match(/Pickup:\s*([^•\n;]+)/i);
+                const bReturnMatch = rowNotes.match(/Return:\s*([^•\n;]+)/i);
+                const bPickupH = parseHourFromTimeStr(bPickupMatch ? bPickupMatch[1] : null) !== null ? parseHourFromTimeStr(bPickupMatch[1]) : 8;
+                const bReturnH = parseHourFromTimeStr(bReturnMatch ? bReturnMatch[1] : null) !== null ? parseHourFromTimeStr(bReturnMatch[1]) : 20;
+
                 overlappingBookings.push({
                   bookingRef: rowRef,
                   start: bookedStart,
-                  end: bookedEnd
+                  end: bookedEnd,
+                  pickupHour: bPickupH,
+                  returnHour: bReturnH
                 });
               }
             }
           }
         }
 
-        // Multi-unit capacity check: reject only if overlapping bookings on any single day reach or exceed total physical units
+        // Multi-unit capacity check with Turnover Buffer evaluation
         if (overlappingBookings.length >= requestedCamCapacity) {
           const reqStartDateObj = parseManilaDateOnly(reqStart);
           const reqEndDateObj = parseManilaDateOnly(reqEnd);
@@ -1576,8 +1612,34 @@ function doPost(e) {
             let curD = new Date(reqStartDateObj.getTime());
             while (curD <= reqEndDateObj) {
               const curDStr = Utilities.formatDate(curD, "Asia/Manila", "yyyy-MM-dd");
-              const activeOnDay = overlappingBookings.filter(b => b.start <= curDStr && curDStr <= b.end);
-              if (activeOnDay.length >= requestedCamCapacity) {
+
+              // Count units actively conflicting on curDStr
+              let busyUnitsOnDay = 0;
+              for (let k = 0; k < overlappingBookings.length; k++) {
+                const ob = overlappingBookings[k];
+                if (ob.start <= curDStr && curDStr <= ob.end) {
+                  const isMidDay = ob.start < curDStr && curDStr < ob.end;
+                  if (isMidDay) {
+                    busyUnitsOnDay++;
+                  } else if (curDStr === ob.end && curDStr === reqStart) {
+                    // Previous rental returns today, incoming rental starts today: enforce 2h turnover buffer
+                    const busyUntilH = ob.returnHour + TURNOVER_BUFFER;
+                    if (reqPickupH < busyUntilH) {
+                      busyUnitsOnDay++;
+                    }
+                  } else if (curDStr === ob.start && curDStr === reqEnd) {
+                    // Incoming rental returns today, next rental starts today
+                    const busyUntilH = reqReturnH + TURNOVER_BUFFER;
+                    if (busyUntilH > ob.pickupHour) {
+                      busyUnitsOnDay++;
+                    }
+                  } else {
+                    busyUnitsOnDay++;
+                  }
+                }
+              }
+
+              if (busyUnitsOnDay >= requestedCamCapacity) {
                 const camName = (reqCamId.includes("g7x") || reqCamId.includes("canon"))
                   ? "Canon PowerShot G7 X Mark III"
                   : "DJI Osmo Pocket 3";
@@ -1587,7 +1649,7 @@ function doPost(e) {
                 return ContentService.createTextOutput(JSON.stringify({
                   status: "error",
                   code: "DATE_CONFLICT",
-                  message: unitNotice + " fully booked for dates overlapping " + curDStr + ". Please select different rental dates."
+                  message: unitNotice + " fully booked on " + curDStr + ". Please select different rental dates or hours."
                 })).setMimeType(ContentService.MimeType.JSON);
               }
               curD.setDate(curD.getDate() + 1);
@@ -1745,11 +1807,11 @@ function doPost(e) {
         bookingsSheet.hideColumns(21, Math.min(7, bookingsSheet.getMaxColumns() - 20));
       }
 
-      // Append / Update Calendar Sync Sheet
+      // Append / Update Calendar Sync Sheet (Includes Handover Times for Same-Day Turnover)
       let calendarSheet = ss.getSheetByName("Calendar Sync");
       if (!calendarSheet) {
         calendarSheet = ss.insertSheet("Calendar Sync");
-        calendarSheet.appendRow(["Camera ID", "Start Date", "End Date", "Customer Tag", "Booking Ref", "Status"]);
+        calendarSheet.appendRow(["Camera ID", "Start Date", "End Date", "Customer Tag", "Booking Ref", "Status", "Pickup Time", "Return Time"]);
       }
 
       let existingCalIndex = -1;
@@ -1763,14 +1825,19 @@ function doPost(e) {
         }
       }
 
+      const pTimeVal = body.pickupTimeSlot || "8:00 AM";
+      const rTimeVal = body.returnTimeSlot || "11:00 PM";
+
       if (existingCalIndex !== -1) {
-        calendarSheet.getRange(existingCalIndex, 1, 1, 6).setValues([[
+        calendarSheet.getRange(existingCalIndex, 1, 1, 8).setValues([[
           body.cameraId || "dji-pocket-3",
           body.startDate,
           body.endDate,
           body.socialMediaHandle || body.customerName,
           body.bookingRef,
-          "Deposit Paid"
+          "Deposit Paid",
+          pTimeVal,
+          rTimeVal
         ]]);
       } else {
         calendarSheet.appendRow([
@@ -1779,7 +1846,9 @@ function doPost(e) {
           body.endDate,
           body.socialMediaHandle || body.customerName,
           body.bookingRef,
-          "Deposit Paid"
+          "Deposit Paid",
+          pTimeVal,
+          rTimeVal
         ]);
       }
 
