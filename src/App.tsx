@@ -4924,7 +4924,7 @@ export default function App() {
                       className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-[#553C9A] text-white font-extrabold text-xs shadow-[3px_3px_0px_#1A1A2E] border-2 border-[#1A1A2E] hover:bg-[#44307D] transition-all cursor-pointer"
                     >
                       <Printer className="w-4 h-4" />
-                      <span>Print / Save as PDF</span>
+                      <span>Print Receipt</span>
                     </button>
                   </div>
 
@@ -5207,8 +5207,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Right Column: Sticky Live Digital Receipt (Desktop) */}
-              {modalStep < 6 && (
+              {/* Right Column: Sticky Live Digital Receipt (Desktop, Steps 1 to 4) */}
+              {modalStep < 5 && (
                 <aside className="hidden lg:block lg:col-span-4 sticky top-24">
                   <div className="bg-[#EDE8FC]/70 rounded-[28px] border-2 border-[#1A1A2E] shadow-[6px_6px_0px_#1A1A2E] p-6 space-y-4">
                     {/* Header */}
