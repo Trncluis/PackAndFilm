@@ -903,17 +903,52 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Optional lookup of customer notes to ensure exact pickup/return times are never lost
+    const notesMap = {};
+    const bSheet = ss.getSheetByName("Bookings");
+    if (bSheet && bSheet.getLastRow() > 1) {
+      const colMap = getHeaderIndexMap(bSheet);
+      const bRows = bSheet.getDataRange().getValues().slice(1);
+      bRows.forEach(row => {
+        const ref = String(row[colMap.bookingRef] || "").trim();
+        if (ref) {
+          const notesText = String(row[colMap.notes] || "");
+          const pMatch = notesText.match(/Pickup:\s*([^•\n;]+)/i);
+          const rMatch = notesText.match(/Return:\s*([^•\n;]+)/i);
+          notesMap[ref] = {
+            pickup: pMatch ? pMatch[1].trim() : "",
+            returnTime: rMatch ? rMatch[1].trim() : ""
+          };
+        }
+      });
+    }
+
     const data = sheet.getDataRange().getValues();
     const rows = data.slice(1);
 
-    const activeBookings = rows.map(r => ({
-      cameraId: r[0],
-      startDate: r[1] ? Utilities.formatDate(new Date(r[1]), "GMT+8", "yyyy-MM-dd") : "",
-      endDate: r[2] ? Utilities.formatDate(new Date(r[2]), "GMT+8", "yyyy-MM-dd") : "",
-      status: r[5] || "Confirmed",
-      pickupTimeSlot: r[6] || "",
-      returnTimeSlot: r[7] || ""
-    })).filter(b => b.status === "Confirmed" || b.status === "Active Rental" || b.status === "Deposit Paid");
+    const activeBookings = rows.map(r => {
+      const ref = String(r[4] || "").trim();
+      const noteTimes = notesMap[ref] || {};
+
+      let pSlot = String(r[6] || "").trim();
+      if (!pSlot || pSlot.includes("@") || pSlot.length > 25) {
+        pSlot = noteTimes.pickup || "";
+      }
+
+      let rSlot = String(r[7] || "").trim();
+      if (!rSlot || rSlot.includes("@") || rSlot.length > 25) {
+        rSlot = noteTimes.returnTime || "";
+      }
+
+      return {
+        cameraId: r[0],
+        startDate: r[1] ? Utilities.formatDate(new Date(r[1]), "GMT+8", "yyyy-MM-dd") : "",
+        endDate: r[2] ? Utilities.formatDate(new Date(r[2]), "GMT+8", "yyyy-MM-dd") : "",
+        status: r[5] || "Confirmed",
+        pickupTimeSlot: pSlot,
+        returnTimeSlot: rSlot
+      };
+    }).filter(b => b.status === "Confirmed" || b.status === "Active Rental" || b.status === "Deposit Paid");
 
     return ContentService.createTextOutput(JSON.stringify({ status: "success", data: activeBookings }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -2233,8 +2268,12 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
   for (let j = 1; j < cData.length; j++) {
     if (String(cData[j][4]).trim() === bookingRef) {
       cRowIdx = j + 1;
-      pickupEventId = String(cData[j][6] || "").trim(); // Col 7
-      returnEventId = String(cData[j][7] || "").trim(); // Col 8
+      const rawCol7 = String(cData[j][6] || "").trim();
+      const rawCol8 = String(cData[j][7] || "").trim();
+      const rawCol14 = String(cData[j][13] || "").trim();
+      const rawCol15 = String(cData[j][14] || "").trim();
+      pickupEventId = rawCol14 || (rawCol7.includes("@") ? rawCol7 : "");
+      returnEventId = rawCol15 || (rawCol8.includes("@") ? rawCol8 : "");
       break;
     }
   }
@@ -2303,7 +2342,13 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
       pEvent.addPopupReminder(1440);
       pEvent.addEmailReminder(1440);
       if (cRowIdx !== -1) {
-        cSheet.getRange(cRowIdx, 7).setValue(pEvent.getId());
+        cSheet.getRange(cRowIdx, 14).setValue(pEvent.getId());
+        // Preserve clean pickup time string in Col 7 if it was previously overwritten
+        const currentP = String(cSheet.getRange(cRowIdx, 7).getValue() || "").trim();
+        if (currentP.includes("@") || !currentP) {
+          const noteMatch = String(bookingRow[colMap.notes] || "").match(/Pickup:\s*([^•\n;]+)/i);
+          if (noteMatch) cSheet.getRange(cRowIdx, 7).setValue(noteMatch[1].trim());
+        }
       }
     } else {
       pEvent.setTitle(pickupTitle);
@@ -2323,7 +2368,13 @@ function syncBookingToGoogleCalendar(bookingRef, targetStage) {
       rEvent.addPopupReminder(1440);
       rEvent.addEmailReminder(1440);
       if (cRowIdx !== -1) {
-        cSheet.getRange(cRowIdx, 8).setValue(rEvent.getId());
+        cSheet.getRange(cRowIdx, 15).setValue(rEvent.getId());
+        // Preserve clean return time string in Col 8 if it was previously overwritten
+        const currentR = String(cSheet.getRange(cRowIdx, 8).getValue() || "").trim();
+        if (currentR.includes("@") || !currentR) {
+          const noteMatch = String(bookingRow[colMap.notes] || "").match(/Return:\s*([^•\n;]+)/i);
+          if (noteMatch) cSheet.getRange(cRowIdx, 8).setValue(noteMatch[1].trim());
+        }
       }
     } else {
       rEvent.setTitle(returnTitle);
@@ -2407,8 +2458,12 @@ function adminPurgeCancelledCalendarEvent(bookingRef) {
   for (let j = 1; j < cData.length; j++) {
     if (String(cData[j][4]).trim() === bookingRef) {
       cRowIdx = j + 1;
-      pickupEventId = String(cData[j][6] || "").trim();
-      returnEventId = String(cData[j][7] || "").trim();
+      const rawCol7 = String(cData[j][6] || "").trim();
+      const rawCol8 = String(cData[j][7] || "").trim();
+      const rawCol14 = String(cData[j][13] || "").trim();
+      const rawCol15 = String(cData[j][14] || "").trim();
+      pickupEventId = rawCol14 || (rawCol7.includes("@") ? rawCol7 : "");
+      returnEventId = rawCol15 || (rawCol8.includes("@") ? rawCol8 : "");
       break;
     }
   }
@@ -2441,8 +2496,8 @@ function adminPurgeCancelledCalendarEvent(bookingRef) {
   });
 
   if (cRowIdx !== -1) {
-    cSheet.getRange(cRowIdx, 7).setValue("");
-    cSheet.getRange(cRowIdx, 8).setValue("");
+    cSheet.getRange(cRowIdx, 14).setValue("");
+    cSheet.getRange(cRowIdx, 15).setValue("");
   }
 
   return { status: "success", purgedEvents: purgedCount };

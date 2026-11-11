@@ -1584,8 +1584,15 @@ export default function App() {
       return;
     }
 
-    // Pre-flight check 2: Re-verify date availability before submitting
-    const currentConflict = checkCameraDateConflict(booking.cameraId, booking.startDate, booking.endDate, bookings);
+    // Pre-flight check 2: Re-verify date availability before submitting (evaluating handover hours & turnover buffer)
+    const currentConflict = checkCameraDateConflict(
+      booking.cameraId,
+      booking.startDate,
+      booking.endDate,
+      bookings,
+      booking.pickupTimeSlot,
+      booking.returnTimeSlot
+    );
     if (currentConflict.hasConflict) {
       const conflictMsg = currentConflict.message || 'The selected dates conflict with an existing confirmed booking. Please choose different dates.';
       setBookingSubmitError(conflictMsg);
