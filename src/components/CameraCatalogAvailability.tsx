@@ -9,7 +9,7 @@ import {
   Sparkles,
   ArrowRight
 } from 'lucide-react';
-import { CameraItem } from '../data/cameras';
+import { CameraItem, CAMERAS } from '../data/cameras';
 import {
   BookingRecord,
   DayAvailabilityInfo,
@@ -256,6 +256,7 @@ interface CameraMonthCalendarModalProps {
   bookings: BookingRecord[];
   onClose: () => void;
   onBookCamera: (cameraId: string, prefillStartDate?: string) => void;
+  onSwitchCamera?: (camera: CameraItem) => void;
 }
 
 export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> = ({
@@ -263,7 +264,8 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
   todayStr,
   bookings,
   onClose,
-  onBookCamera
+  onBookCamera,
+  onSwitchCamera
 }) => {
   if (!camera) return null;
 
@@ -408,6 +410,31 @@ export const CameraMonthCalendarModal: React.FC<CameraMonthCalendarModalProps> =
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Fleet Switcher Tabs inside Calendar Modal */}
+        <div className="px-5 sm:px-6 py-2.5 bg-[#FAFAF7] border-b-2 border-[#1A1A2E] flex items-center gap-2 overflow-x-auto">
+          {CAMERAS.filter(c => c.isAvailable).map((c) => {
+            const isCur = c.id === camera.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  if (onSwitchCamera) onSwitchCamera(c);
+                  setSelectedDate(null);
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  isCur
+                    ? 'bg-[#1A1A2E] text-white shadow-[2px_2px_0px_#6B46C1]'
+                    : 'bg-white text-[#6B6B8A] border-2 border-[#1A1A2E] hover:text-[#1A1A2E]'
+                }`}
+              >
+                <span>{c.shortName}</span>
+                {isCur && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+              </button>
+            );
+          })}
         </div>
 
         {/* Modal Body */}

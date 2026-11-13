@@ -887,7 +887,9 @@ function doGet(e) {
       const formulas = dataRange.getFormulas();
       const rows = data.slice(1);
 
-      const bookingsList = rows.map((r, i) => mapBookingRecord(r, i, colMap, formulas, bookingsSheet));
+      // Filter out completely blank or ghost rows
+      const validRows = rows.filter(r => String(r[colMap.bookingRef] || r[colMap.customerName] || "").trim() !== "");
+      const bookingsList = validRows.map((r, i) => mapBookingRecord(r, i, colMap, formulas, bookingsSheet));
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -1050,7 +1052,9 @@ function doPost(e) {
       const formulas = dataRange.getFormulas();
       const rows = data.slice(1);
 
-      const bookingsList = rows.map((r, i) => mapBookingRecord(r, i, colMap, formulas, bookingsSheet));
+      // Filter out completely blank or ghost rows
+      const validRows = rows.filter(r => String(r[colMap.bookingRef] || r[colMap.customerName] || "").trim() !== "");
+      const bookingsList = validRows.map((r, i) => mapBookingRecord(r, i, colMap, formulas, bookingsSheet));
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",

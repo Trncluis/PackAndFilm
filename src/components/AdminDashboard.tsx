@@ -692,7 +692,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const data = await res.json().catch(() => null);
 
       if (data && data.status === 'success' && Array.isArray(data.bookings)) {
-        setBookings(data.bookings);
+        // Filter out empty/ghost rows that have no customer name and no booking ref
+        const cleanBookings = data.bookings.filter((b: AdminBookingItem) =>
+          Boolean(String(b.bookingRef || '').trim() || String(b.customerName || '').trim())
+        );
+        setBookings(cleanBookings);
         setLastSyncTime(new Date());
       } else if (data && data.code === 'UNAUTHORIZED') {
         handleLogout();
@@ -990,6 +994,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Filter & Search
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
+      // Discard blank/ghost rows from sheet
+      if (!String(b.bookingRef || '').trim() && !String(b.customerName || '').trim()) return false;
+
       const matchSearch =
         !searchQuery.trim() ||
         (b.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||

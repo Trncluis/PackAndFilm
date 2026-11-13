@@ -904,35 +904,79 @@ export default function App() {
 
   // Dynamic Hourly Dropdown Options for Pickup
   const pickupTimeOptions = useMemo<SelectOption[]>(() => {
+    let currentManilaHour = -1;
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Manila',
+        hour: 'numeric',
+        hour12: false
+      }).formatToParts(new Date());
+      const hourPart = parts.find(p => p.type === 'hour');
+      if (hourPart) currentManilaHour = parseInt(hourPart.value, 10);
+    } catch {
+      currentManilaHour = new Date().getHours();
+    }
+
+    const isToday = booking.startDate === todayStr;
+
     return ALL_HOURS.map((item) => {
-      const isBlocked = booking.startDate ? !startDayAvailability.availableHours.includes(item.h) : false;
+      const isPastHour = isToday && item.h <= currentManilaHour;
+      const isTurnoverBlocked = booking.startDate ? !startDayAvailability.availableHours.includes(item.h) : false;
+      const isBlocked = isPastHour || isTurnoverBlocked;
+
+      let badge: string | undefined = undefined;
+      if (isPastHour) {
+        badge = 'Past Hour';
+      } else if (isTurnoverBlocked) {
+        badge = 'Turnover Buffer';
+      } else if (item.h === startDayAvailability.earliestPickupHour && startDayAvailability.isTurnoverDay) {
+        badge = 'Earliest Available';
+      } else if (isToday && item.h === currentManilaHour + 1) {
+        badge = 'Next Available';
+      } else if (item.h === 8) {
+        badge = 'Opening';
+      } else if (item.h === 10) {
+        badge = 'Popular';
+      } else if (item.h === 23) {
+        badge = 'Closing Cutoff (11 PM)';
+      }
+
       return {
         value: item.value,
         label: item.label,
         disabled: isBlocked,
-        badge: isBlocked
-          ? 'Turnover Buffer'
-          : item.h === startDayAvailability.earliestPickupHour && startDayAvailability.isTurnoverDay
-          ? 'Earliest Available'
-          : item.h === 8
-          ? 'Opening'
-          : item.h === 10
-          ? 'Popular'
-          : item.h === 23
-          ? 'Closing Cutoff (11 PM)'
-          : undefined,
+        badge,
       };
     });
-  }, [ALL_HOURS, booking.startDate, startDayAvailability]);
+  }, [ALL_HOURS, booking.startDate, todayStr, startDayAvailability]);
 
   const returnTimeOptions = useMemo<SelectOption[]>(() => {
     const isSameDay = !!(booking.startDate && booking.endDate && booking.startDate === booking.endDate);
     const selectedPickupH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h || 8;
 
+    let currentManilaHour = -1;
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Manila',
+        hour: 'numeric',
+        hour12: false
+      }).formatToParts(new Date());
+      const hourPart = parts.find(p => p.type === 'hour');
+      if (hourPart) currentManilaHour = parseInt(hourPart.value, 10);
+    } catch {
+      currentManilaHour = new Date().getHours();
+    }
+
+    const isTodayReturn = booking.endDate === todayStr;
+
     let available = ALL_HOURS;
     // On same-day rentals, return time must be strictly after pickup time
     if (isSameDay) {
       available = available.filter(item => item.h > selectedPickupH);
+    }
+    // Cannot return in a past hour if returning today
+    if (isTodayReturn) {
+      available = available.filter(item => item.h > currentManilaHour);
     }
 
     return available.map((item) => ({
@@ -945,22 +989,38 @@ export default function App() {
           ? 'Popular'
           : undefined,
     }));
-  }, [ALL_HOURS, booking.startDate, booking.endDate, booking.pickupTimeSlot]);
+  }, [ALL_HOURS, booking.startDate, booking.endDate, booking.pickupTimeSlot, todayStr]);
 
-  // Auto-synchronize pickup time if current selection is blocked by a turnover buffer
+  // Auto-synchronize pickup time if current selection is blocked by a turnover buffer or past hour
   useEffect(() => {
     if (!booking.startDate || !booking.cameraId) return;
-    if (startDayAvailability.availableHours.length > 0) {
+    const isToday = booking.startDate === todayStr;
+    let currentManilaHour = -1;
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Manila',
+        hour: 'numeric',
+        hour12: false
+      }).formatToParts(new Date());
+      const hourPart = parts.find(p => p.type === 'hour');
+      if (hourPart) currentManilaHour = parseInt(hourPart.value, 10);
+    } catch {
+      currentManilaHour = new Date().getHours();
+    }
+
+    const validHours = ALL_HOURS.filter(item => {
+      const isPastHour = isToday && item.h <= currentManilaHour;
+      const isTurnover = !startDayAvailability.availableHours.includes(item.h);
+      return !isPastHour && !isTurnover;
+    });
+
+    if (validHours.length > 0) {
       const currentH = ALL_HOURS.find(x => x.value === booking.pickupTimeSlot)?.h;
-      if (currentH === undefined || !startDayAvailability.availableHours.includes(currentH)) {
-        const earliestH = startDayAvailability.earliestPickupHour || startDayAvailability.availableHours[0];
-        const matchingHour = ALL_HOURS.find(x => x.h === earliestH);
-        if (matchingHour) {
-          setBooking(b => ({ ...b, pickupTimeSlot: matchingHour.value }));
-        }
+      if (currentH === undefined || !validHours.some(vh => vh.h === currentH)) {
+        setBooking(b => ({ ...b, pickupTimeSlot: validHours[0].value }));
       }
     }
-  }, [booking.startDate, booking.cameraId, startDayAvailability, ALL_HOURS]);
+  }, [booking.startDate, booking.cameraId, startDayAvailability, ALL_HOURS, todayStr]);
 
   // Synchronize return time on same-day rentals so return > pickup
   useEffect(() => {
@@ -1311,6 +1371,8 @@ export default function App() {
     setModalStep(1);
     setIsModalOpen(true);
     navigateTo('book');
+    // Refresh live bookings from Google Sheets automatically
+    fetchLiveCalendarFromSheet(false);
   };
 
   // Launch Confetti when Step 6 reached
@@ -3058,9 +3120,17 @@ export default function App() {
                             key={cam.id}
                             type="button"
                             onClick={() => {
-                              setBooking(b => ({ ...b, cameraId: cam.id }));
+                              setBooking(b => {
+                                const conflict = checkCameraDateConflict(cam.id, b.startDate, b.endDate, bookings, b.pickupTimeSlot, b.returnTimeSlot);
+                                return {
+                                  ...b,
+                                  cameraId: cam.id,
+                                  ...(conflict.hasConflict ? { startDate: '', endDate: '' } : {})
+                                };
+                              });
                               setSelectedCameraId(cam.id);
                               clearFieldError('cameraId');
+                              fetchLiveCalendarFromSheet(false);
                             }}
                             className={`relative p-3.5 rounded-2xl text-left transition-all cursor-pointer group flex flex-col justify-between ${
                               isSelected
@@ -3271,6 +3341,7 @@ export default function App() {
 
                       {/* ─── Unified Big Interactive Calendar (Orbit360 Inspired, PackAndFilm Neo-Brutalist) ─── */}
                       <UnifiedRentalCalendar
+                        key={booking.cameraId}
                         rentalType={booking.rentalType}
                         startDate={booking.startDate}
                         endDate={booking.endDate}
@@ -6045,10 +6116,12 @@ export default function App() {
           FULL-MONTH LIVE FLEET AVAILABILITY CALENDAR MODAL
       ───────────────────────────────────────────────────────────── */}
       <CameraMonthCalendarModal
+        key={calendarModalCamera?.id || 'none'}
         camera={calendarModalCamera}
         todayStr={todayStr}
         bookings={bookings}
         onClose={() => setCalendarModalCamera(null)}
+        onSwitchCamera={(cam) => setCalendarModalCamera(cam)}
         onBookCamera={(camId, prefillDate) => handleOpenBookingModal(camId, prefillDate)}
       />
 

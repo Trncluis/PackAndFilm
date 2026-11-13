@@ -216,6 +216,31 @@ export const checkCameraDateConflict = (
   const reqPickupH = parseHourFromTimeStr(requestedPickupTime);
   const reqReturnH = parseHourFromTimeStr(requestedReturnTime);
 
+  // Real-world time check: if booking for today, pickup time cannot be in the past
+  let currentManilaDateStr = '';
+  let currentManilaHour = -1;
+  try {
+    currentManilaDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Manila',
+      hour: 'numeric',
+      hour12: false
+    }).formatToParts(new Date());
+    const hourPart = parts.find(p => p.type === 'hour');
+    if (hourPart) currentManilaHour = parseInt(hourPart.value, 10);
+  } catch {
+    currentManilaDateStr = new Date().toISOString().split('T')[0];
+    currentManilaHour = new Date().getHours();
+  }
+
+  if (startStr === currentManilaDateStr && reqPickupH !== null && reqPickupH <= currentManilaHour) {
+    return {
+      hasConflict: true,
+      conflictingBooking: null,
+      message: `The selected pickup time (${requestedPickupTime}) has already passed for today. Please choose an upcoming hour.`
+    };
+  }
+
   // 1. Check start date hourly availability
   const startDayHours = getCameraHourAvailabilityOnDate(cameraId, startStr, bookingsList);
   if (startDayHours.availableHours.length === 0) {
