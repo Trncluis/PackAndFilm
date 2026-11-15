@@ -707,7 +707,9 @@ function getHeaderIndexMap(sheet) {
     receiptUrl: findCol(["payment receipt", "receipt url"], 25),
     guardianIdUrl: findCol(["guardian id", "parent / guardian"], 26),
     meetupFee: findCol(["meetup fee"], 27),
-    grandTotal: findCol(["grand total", "package total"], 28)
+    grandTotal: findCol(["grand total", "package total"], 28),
+    gcashAccountName: findCol(["deposit gcash name", "gcash account name", "gcash name", "account name"], -1),
+    gcashAccountNumber: findCol(["deposit gcash number", "gcash account number", "gcash mobile", "gcash number", "account number"], -1)
   };
 }
 
@@ -827,7 +829,25 @@ function mapBookingRecord(r, i, colMap, formulas, bookingsSheet) {
     billingUrl: billing,
     selfieVideoUrl: selfie,
     receiptUrl: receipt,
-    guardianIdUrl: guardian
+    guardianIdUrl: guardian,
+    gcashAccountName: (function() {
+      if (colMap.gcashAccountName !== undefined && colMap.gcashAccountName >= 0 && r[colMap.gcashAccountName]) {
+        return String(r[colMap.gcashAccountName]).trim();
+      }
+      const match = String(r[colMap.notes] || "").match(/(?:Deposit\s+Refund\s+)?GCash(?:\s+Account)?\s+Name:\s*([^•\n;]+)/i);
+      if (match) return match[1].trim();
+      const match2 = String(r[colMap.notes] || "").match(/Deposit\s+Refund\s+GCash:\s*([^(•\n;]+)\s*\(/i);
+      return match2 ? match2[1].trim() : "";
+    })(),
+    gcashAccountNumber: (function() {
+      if (colMap.gcashAccountNumber !== undefined && colMap.gcashAccountNumber >= 0 && r[colMap.gcashAccountNumber]) {
+        return String(r[colMap.gcashAccountNumber]).trim();
+      }
+      const match = String(r[colMap.notes] || "").match(/(?:Deposit\s+Refund\s+)?GCash(?:\s+Account)?\s+(?:Number|No|Mobile):\s*([^•\n;]+)/i);
+      if (match) return match[1].trim();
+      const match2 = String(r[colMap.notes] || "").match(/Deposit\s+Refund\s+GCash:\s*[^(•\n;]+\(([^)]+)\)/i);
+      return match2 ? match2[1].trim() : "";
+    })()
   };
 }
 
@@ -1321,6 +1341,95 @@ function doPost(e) {
         previousStatus: currentRawStatus,
         newStatus: newStatus,
         auditedBy: session.name
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ── 4b. ADMIN BLOCK DATES ACTION (FLEET MANAGEMENT) ──
+    if (body.action === "adminBlockDates") {
+      const session = validateSessionToken(body.sessionToken);
+      if (!session) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          code: "UNAUTHORIZED",
+          message: "Access Denied: Valid admin session token required."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const randomCode = Math.floor(1000 + Math.random() * 9000);
+      const bookingRef = body.bookingRef || ("#ADM-HOLD-" + randomCode);
+      const reason = body.reason || "Maintenance / Hold";
+      const customerName = body.customerName || ("[ADMIN HOLD] " + reason);
+      const cameraRented = body.cameraRented || "Canon PowerShot G7 X Mark III Creator Vlogging Kit";
+      const cameraId = body.cameraId || (String(cameraRented).toLowerCase().includes("pocket") ? "dji-pocket-3" : "canon-g7x-mark-iii");
+      const startDate = body.startDate;
+      const endDate = body.endDate || body.startDate;
+      const pickupTime = body.pickupTimeSlot || "8:00 AM";
+      const returnTime = body.returnTimeSlot || "11:00 PM";
+      const unit = body.unitAssigned || "All Units";
+      const noteText = "Admin Hold • Reason: " + reason + " • Unit: " + unit + (body.notes ? " • " + body.notes : "") + " • Created by " + session.name;
+
+      let rentalDays = 1;
+      if (startDate && endDate) {
+        try {
+          const s = new Date(startDate);
+          const e = new Date(endDate);
+          if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+            rentalDays = Math.max(1, Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+          }
+        } catch (err) {}
+      }
+
+      const bSheet = ss.getSheetByName("Bookings");
+      if (bSheet) {
+        bSheet.appendRow([
+          bookingRef,
+          new Date(),
+          customerName,
+          body.contactNumber || "N/A",
+          body.socialMediaHandle || "@packandfilm",
+          cameraRented,
+          startDate,
+          endDate,
+          rentalDays,
+          "Admin Hold",
+          "Pasig Hub",
+          reason,
+          0,
+          0,
+          0,
+          0,
+          "ADMIN-HOLD",
+          "Confirmed",
+          noteText
+        ]);
+      }
+
+      const cSheet = ss.getSheetByName("Calendar Sync");
+      if (cSheet) {
+        cSheet.appendRow([
+          cameraId,
+          startDate,
+          endDate,
+          customerName,
+          bookingRef,
+          "Confirmed",
+          pickupTime,
+          returnTime,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]);
+      }
+
+      Logger.log("Admin block created " + bookingRef + " by " + session.name);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        bookingRef: bookingRef,
+        message: "Dates successfully blocked in fleet schedule."
       })).setMimeType(ContentService.MimeType.JSON);
     }
 

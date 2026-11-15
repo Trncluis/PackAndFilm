@@ -5,6 +5,8 @@ export const TURNOVER_BUFFER_HOURS = 2;
 
 export interface BookingRecord {
   id: string;
+  bookingRef?: string;
+  customerName?: string;
   cameraId: string;
   title: string;
   renterTag: string;
@@ -17,6 +19,11 @@ export interface BookingRecord {
   pickupHour?: number;
   returnHour?: number;
   notes?: string;
+  gcashAccountName?: string;
+  gcashAccountNumber?: string;
+  isBlocked?: boolean;
+  blockReason?: string;
+  unitAssigned?: string;
 }
 
 // Initial bookings starts 100% empty; availability is strictly populated by confirmed customer bookings

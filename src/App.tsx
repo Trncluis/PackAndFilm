@@ -649,6 +649,8 @@ export default function App() {
 
     return {
       id,
+      bookingRef: id,
+      customerName: customer,
       cameraId: matchedCameraId,
       title: `${customer} • Camera Rental`,
       renterTag: social,
@@ -661,6 +663,8 @@ export default function App() {
       pickupHour: times.pickupHour !== null ? times.pickupHour : undefined,
       returnHour: times.returnHour !== null ? times.returnHour : undefined,
       notes: row.notes || row['Notes'] || undefined,
+      gcashAccountName: row.gcashAccountName || undefined,
+      gcashAccountNumber: row.gcashAccountNumber || undefined,
     };
   };
 
@@ -1593,7 +1597,7 @@ export default function App() {
       returnTimeSlot: booking.returnTimeSlot,
       pickupHour: parseHourFromTimeStr(booking.pickupTimeSlot) ?? undefined,
       returnHour: parseHourFromTimeStr(booking.returnTimeSlot) ?? undefined,
-      notes: `Rental Type: ${booking.rentalType || (booking.startDate === booking.endDate ? 'same-day' : 'multi-day')} • Pickup: ${booking.pickupTimeSlot} • Return: ${booking.returnTimeSlot}`
+      notes: `Rental Type: ${booking.rentalType || (booking.startDate === booking.endDate ? 'same-day' : 'multi-day')} • Pickup: ${booking.pickupTimeSlot} • Return: ${booking.returnTimeSlot} • Security Deposit Refund GCash: ${booking.gcashAccountName || 'N/A'} (${booking.gcashAccountNumber || 'N/A'})`
     };
 
     // Payload structure for Google Sheets & Google Drive
@@ -1619,10 +1623,12 @@ export default function App() {
       downpaymentPaid: DOWNPAYMENT_FEE,
       balanceDue: modalQuote.balanceDue,
       gcashRefNumber: booking.gcashRefNumber || 'N/A',
+      gcashAccountName: booking.gcashAccountName || 'N/A',
+      gcashAccountNumber: booking.gcashAccountNumber || 'N/A',
       termsAccepted: booking.termsAccepted,
       termsVersion: booking.termsVersion || RENTAL_CONFIG.termsVersion,
       termsAcceptedAt: booking.termsAcceptedAt || new Date().toISOString(),
-      notes: `Rental Type: ${booking.rentalType || (booking.startDate === booking.endDate ? 'same-day' : 'multi-day')} • Pickup: ${booking.pickupTimeSlot} • Return: ${booking.returnTimeSlot} • Email: ${booking.email || 'N/A'} • Emergency Contacts: ${emergencyContactsText}`,
+      notes: `Rental Type: ${booking.rentalType || (booking.startDate === booking.endDate ? 'same-day' : 'multi-day')} • Pickup: ${booking.pickupTimeSlot} • Return: ${booking.returnTimeSlot} • Email: ${booking.email || 'N/A'} • Security Deposit Refund GCash: ${booking.gcashAccountName || 'N/A'} (${booking.gcashAccountNumber || 'N/A'}) • Emergency Contacts: ${emergencyContactsText}`,
       // KYC Uploaded Files passed to Google Apps Script -> Google Drive:
       id1File: booking.id1File,
       id1BackFile: booking.id1BackFile,

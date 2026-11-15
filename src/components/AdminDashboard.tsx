@@ -24,7 +24,18 @@ import {
   Trash2,
   AlertTriangle,
   XCircle,
-  Clock
+  Clock,
+  Lock,
+  Unlock,
+  Copy,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  Phone,
+  Shield,
+  Tag,
+  Sparkles
 } from 'lucide-react';
 
 export function parseBookingEmail(notes?: string, email?: string): string {
@@ -45,6 +56,35 @@ export function parseBookingNotesSchedule(notes?: string, startDate?: string, en
     rentalType: typeMatch ? typeMatch[1].trim() : (isSameDay ? 'Same-Day' : 'Multi-Day'),
     pickupTime: pickupMatch ? pickupMatch[1].trim() : null,
     returnTime: returnMatch ? returnMatch[1].trim() : null,
+  };
+}
+
+export function parseBookingGcashRefund(notes?: string, accountName?: string, accountNumber?: string): {
+  accountName: string;
+  accountNumber: string;
+} {
+  let name = (accountName && accountName.trim() && accountName !== 'N/A') ? accountName.trim() : '';
+  let num = (accountNumber && accountNumber.trim() && accountNumber !== 'N/A') ? accountNumber.trim() : '';
+
+  if ((!name || !num) && notes) {
+    const matchFull = notes.match(/(?:Security\s+Deposit\s+(?:Refund\s+)?)?GCash(?:\s+Refund)?:\s*([^(•\n;]+)\s*\(([^)]+)\)/i);
+    if (matchFull) {
+      if (!name) name = matchFull[1].trim();
+      if (!num) num = matchFull[2].trim();
+    }
+    if (!name) {
+      const matchName = notes.match(/(?:Deposit\s+Refund\s+)?GCash(?:\s+Account)?\s+Name:\s*([^•\n;]+)/i);
+      if (matchName) name = matchName[1].trim();
+    }
+    if (!num) {
+      const matchNum = notes.match(/(?:Deposit\s+Refund\s+)?GCash(?:\s+Account)?\s+(?:Number|No|Mobile):\s*([^•\n;]+)/i);
+      if (matchNum) num = matchNum[1].trim();
+    }
+  }
+
+  return {
+    accountName: name,
+    accountNumber: num
   };
 }
 
@@ -70,6 +110,8 @@ export interface AdminBookingItem {
   downpaymentPaid: number | string;
   balanceDue: number | string;
   gcashRefNumber: string;
+  gcashAccountName?: string;
+  gcashAccountNumber?: string;
   status: string;
   notes: string;
   id1Url?: string;
@@ -101,6 +143,302 @@ export interface AdminBookingItem {
   termsAccepted?: boolean;
   termsVersion?: string;
   meetupHandlingFee?: number | string;
+  isBlocked?: boolean;
+  blockReason?: string;
+  unitAssigned?: string;
+}
+
+export interface FleetUnit {
+  id: 'dji-pocket-3' | 'canon-g7x-black' | 'canon-g7x-silver';
+  name: string;
+  shortName: string;
+  cameraId: string;
+  colorName: string;
+  tagColor: string;
+  borderColor: string;
+  dotColor: string;
+  badgeBg: string;
+}
+
+export const FLEET_UNITS: FleetUnit[] = [
+  {
+    id: 'dji-pocket-3',
+    name: 'DJI Osmo Pocket 3 (Unit 1)',
+    shortName: 'Osmo Pocket 3',
+    cameraId: 'dji-pocket-3',
+    colorName: 'Standard',
+    tagColor: 'text-[#553C9A]',
+    borderColor: 'border-[#C9B8F0]',
+    dotColor: '#553C9A',
+    badgeBg: 'bg-[#EDE8FC]'
+  },
+  {
+    id: 'canon-g7x-black',
+    name: 'Canon PowerShot G7 X Mark III — Black Edition (Unit 1)',
+    shortName: 'G7 X Black',
+    cameraId: 'canon-g7x-mark-iii',
+    colorName: 'Black',
+    tagColor: 'text-[#1A1A2E]',
+    borderColor: 'border-[#1A1A2E]',
+    dotColor: '#1A1A2E',
+    badgeBg: 'bg-[#FAFAF7]'
+  },
+  {
+    id: 'canon-g7x-silver',
+    name: 'Canon PowerShot G7 X Mark III — Silver Edition (Unit 2)',
+    shortName: 'G7 X Silver',
+    cameraId: 'canon-g7x-mark-iii',
+    colorName: 'Silver',
+    tagColor: 'text-[#4A5568]',
+    borderColor: 'border-[#CBD5E0]',
+    dotColor: '#718096',
+    badgeBg: 'bg-slate-100'
+  }
+];
+
+export interface UnitDayStatus {
+  status: 'available' | 'booked' | 'turnover' | 'blocked';
+  booking?: AdminBookingItem;
+  label: string;
+  timeSlot?: string;
+  note?: string;
+}
+
+export function normalizeAdminBooking(b: any): AdminBookingItem {
+  if (!b || typeof b !== 'object') {
+    return {
+      bookingRef: 'REF-UNKNOWN',
+      timestamp: new Date().toISOString(),
+      customerName: 'Valued Renter',
+      email: '',
+      contactNumber: '',
+      socialMediaHandle: '',
+      cameraRented: 'Camera Unit',
+      rentalPackage: 'Standard Kit',
+      startDate: '',
+      endDate: '',
+      rentalType: 'Multi-Day',
+      handoverMethod: 'Metro Manila',
+      status: 'Confirmed'
+    };
+  }
+
+  const bookingRef = String(b.bookingRef || b.id || `REF-${Math.random().toString(36).substring(2, 7).toUpperCase()}`);
+  const customerName = String(
+    b.customerName ||
+    (b.title ? b.title.split('•')[0].trim() : '') ||
+    b.renterTag ||
+    'Valued Renter'
+  );
+  const rawCam = String(b.cameraId || b.cameraRented || '').toLowerCase();
+  const isOsmo = rawCam.includes('pocket') || rawCam.includes('osmo') || rawCam.includes('dji');
+  const cameraId = b.cameraId || (isOsmo ? 'dji-pocket-3' : 'canon-g7x-mark-iii');
+  const cameraRented = b.cameraRented || (isOsmo ? 'DJI Osmo Pocket 3 Standard Kit' : 'Canon PowerShot G7 X Mark III Creator Vlogging Kit');
+
+  const calcDays = () => {
+    if (b.rentalDays && typeof b.rentalDays === 'number') return b.rentalDays;
+    if (b.startDate && b.endDate) {
+      try {
+        const s = new Date(b.startDate);
+        const e = new Date(b.endDate);
+        if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+          return Math.max(1, Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+        }
+      } catch {
+        return 1;
+      }
+    }
+    return 1;
+  };
+
+  const rentalDays = calcDays();
+
+  return {
+    ...b,
+    bookingRef,
+    customerName,
+    cameraId,
+    cameraRented,
+    startDate: String(b.startDate || ''),
+    endDate: String(b.endDate || ''),
+    rentalDays,
+    status: String(b.status || 'Confirmed'),
+    contactNumber: String(b.contactNumber || ''),
+    email: String(b.email || ''),
+    socialMediaHandle: String(b.socialMediaHandle || b.renterTag || ''),
+    rentalType: String(b.rentalType || (b.startDate && b.endDate && b.startDate === b.endDate ? 'Same-Day' : 'Multi-Day')),
+    handoverMethod: String(b.handoverMethod || b.hub || 'Metro Manila'),
+    notes: String(b.notes || ''),
+    downpaymentPaid: b.downpaymentPaid !== undefined ? Number(b.downpaymentPaid) : 0,
+    balanceDue: b.balanceDue !== undefined ? Number(b.balanceDue) : 0,
+    gcashAccountName: String(b.gcashAccountName || ''),
+    gcashAccountNumber: String(b.gcashAccountNumber || '')
+  };
+}
+
+export function getFleetUnitBookingsForDate(
+  dateStr: string,
+  bookingsList: AdminBookingItem[]
+): Record<'dji-pocket-3' | 'canon-g7x-black' | 'canon-g7x-silver', UnitDayStatus> {
+  const result: Record<'dji-pocket-3' | 'canon-g7x-black' | 'canon-g7x-silver', UnitDayStatus> = {
+    'dji-pocket-3': { status: 'available', label: 'Available' },
+    'canon-g7x-black': { status: 'available', label: 'Available' },
+    'canon-g7x-silver': { status: 'available', label: 'Available' }
+  };
+
+  if (!dateStr || !Array.isArray(bookingsList)) {
+    return result;
+  }
+
+  const activeOnDate = bookingsList
+    .filter(rawB => {
+      if (!rawB) return false;
+      const s = String(rawB.status || '').toLowerCase();
+      if (s.includes('reject') || s.includes('cancel')) return false;
+      const start = String(rawB.startDate || '');
+      const end = String(rawB.endDate || '');
+      if (!start || !end) return false;
+      return start <= dateStr && dateStr <= end;
+    })
+    .map(normalizeAdminBooking);
+
+  // 1. DJI Osmo Pocket 3
+  const osmoBooking = activeOnDate.find(b =>
+    b.cameraId === 'dji-pocket-3' || String(b.cameraRented || '').toLowerCase().includes('osmo')
+  );
+
+  if (osmoBooking) {
+    const sched = parseBookingNotesSchedule(osmoBooking.notes, osmoBooking.startDate, osmoBooking.endDate);
+    const isHold = String(osmoBooking.customerName || '').includes('[ADMIN') ||
+                   String(osmoBooking.status || '').includes('Admin Hold') ||
+                   osmoBooking.gcashRefNumber === 'ADMIN-HOLD' ||
+                   Boolean((osmoBooking as any).isBlocked);
+    if (isHold) {
+      result['dji-pocket-3'] = {
+        status: 'blocked',
+        booking: osmoBooking,
+        label: 'Admin Blocked',
+        note: osmoBooking.shootType || 'Admin Hold'
+      };
+    } else if (osmoBooking.endDate === dateStr && sched.returnTime && sched.returnTime !== '11:00 PM') {
+      result['dji-pocket-3'] = {
+        status: 'turnover',
+        booking: osmoBooking,
+        label: `Turnover (${sched.returnTime})`,
+        timeSlot: `${sched.pickupTime || '8:00 AM'} – ${sched.returnTime}`
+      };
+    } else {
+      result['dji-pocket-3'] = {
+        status: 'booked',
+        booking: osmoBooking,
+        label: 'Rented',
+        timeSlot: `${sched.pickupTime || '8:00 AM'} – ${sched.returnTime || '11:00 PM'}`
+      };
+    }
+  }
+
+  // 2. Canon G7 X Mark III (Two Units: Black and Silver)
+  const canonBookings = activeOnDate.filter(b =>
+    b.cameraId === 'canon-g7x-mark-iii' ||
+    String(b.cameraRented || '').toLowerCase().includes('canon') ||
+    String(b.cameraRented || '').toLowerCase().includes('g7')
+  );
+
+  let blackBooking: AdminBookingItem | undefined;
+  let silverBooking: AdminBookingItem | undefined;
+
+  // First pass: explicit unit assignment in notes or unitAssigned
+  const unassignedCanon: AdminBookingItem[] = [];
+  for (const b of canonBookings) {
+    const notesLower = String(b.notes || '').toLowerCase();
+    const unitLower = String(b.unitAssigned || '').toLowerCase();
+    if (unitLower.includes('silver') || notesLower.includes('silver')) {
+      if (!silverBooking) silverBooking = b;
+      else unassignedCanon.push(b);
+    } else if (unitLower.includes('black') || notesLower.includes('black')) {
+      if (!blackBooking) blackBooking = b;
+      else unassignedCanon.push(b);
+    } else {
+      unassignedCanon.push(b);
+    }
+  }
+
+  // Second pass: deterministic allocation for general customer bookings
+  unassignedCanon.sort((a, b) =>
+    String(a.startDate || '').localeCompare(String(b.startDate || '')) ||
+    String(a.bookingRef || '').localeCompare(String(b.bookingRef || ''))
+  );
+  for (const b of unassignedCanon) {
+    if (!blackBooking) {
+      blackBooking = b;
+    } else if (!silverBooking) {
+      silverBooking = b;
+    }
+  }
+
+  // Map Black Unit Status
+  if (blackBooking) {
+    const sched = parseBookingNotesSchedule(blackBooking.notes, blackBooking.startDate, blackBooking.endDate);
+    const isHold = String(blackBooking.customerName || '').includes('[ADMIN') ||
+                   String(blackBooking.status || '').includes('Admin Hold') ||
+                   blackBooking.gcashRefNumber === 'ADMIN-HOLD' ||
+                   Boolean((blackBooking as any).isBlocked);
+    if (isHold) {
+      result['canon-g7x-black'] = {
+        status: 'blocked',
+        booking: blackBooking,
+        label: 'Admin Blocked',
+        note: blackBooking.shootType || 'Admin Hold'
+      };
+    } else if (blackBooking.endDate === dateStr && sched.returnTime && sched.returnTime !== '11:00 PM') {
+      result['canon-g7x-black'] = {
+        status: 'turnover',
+        booking: blackBooking,
+        label: `Turnover (${sched.returnTime})`,
+        timeSlot: `${sched.pickupTime || '8:00 AM'} – ${sched.returnTime}`
+      };
+    } else {
+      result['canon-g7x-black'] = {
+        status: 'booked',
+        booking: blackBooking,
+        label: 'Rented',
+        timeSlot: `${sched.pickupTime || '8:00 AM'} – ${sched.returnTime || '11:00 PM'}`
+      };
+    }
+  }
+
+  // Map Silver Unit Status
+  if (silverBooking) {
+    const sched = parseBookingNotesSchedule(silverBooking.notes, silverBooking.startDate, silverBooking.endDate);
+    const isHold = String(silverBooking.customerName || '').includes('[ADMIN') ||
+                   String(silverBooking.status || '').includes('Admin Hold') ||
+                   silverBooking.gcashRefNumber === 'ADMIN-HOLD' ||
+                   Boolean((silverBooking as any).isBlocked);
+    if (isHold) {
+      result['canon-g7x-silver'] = {
+        status: 'blocked',
+        booking: silverBooking,
+        label: 'Admin Blocked',
+        note: silverBooking.shootType || 'Admin Hold'
+      };
+    } else if (silverBooking.endDate === dateStr && sched.returnTime && sched.returnTime !== '11:00 PM') {
+      result['canon-g7x-silver'] = {
+        status: 'turnover',
+        booking: silverBooking,
+        label: `Turnover (${sched.returnTime})`,
+        timeSlot: `${sched.pickupTime || '8:00 AM'} – ${sched.returnTime}`
+      };
+    } else {
+      result['canon-g7x-silver'] = {
+        status: 'booked',
+        booking: silverBooking,
+        label: 'Rented',
+        timeSlot: `${sched.pickupTime || '8:00 AM'} – ${sched.returnTime || '11:00 PM'}`
+      };
+    }
+  }
+
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -487,7 +825,59 @@ interface AdminDashboardProps {
   onBookingsUpdated?: (updated: any[]) => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class AdminErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Admin Dashboard caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#FAFAF7] flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] p-8 max-w-md w-full text-center space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-[#EDE8FC] border-2 border-[#1A1A2E] mx-auto flex items-center justify-center text-2xl">
+              ⚡
+            </div>
+            <h2 className="font-black text-xl text-[#1A1A2E]">Display Recovered</h2>
+            <p className="text-xs text-[#6B6B8A] leading-relaxed">
+              The dashboard encountered a temporary render sync issue while loading data.
+            </p>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false });
+                window.location.reload();
+              }}
+              className="w-full py-3 rounded-2xl bg-[#553C9A] text-white font-black text-xs border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 transition-all cursor-pointer"
+            >
+              Reload Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
   appsScriptUrl,
   onExit,
   localBookings = [],
@@ -512,7 +902,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Bookings Data & Sync
-  const [bookings, setBookings] = useState<AdminBookingItem[]>(() => (localBookings && localBookings.length > 0 ? (localBookings as any) : []));
+  const [bookings, setBookings] = useState<AdminBookingItem[]>(() =>
+    Array.isArray(localBookings) && localBookings.length > 0
+      ? localBookings.map(normalizeAdminBooking)
+      : []
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -542,7 +936,158 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Document Preview Modal
   const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string; isVideo?: boolean } | null>(null);
 
+  // ── Fleet Calendar & Date Blocking States ──
+  const [adminViewMode, setAdminViewMode] = useState<'list' | 'calendar'>('list');
+  const [selectedFleetUnit, setSelectedFleetUnit] = useState<string>('all');
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(() => {
+    try {
+      return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    } catch {
+      return new Date().toISOString().split('T')[0];
+    }
+  });
+
+  // Admin Date Blocking Modal States
+    const [blockUnit, setBlockUnit] = useState<string>('all-units');
+  const [blockStartDate, setBlockStartDate] = useState<string>('');
+  const [blockEndDate, setBlockEndDate] = useState<string>('');
+  const [blockReason, setBlockReason] = useState<string>('Maintenance & Cleaning');
+  const [blockCustomerName, setBlockCustomerName] = useState<string>('');
+  const [blockContact, setBlockContact] = useState<string>('');
+  const [blockNotes, setBlockNotes] = useState<string>('');
+  const [isSubmittingBlock, setIsSubmittingBlock] = useState(false);
+  const [selectingRangeEnd, setSelectingRangeEnd] = useState<boolean>(false);
+
+  // Friendly date display helper
+  const formatFriendlyDate = (dStr?: string | null) => {
+    if (!dStr || typeof dStr !== 'string') return '';
+    try {
+      const parts = dStr.split('-');
+      if (parts.length !== 3) return dStr;
+      const [y, m, d] = parts.map(Number);
+      if (isNaN(y) || isNaN(m) || isNaN(d)) return dStr;
+      const dt = new Date(y, m - 1, d);
+      if (isNaN(dt.getTime())) return dStr;
+      return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return dStr;
+    }
+  };
+
+  // Safe days count between start and end
+  const calculateBlockDaysCount = () => {
+    if (!blockStartDate || !blockEndDate) return 1;
+    try {
+      const [y1, m1, d1] = blockStartDate.split('-').map(Number);
+      const [y2, m2, d2] = blockEndDate.split('-').map(Number);
+      const s = new Date(y1, m1 - 1, d1);
+      const e = new Date(y2, m2 - 1, d2);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+      const diff = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
+      return Math.max(1, diff + 1);
+    } catch {
+      return 1;
+    }
+  };
+
+  // Unified click handler matching website UnifiedRentalCalendar
+  const handleCalendarDateClick = (dateStr: string) => {
+    setSelectedCalendarDate(dateStr);
+
+    if (!blockStartDate || !selectingRangeEnd) {
+      setBlockStartDate(dateStr);
+      setBlockEndDate(dateStr);
+      setSelectingRangeEnd(true);
+    } else {
+      if (dateStr >= blockStartDate) {
+        setBlockEndDate(dateStr);
+        setSelectingRangeEnd(false);
+      } else {
+        setBlockStartDate(dateStr);
+        setBlockEndDate(dateStr);
+        setSelectingRangeEnd(true);
+      }
+    }
+  };
+
+  const handleClearSelection = () => {
+    setBlockStartDate('');
+    setBlockEndDate('');
+    setSelectingRangeEnd(false);
+  };
+
   const isAuthenticated = !!sessionToken;
+
+  // Calendar calculations
+  const calYear = calendarMonth.getFullYear();
+  const calMonth = calendarMonth.getMonth();
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const allCalendarDays = useMemo(() => {
+    const firstDayOfMonth = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const daysInPrevMonth = new Date(calYear, calMonth, 0).getDate();
+
+    const prevMonthDays = Array.from({ length: firstDayOfMonth }, (_, i) => {
+      const d = daysInPrevMonth - firstDayOfMonth + i + 1;
+      const prevY = calMonth === 0 ? calYear - 1 : calYear;
+      const prevM = calMonth === 0 ? 12 : calMonth;
+      return {
+        day: d,
+        isCurrentMonth: false,
+        dateStr: `${prevY}-${String(prevM).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      };
+    });
+
+    const currentMonthDays = Array.from({ length: daysInMonth }, (_, i) => {
+      const d = i + 1;
+      const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      return {
+        day: d,
+        isCurrentMonth: true,
+        dateStr
+      };
+    });
+
+    const totalDays = prevMonthDays.length + currentMonthDays.length;
+    const remainingDays = totalDays % 7 === 0 ? 0 : 7 - (totalDays % 7);
+    const nextMonthDays = Array.from({ length: remainingDays }, (_, i) => {
+      const d = i + 1;
+      const nextY = calMonth === 11 ? calYear + 1 : calYear;
+      const nextM = calMonth === 11 ? 1 : calMonth + 2;
+      return {
+        day: d,
+        isCurrentMonth: false,
+        dateStr: `${nextY}-${String(nextM).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      };
+    });
+
+    return [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
+  }, [calYear, calMonth]);
+
+  const handlePrevCalMonth = () => {
+    setCalendarMonth(new Date(calYear, calMonth - 1, 1));
+  };
+
+  const handleNextCalMonth = () => {
+    setCalendarMonth(new Date(calYear, calMonth + 1, 1));
+  };
+
+  const handleJumpToToday = () => {
+    setCalendarMonth(new Date());
+    try {
+      setSelectedCalendarDate(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }));
+    } catch {
+      setSelectedCalendarDate(new Date().toISOString().split('T')[0]);
+    }
+  };
 
   // Reset KYC review state whenever selected booking changes
   useEffect(() => {
@@ -556,7 +1101,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Prevent background scroll-chaining and repaint cycles when any modal is open in Admin Dashboard
   useEffect(() => {
-    const isAnyModalOpen = !!selectedBooking || !!previewDoc || showClearAllModal || !!deleteTargetBooking;
+    const isAnyModalOpen = !!selectedBooking || !!previewDoc || showClearAllModal || !!deleteTargetBooking ;
     if (isAnyModalOpen) {
       const originalOverflow = window.getComputedStyle(document.body).overflow;
       document.body.style.overflow = 'hidden';
@@ -693,22 +1238,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       if (data && data.status === 'success' && Array.isArray(data.bookings)) {
         // Filter out empty/ghost rows that have no customer name and no booking ref
-        const cleanBookings = data.bookings.filter((b: AdminBookingItem) =>
-          Boolean(String(b.bookingRef || '').trim() || String(b.customerName || '').trim())
-        );
+        const cleanBookings = data.bookings
+          .filter((b: any) =>
+            Boolean(String(b?.bookingRef || b?.id || '').trim() || String(b?.customerName || b?.title || '').trim())
+          )
+          .map(normalizeAdminBooking);
         setBookings(cleanBookings);
         setLastSyncTime(new Date());
       } else if (data && data.code === 'UNAUTHORIZED') {
-        handleLogout();
-        setLoginError('Your server session has expired. Please log in again.');
+        if (!sessionToken.startsWith('pnf-session-auth-local-')) {
+          handleLogout();
+          setLoginError('Your server session has expired. Please log in again.');
+        } else {
+          console.warn('Local dev session active.');
+        }
       } else {
         throw new Error(data?.message || 'Unable to retrieve reservations.');
       }
     } catch (err: any) {
       console.warn('Error syncing bookings from backend:', err);
       setSyncError('Could not sync with Google Sheets. Showing cached records.');
-      if (localBookings.length > 0 && bookings.length === 0) {
-        setBookings(localBookings);
+      if (Array.isArray(localBookings) && localBookings.length > 0 && bookings.length === 0) {
+        setBookings(localBookings.map(normalizeAdminBooking));
       }
     } finally {
       setIsLoading(false);
@@ -918,6 +1469,156 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setTimeout(() => setActionSuccessMsg(null), 4000);
     } finally {
       setIsDeletingBooking(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // ADMIN BLOCK DATES & MANUAL FLEET HOLD
+  // ─────────────────────────────────────────────────────────────
+  const handleAdminBlockDates = async () => {
+    if (!sessionToken || !blockStartDate) return;
+    setIsSubmittingBlock(true);
+
+    try {
+      const sDate = blockStartDate;
+      const eDate = blockEndDate || blockStartDate;
+      const isOfflineCustomer = blockReason === 'Offline / Walk-In Customer Reservation';
+      const custName = isOfflineCustomer && blockCustomerName.trim()
+        ? blockCustomerName.trim()
+        : `[ADMIN HOLD] ${blockReason}`;
+      const custPhone = blockContact.trim() || 'N/A';
+
+      // Build target units
+      const unitsToCreate: { cameraId: string; cameraName: string; unitTag: string }[] = [];
+      if (blockUnit === 'dji-pocket-3') {
+        unitsToCreate.push({
+          cameraId: 'dji-pocket-3',
+          cameraName: 'DJI Osmo Pocket 3 Standard Kit',
+          unitTag: 'Osmo #1'
+        });
+      } else if (blockUnit === 'canon-g7x-black') {
+        unitsToCreate.push({
+          cameraId: 'canon-g7x-mark-iii',
+          cameraName: 'Canon PowerShot G7 X Mark III Creator Vlogging Kit',
+          unitTag: 'Unit: Black'
+        });
+      } else if (blockUnit === 'canon-g7x-silver') {
+        unitsToCreate.push({
+          cameraId: 'canon-g7x-mark-iii',
+          cameraName: 'Canon PowerShot G7 X Mark III Creator Vlogging Kit',
+          unitTag: 'Unit: Silver'
+        });
+      } else if (blockUnit === 'both-canon') {
+        unitsToCreate.push({
+          cameraId: 'canon-g7x-mark-iii',
+          cameraName: 'Canon PowerShot G7 X Mark III Creator Vlogging Kit',
+          unitTag: 'Unit: Black'
+        });
+        unitsToCreate.push({
+          cameraId: 'canon-g7x-mark-iii',
+          cameraName: 'Canon PowerShot G7 X Mark III Creator Vlogging Kit',
+          unitTag: 'Unit: Silver'
+        });
+      } else if (blockUnit === 'all-units') {
+        unitsToCreate.push({
+          cameraId: 'dji-pocket-3',
+          cameraName: 'DJI Osmo Pocket 3 Standard Kit',
+          unitTag: 'Osmo #1'
+        });
+        unitsToCreate.push({
+          cameraId: 'canon-g7x-mark-iii',
+          cameraName: 'Canon PowerShot G7 X Mark III Creator Vlogging Kit',
+          unitTag: 'Unit: Black'
+        });
+        unitsToCreate.push({
+          cameraId: 'canon-g7x-mark-iii',
+          cameraName: 'Canon PowerShot G7 X Mark III Creator Vlogging Kit',
+          unitTag: 'Unit: Silver'
+        });
+      }
+
+      const createdItems: AdminBookingItem[] = [];
+
+      for (const u of unitsToCreate) {
+        const randomCode = Math.floor(1000 + Math.random() * 9000);
+        const newRef = `#ADM-HOLD-${randomCode}`;
+        const noteFull = `Admin Hold • Reason: ${blockReason} • ${u.unitTag} • Pickup: 8:00 AM • Return: 11:00 PM${blockNotes ? ` • Notes: ${blockNotes}` : ''}`;
+
+        try {
+          if (appsScriptUrl && !sessionToken.startsWith('pnf-session-auth-')) {
+            await fetch(appsScriptUrl, {
+              method: 'POST',
+              redirect: 'follow',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                action: 'adminBlockDates',
+                sessionToken: sessionToken,
+                bookingRef: newRef,
+                customerName: custName,
+                contactNumber: custPhone,
+                socialMediaHandle: '@packandfilm',
+                cameraRented: u.cameraName,
+                cameraId: u.cameraId,
+                startDate: sDate,
+                endDate: eDate,
+                reason: blockReason,
+                unitAssigned: u.unitTag,
+                notes: noteFull
+              })
+            });
+          }
+        } catch (apiErr) {
+          console.warn('Backend block post error:', apiErr);
+        }
+
+        const newBookingItem: AdminBookingItem & { id?: string; title?: string; renterTag?: string; hub?: string } = {
+          id: newRef,
+          bookingRef: newRef,
+          title: custName,
+          renterTag: '@admin',
+          hub: 'Pasig Hub',
+          timestamp: new Date().toISOString(),
+          customerName: custName,
+          contactNumber: custPhone,
+          socialMediaHandle: '@packandfilm',
+          cameraRented: u.cameraName,
+          cameraId: u.cameraId,
+          startDate: sDate,
+          endDate: eDate,
+          rentalDays: 1,
+          handoverMethod: 'Admin Hold',
+          address: 'Pasig Hub',
+          shootType: blockReason,
+          rentalTotal: 0,
+          securityDeposit: 0,
+          downpaymentPaid: 0,
+          balanceDue: 0,
+          gcashRefNumber: 'ADMIN-HOLD',
+          status: 'Confirmed',
+          notes: noteFull,
+          isBlocked: true,
+          blockReason: blockReason,
+          unitAssigned: u.unitTag
+        };
+        createdItems.push(newBookingItem);
+      }
+
+      const updated = [...createdItems, ...bookings];
+      setBookings(updated);
+      if (onBookingsUpdated) onBookingsUpdated(updated);
+      setBlockNotes('');
+      setBlockCustomerName('');
+      setBlockContact('');
+      setBlockStartDate('');
+      setBlockEndDate('');
+      setSelectingRangeEnd(false);
+      setActionSuccessMsg(`Successfully locked dates (${sDate}${sDate !== eDate ? ` to ${eDate}` : ''}).`);
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    } catch (err: any) {
+      console.error('Error creating admin block:', err);
+      setWorkflowErrorMsg(err?.message || 'Failed to create block');
+    } finally {
+      setIsSubmittingBlock(false);
     }
   };
 
@@ -1290,7 +1991,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         )}
 
-        {/* Search & Filter Toolbar */}
+        {/* Admin Navigation Switcher: Bookings Manager vs Fleet Calendar & Units */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E]">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            <button
+              onClick={() => setAdminViewMode('list')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                adminViewMode === 'list'
+                  ? 'bg-[#1A1A2E] text-white shadow-xs'
+                  : 'bg-[#FAFAF7] text-[#6B6B8A] hover:bg-[#EDE8FC] hover:text-[#1A1A2E]'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Bookings Manager</span>
+              {bookings.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  adminViewMode === 'list' ? 'bg-white/20 text-white' : 'bg-[#EDE8FC] text-[#553C9A]'
+                }`}>
+                  {bookings.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setAdminViewMode('calendar')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                adminViewMode === 'calendar'
+                  ? 'bg-[#1A1A2E] text-white shadow-xs'
+                  : 'bg-[#FAFAF7] text-[#6B6B8A] hover:bg-[#EDE8FC] hover:text-[#1A1A2E]'
+              }`}
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Fleet Calendar & Units</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F7F1] text-[#234E52] border border-[#A8DBC8]">
+                3 Units Live
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* View 1: Bookings List Manager */}
+        {adminViewMode === 'list' && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Search & Filter Toolbar */}
         <div className="bg-white p-4 rounded-2xl border-2 border-[#E8E4F0] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
           {/* Search Input */}
           <div className="relative flex-1">
@@ -1414,7 +2157,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               ? 'bg-[#FEF0E7] text-[#C05621] border-[#F5C6A8]'
                               : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
                           }`}>
-                            {schedule.isSameDay ? 'Same-Day (1d)' : `${b.rentalDays}d Multi-Day`}
+                            {schedule.isSameDay ? 'Same-Day (1d)' : `${b.rentalDays || 1}d Multi-Day`}
                           </span>
                         </div>
                         <div className="font-extrabold text-[#1A1A2E] flex items-center gap-1.5">
@@ -1439,121 +2182,170 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className="space-y-0.5">
                         <span className="text-[10px] font-bold text-[#6B6B8A] uppercase">Financials</span>
                         <div className="font-bold text-[#1A1A2E]">
-                          <span>Paid: ₱{b.downpaymentPaid}</span>
-                          <span className="text-[#6B6B8A]"> • Due: ₱{b.balanceDue}</span>
-                          {b.meetupFee !== undefined && Number(b.meetupFee) > 0 && (
-                            <span className="text-[#6B6B8A]"> • Meetup Fee: ₱{b.meetupFee}</span>
-                          )}
-                          {b.grandTotal !== undefined && (
-                            <span className="text-[#553C9A] font-black"> • Grand Total: ₱{b.grandTotal}</span>
+                          {String(b.customerName || '').includes('[ADMIN') || String(b.status || '').includes('Admin Hold') || b.gcashRefNumber === 'ADMIN-HOLD' ? (
+                            <span className="text-[#553C9A] font-black">Admin Hold</span>
+                          ) : (
+                            <>
+                              <span>Paid: ₱{Number(b.downpaymentPaid || 0).toLocaleString()}</span>
+                              <span className="text-[#6B6B8A]"> • Due: ₱{Number(b.balanceDue || 0).toLocaleString()}</span>
+                              {b.grandTotal !== undefined && Number(b.grandTotal) > 0 && (
+                                <span className="text-[#553C9A] font-black"> • Total: ₱{Number(b.grandTotal).toLocaleString()}</span>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
                     </div>
 
                     {/* Quick Admin Actions Row Enforcing Sequence */}
-                    <div className="pt-2 border-t border-[#E8E4F0]/60 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-[11px] text-[#6B6B8A]">
-                        <span>Contact: <strong>{b.contactNumber}</strong></span>
-                        <span>•</span>
-                        <span>Email: <strong className="text-[#553C9A]">{parseBookingEmail(b.notes, b.email) || 'N/A'}</strong></span>
-                        <span>•</span>
-                        <span>GCash Ref: <strong>{b.gcashRefNumber || 'N/A'}</strong></span>
-                      </div>
+                    <div className="pt-2 border-t border-[#E8E4F0]/60 space-y-2">
+                      {/* Customer Contact & Deposit Refund Details */}
+                      {(() => {
+                        const gcashRefund = parseBookingGcashRefund(b.notes, b.gcashAccountName, b.gcashAccountNumber);
+                        const isHold = String(b.customerName || '').includes('[ADMIN') || String(b.status || '').includes('Admin Hold') || b.gcashRefNumber === 'ADMIN-HOLD' || Boolean((b as any).isBlocked);
 
-                      <div className="flex items-center gap-1.5">
-                        {/* Step 1: KYC Pending -> Can only Inspect & Review KYC */}
-                        {workflow.step === 1 && (
-                          <>
-                            <button
-                              onClick={() => {
-                                setSelectedBooking(b);
-                                setInspectedDocs({});
-                                setKycConfirmedCheckbox(false);
-                              }}
-                              className="px-3 py-1 rounded-xl bg-[#553C9A] text-white text-[11px] font-bold hover:bg-[#44337A] transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
-                            >
-                              <Eye className="w-3 h-3" />
-                              <span>Inspect & Review KYC</span>
-                            </button>
+                        return (
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                            <div className="flex flex-wrap items-center gap-2 text-[#6B6B8A]">
+                              <span>Contact: <strong>{b.contactNumber}</strong></span>
+                              <span>•</span>
+                              <span>Email: <strong className="text-[#553C9A]">{parseBookingEmail(b.notes, b.email) || 'N/A'}</strong></span>
+                              <span>•</span>
+                              <span>GCash Ref: <strong>{b.gcashRefNumber || 'N/A'}</strong></span>
+                            </div>
 
-                            <button
-                              disabled={true}
-                              className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
-                              title="Customer KYC must be reviewed and approved before marking as picked up"
-                            >
-                              Mark Picked Up
-                            </button>
+                            {isHold ? (
+                              <span className="px-2.5 py-0.5 rounded-lg bg-[#EDE8FC] border border-[#C9B8F0] text-[#553C9A] font-black flex items-center gap-1">
+                                <Lock className="w-3 h-3" />
+                                <span>Admin Fleet Hold</span>
+                              </span>
+                            ) : (
+                              <div className="px-2.5 py-0.5 rounded-lg bg-[#E8F7F1] border border-[#A8DBC8] text-[#234E52] flex items-center gap-1.5 font-bold shadow-2xs">
+                                <CreditCard className="w-3.5 h-3.5 text-[#234E52]" />
+                                <span>Deposit Refund GCash:</span>
+                                <strong className="text-[#1A1A2E]">{gcashRefund.accountName || 'Not specified'}</strong>
+                                <span>•</span>
+                                <strong className="text-[#1A1A2E]">{gcashRefund.accountNumber || 'Not specified'}</strong>
+                                {(gcashRefund.accountName || gcashRefund.accountNumber) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const text = `${gcashRefund.accountName} - ${gcashRefund.accountNumber}`;
+                                      navigator.clipboard.writeText(text);
+                                      setActionSuccessMsg(`Copied GCash: ${text}`);
+                                      setTimeout(() => setActionSuccessMsg(null), 3000);
+                                    }}
+                                    className="p-0.5 hover:text-[#1A1A2E] text-[#234E52] cursor-pointer ml-0.5"
+                                    title="Copy GCash refund details"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
-                            <button
-                              disabled={true}
-                              className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
-                              title="Booking must be approved and equipment picked up before marking as returned"
-                            >
-                              Mark Returned
-                            </button>
-                          </>
-                        )}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#E8E4F0]/40">
+                        <div className="text-[10px] text-[#6B6B8A]">
+                          {b.handoverMethod}
+                        </div>
 
-                        {/* Step 2: KYC Approved -> Can Mark Picked Up */}
-                        {workflow.step === 2 && (
-                          <>
+                        <div className="flex items-center gap-1.5">
+                          {/* Step 1: KYC Pending -> Can only Inspect & Review KYC */}
+                          {workflow.step === 1 && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setSelectedBooking(b);
+                                  setInspectedDocs({});
+                                  setKycConfirmedCheckbox(false);
+                                }}
+                                className="px-3 py-1 rounded-xl bg-[#553C9A] text-white text-[11px] font-bold hover:bg-[#44337A] transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>Inspect & Review KYC</span>
+                              </button>
+
+                              <button
+                                disabled={true}
+                                className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
+                                title="Customer KYC must be reviewed and approved before marking as picked up"
+                              >
+                                Mark Picked Up
+                              </button>
+
+                              <button
+                                disabled={true}
+                                className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
+                                title="Booking must be approved and equipment picked up before marking as returned"
+                              >
+                                Mark Returned
+                              </button>
+                            </>
+                          )}
+
+                          {/* Step 2: KYC Approved -> Can Mark Picked Up */}
+                          {workflow.step === 2 && (
+                            <>
+                              <button
+                                disabled={isUpdating}
+                                onClick={() => handleUpdateStatus(b.bookingRef, 'Active Rental')}
+                                className="px-3 py-1 rounded-xl bg-[#38A169] text-white text-[11px] font-extrabold hover:bg-[#2F855A] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-xs"
+                              >
+                                {isUpdating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                <span>Mark Picked Up</span>
+                              </button>
+
+                              <button
+                                disabled={true}
+                                className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
+                                title="Equipment must be picked up first before it can be marked as returned"
+                              >
+                                Mark Returned
+                              </button>
+                            </>
+                          )}
+
+                          {/* Step 3: Picked Up -> Can Mark Returned */}
+                          {workflow.step === 3 && (
                             <button
                               disabled={isUpdating}
-                              onClick={() => handleUpdateStatus(b.bookingRef, 'Active Rental')}
-                              className="px-3 py-1 rounded-xl bg-[#38A169] text-white text-[11px] font-extrabold hover:bg-[#2F855A] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-xs"
+                              onClick={() => handleUpdateStatus(b.bookingRef, 'Completed')}
+                              className="px-3 py-1 rounded-xl bg-[#234E52] text-white text-[11px] font-extrabold hover:bg-[#1D3F42] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-xs"
                             >
                               {isUpdating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                              <span>Mark Picked Up</span>
+                              <span>Mark Returned</span>
                             </button>
+                          )}
 
-                            <button
-                              disabled={true}
-                              className="px-3 py-1 rounded-xl bg-[#FAFAF7] border border-[#E8E4F0] text-[11px] font-bold text-[#A0AEC0] cursor-not-allowed opacity-50"
-                              title="Equipment must be picked up first before it can be marked as returned"
-                            >
-                              Mark Returned
-                            </button>
-                          </>
-                        )}
+                          {/* Step 4: Returned */}
+                          {workflow.step === 4 && (
+                            <span className="text-[11px] font-extrabold text-[#22543D] bg-[#F0FFF4] px-2.5 py-1 rounded-xl border border-[#9AE6B4] flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-[#38A169]" />
+                              <span>Rental Completed</span>
+                            </span>
+                          )}
 
-                        {/* Step 3: Picked Up -> Can Mark Returned */}
-                        {workflow.step === 3 && (
+                          {/* Closed / Rejected */}
+                          {workflow.step === 'closed' && (
+                            <span className="text-[11px] font-bold text-[#C53030] bg-[#FFF5F5] px-2.5 py-1 rounded-xl border border-[#FEB2B2]">
+                              {b.status}
+                            </span>
+                          )}
+
+                          {/* Delete Action Button */}
                           <button
-                            disabled={isUpdating}
-                            onClick={() => handleUpdateStatus(b.bookingRef, 'Completed')}
-                            className="px-3 py-1 rounded-xl bg-[#234E52] text-white text-[11px] font-extrabold hover:bg-[#1D3F42] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-xs"
+                            disabled={isUpdating || isDeletingBooking}
+                            onClick={() => setDeleteTargetBooking(b)}
+                            className="px-2.5 py-1 rounded-xl bg-white hover:bg-[#FFF5F5] border border-[#FEB2B2] text-[11px] font-bold text-[#C53030] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                            title="Permanently remove this booking"
                           >
-                            {isUpdating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                            <span>Mark Returned</span>
+                            <Trash2 className="w-3 h-3 text-[#C53030]" />
+                            <span className="hidden sm:inline">Delete</span>
                           </button>
-                        )}
-
-                        {/* Step 4: Returned */}
-                        {workflow.step === 4 && (
-                          <span className="text-[11px] font-extrabold text-[#22543D] bg-[#F0FFF4] px-2.5 py-1 rounded-xl border border-[#9AE6B4] flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-[#38A169]" />
-                            <span>Rental Completed</span>
-                          </span>
-                        )}
-
-                        {/* Closed / Rejected */}
-                        {workflow.step === 'closed' && (
-                          <span className="text-[11px] font-bold text-[#C53030] bg-[#FFF5F5] px-2.5 py-1 rounded-xl border border-[#FEB2B2]">
-                            {b.status}
-                          </span>
-                        )}
-
-                        {/* Delete Action Button */}
-                        <button
-                          disabled={isUpdating || isDeletingBooking}
-                          onClick={() => setDeleteTargetBooking(b)}
-                          className="px-2.5 py-1 rounded-xl bg-white hover:bg-[#FFF5F5] border border-[#FEB2B2] text-[11px] font-bold text-[#C53030] transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                          title="Permanently remove this booking"
-                        >
-                          <Trash2 className="w-3 h-3 text-[#C53030]" />
-                          <span className="hidden sm:inline">Delete</span>
-                        </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1562,6 +2354,652 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
         </div>
+      </div>
+    )}
+
+    {/* View 2: Fleet Calendar & Units Manager */}
+    {adminViewMode === 'calendar' && (
+      <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto">
+        {/* Top Control Bar: Fleet Unit Switcher Tabs */}
+        <div className="bg-white p-3 sm:p-4 rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            <button
+              onClick={() => {
+                setSelectedFleetUnit('all');
+                setBlockUnit('all-units');
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                selectedFleetUnit === 'all'
+                  ? 'bg-[#1A1A2E] text-white shadow-xs'
+                  : 'bg-[#FAFAF7] text-[#6B6B8A] hover:bg-[#EDE8FC] hover:text-[#1A1A2E]'
+              }`}
+            >
+              <span>All 3 Fleet Units</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-white/20">3</span>
+            </button>
+
+            {FLEET_UNITS.map(unit => (
+              <button
+                key={unit.id}
+                onClick={() => {
+                  setSelectedFleetUnit(unit.id);
+                  setBlockUnit(unit.id);
+                }}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 border ${
+                  selectedFleetUnit === unit.id
+                    ? 'bg-[#1A1A2E] text-white border-[#1A1A2E] shadow-xs'
+                    : 'bg-white text-[#1A1A2E] border-[#E8E4F0] hover:bg-[#FAFAF7]'
+                }`}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: unit.dotColor }}
+                />
+                <span>{unit.shortName}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 justify-end">
+            {blockStartDate && (
+              <button
+                onClick={handleClearSelection}
+                className="px-3 py-1.5 rounded-xl bg-[#FFF5F5] hover:bg-[#FED7D7] text-[#C53030] border border-[#FEB2B2] text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Clear Selection</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 2-Column Responsive Workbench: Calendar (Left) + Interactive Action Panel (Right) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* ── LEFT COLUMN (7 Cols): Unified Rental Calendar ── */}
+          <div className="lg:col-span-7">
+            <div className="rounded-[28px] border-2 border-[#1A1A2E] bg-white shadow-[6px_6px_0px_0px_#1A1A2E] p-4 sm:p-6 space-y-4 isolate">
+              
+              {/* Calendar Header with Navigation */}
+              <div className="flex items-center justify-between pb-3.5 border-b-2 border-[#E8E4F0]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-black text-base sm:text-lg text-[#1A1A2E] uppercase tracking-wider">
+                      {monthNames[calMonth]} {calYear}
+                    </h4>
+                    <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E]">
+                      {selectedFleetUnit === 'all' ? 'All 3 Units' : FLEET_UNITS.find(u => u.id === selectedFleetUnit)?.shortName || 'Fleet'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#6B6B8A] font-semibold mt-1">
+                    {!blockStartDate
+                      ? 'Tap start date, then return date to select a range to block.'
+                      : selectingRangeEnd
+                      ? 'Now tap your return date (or tap same date for 1 day).'
+                      : `Selected: ${formatFriendlyDate(blockStartDate)} → ${formatFriendlyDate(blockEndDate)} (${calculateBlockDaysCount()} Days)`}
+                  </p>
+                </div>
+
+                {/* Navigation Chevrons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrevCalMonth}
+                    className="w-9 h-9 rounded-full bg-[#FAFAF7] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer active:translate-y-0.5"
+                    aria-label="Previous month"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextCalMonth}
+                    className="w-9 h-9 rounded-full bg-[#FAFAF7] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 flex items-center justify-center text-[#1A1A2E] transition-all cursor-pointer active:translate-y-0.5"
+                    aria-label="Next month"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Weekday Column Headers */}
+              <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center">
+                {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((d) => (
+                  <span
+                    key={d}
+                    className="text-[11px] font-black uppercase text-[#6B6B8A] tracking-wider py-1 select-none"
+                  >
+                    {d}
+                  </span>
+                ))}
+              </div>
+
+              {/* Days Grid */}
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                {allCalendarDays.map((item, idx) => {
+                  let todayStr = '';
+                  try {
+                    todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+                  } catch {
+                    todayStr = new Date().toISOString().split('T')[0];
+                  }
+                  const isToday = item.dateStr === todayStr;
+
+                  const unitStatuses = getFleetUnitBookingsForDate(item.dateStr, bookings);
+
+                  // Single unit vs All units availability
+                  let isBooked = false;
+                  let isTurnover = false;
+                  let isBlocked = false;
+                  let isAvailable = false;
+                  let tooltip = '';
+
+                  if (selectedFleetUnit !== 'all') {
+                    const st = unitStatuses[selectedFleetUnit as keyof typeof unitStatuses] || unitStatuses['dji-pocket-3'] || { status: 'available', label: 'Available' };
+                    isBooked = st.status === 'booked';
+                    isTurnover = st.status === 'turnover';
+                    isBlocked = st.status === 'blocked';
+                    isAvailable = st.status === 'available';
+                    tooltip = `${st.label || 'Available'}${st.booking ? ` (${st.booking.customerName || 'Reserved'})` : ''}`;
+                  } else {
+                    const statuses = Object.values(unitStatuses);
+                    const blockedCount = statuses.filter(s => s.status === 'blocked').length;
+                    const bookedCount = statuses.filter(s => s.status === 'booked').length;
+                    const turnoverCount = statuses.filter(s => s.status === 'turnover').length;
+
+                    if (blockedCount === 3) {
+                      isBlocked = true;
+                      tooltip = 'All 3 units blocked by Admin';
+                    } else if (bookedCount === 3) {
+                      isBooked = true;
+                      tooltip = 'All 3 units rented';
+                    } else if (bookedCount + blockedCount === 3) {
+                      isBooked = true;
+                      tooltip = 'Fully booked / held';
+                    } else if (turnoverCount > 0 && bookedCount + blockedCount + turnoverCount === 3) {
+                      isTurnover = true;
+                      tooltip = 'Turnover & rentals';
+                    } else {
+                      isAvailable = true;
+                      tooltip = `${3 - (bookedCount + blockedCount)} of 3 units available`;
+                    }
+                  }
+
+                  // Range selection calculation matching UnifiedRentalCalendar
+                  const isRangeActive = Boolean(blockStartDate && blockEndDate && blockStartDate !== blockEndDate);
+                  const isRangeStart = isRangeActive && item.dateStr === blockStartDate;
+                  const isRangeEnd = isRangeActive && item.dateStr === blockEndDate;
+                  const isRangeMiddle = isRangeActive && blockStartDate < item.dateStr && item.dateStr < blockEndDate;
+                  const isSingleSelected = (!isRangeActive && (item.dateStr === blockStartDate || item.dateStr === blockEndDate)) || (blockStartDate === blockEndDate && item.dateStr === blockStartDate);
+                  const isDayInspected = selectedCalendarDate === item.dateStr;
+
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleCalendarDateClick(item.dateStr)}
+                      title={tooltip}
+                      className={`relative w-full aspect-square rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-0.5 sm:p-1 transition-all select-none cursor-pointer ${
+                        !item.isCurrentMonth
+                          ? 'text-[#CBD5E0] opacity-40 font-medium'
+                          : isRangeStart
+                          ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] rounded-l-xl sm:rounded-l-2xl rounded-r-none font-black z-10'
+                          : isRangeEnd
+                          ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] rounded-r-xl sm:rounded-r-2xl rounded-l-none font-black z-10'
+                          : isRangeMiddle
+                          ? 'bg-[#EDE8FC] text-[#553C9A] border-y-2 border-[#1A1A2E] rounded-none font-black'
+                          : isSingleSelected
+                          ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E] rounded-xl sm:rounded-2xl font-black scale-105 z-10'
+                          : isBlocked
+                          ? `bg-[#EDE8FC] text-[#553C9A] border-2 border-[#C9B8F0] rounded-xl sm:rounded-2xl font-black hover:border-[#1A1A2E] ${isDayInspected ? 'ring-2 ring-[#553C9A]' : ''}`
+                          : isBooked
+                          ? `bg-[#FFF5F5] text-[#C53030] line-through border border-[#FEB2B2]/60 rounded-xl sm:rounded-2xl font-bold opacity-85 ${isDayInspected ? 'ring-2 ring-[#E53E3E]' : ''}`
+                          : isTurnover
+                          ? `bg-[#FFFBEB] text-[#92400E] border-2 border-[#FDE68A] hover:border-[#1A1A2E] hover:shadow-[2px_2px_0px_#1A1A2E] rounded-xl sm:rounded-2xl font-black ${isDayInspected ? 'ring-2 ring-[#B45309]' : ''}`
+                          : `bg-white text-[#1A1A2E] font-extrabold text-xs sm:text-sm rounded-xl sm:rounded-2xl border border-[#E8E4F0] hover:border-2 hover:border-[#1A1A2E] hover:bg-[#E8F7F1] hover:text-[#2F855A] hover:shadow-[2px_2px_0px_#1A1A2E] hover:-translate-y-0.5 active:translate-y-0 ${
+                              isDayInspected ? 'ring-2 ring-[#1A1A2E] ring-offset-1 font-black bg-[#E8F7F1]/50' : isToday ? 'border-2 border-[#553C9A] font-black' : ''
+                            }`
+                      }`}
+                    >
+                      <span className="leading-none text-xs sm:text-sm font-black">{item.day}</span>
+
+                      {/* Status Indicator Dots */}
+                      {item.isCurrentMonth && (
+                        <div className="h-1.5 flex items-center justify-center gap-0.5 mt-0.5 sm:mt-1">
+                          {selectedFleetUnit !== 'all' ? (
+                            isSingleSelected || isRangeStart || isRangeEnd ? (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#553C9A]" />
+                            ) : isBlocked ? (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#6B46C1]" />
+                            ) : isBooked ? (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#E53E3E]" />
+                            ) : isTurnover ? (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
+                            ) : (
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#38A169]" />
+                            )
+                          ) : (
+                            /* All 3 Fleet Units Dots */
+                            FLEET_UNITS.map(unit => {
+                              const st = unitStatuses[unit.id] || { status: 'available', label: 'Available' };
+                              let dotColor = '#38A169';
+                              if (st.status === 'blocked') dotColor = '#6B46C1';
+                              else if (st.status === 'booked') dotColor = '#E53E3E';
+                              else if (st.status === 'turnover') dotColor = '#D97706';
+
+                              return (
+                                <span
+                                  key={unit.id}
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: dotColor }}
+                                />
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Legend Bar & Jump to Today */}
+              <div className="pt-3.5 border-t-2 border-[#E8E4F0] flex flex-wrap items-center justify-between gap-3 text-[11px] text-[#6B6B8A]">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex items-center gap-1.5 font-bold text-[#1A1A2E]">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#C9B8F0] border border-[#1A1A2E]" />
+                    <span>Selected</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 font-bold text-[#2F855A]">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#38A169]" />
+                    <span>Available</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 font-bold text-[#92400E]">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#D97706]" />
+                    <span>Turnover (2h Buffer)</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 font-bold text-[#C53030]">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#E53E3E]" />
+                    <span>Rented</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 font-bold text-[#553C9A]">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#6B46C1]" />
+                    <span>Admin Hold</span>
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleJumpToToday}
+                  className="px-3 py-1.5 rounded-full bg-white border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 text-xs font-black text-[#553C9A] flex items-center gap-1.5 cursor-pointer transition-all active:translate-y-0.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#DD6B20]" />
+                  <span>Jump to Today</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          {/* ── RIGHT COLUMN (5 Cols): Interactive Action Panel ── */}
+          <div className="lg:col-span-5 space-y-4">
+            
+            {/* Card 1: Quick Date Blocking & Manual Reservation Hold */}
+            <div className="bg-white rounded-[28px] border-2 border-[#1A1A2E] shadow-[6px_6px_0px_0px_#1A1A2E] p-5 space-y-4 isolate">
+              <div className="flex items-center justify-between pb-3 border-b-2 border-[#E8E4F0]">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-[#EDE8FC] border border-[#C9B8F0] flex items-center justify-center text-[#553C9A]">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-[#1A1A2E]">
+                      Lock / Reserve Dates
+                    </h3>
+                    <p className="text-[11px] text-[#6B6B8A] font-semibold">
+                      Block dates to prevent website bookings
+                    </p>
+                  </div>
+                </div>
+
+                {blockStartDate && (
+                  <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]">
+                    {calculateBlockDaysCount()} {calculateBlockDaysCount() === 1 ? 'Day' : 'Days'}
+                  </span>
+                )}
+              </div>
+
+              {/* Selected Window Banner */}
+              {blockStartDate ? (
+                <div className="p-3 rounded-2xl bg-[#EDE8FC]/50 border-2 border-[#1A1A2E] flex items-center justify-between gap-2 text-xs font-bold text-[#1A1A2E]">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-[#553C9A] shrink-0" />
+                    <span>
+                      {formatFriendlyDate(blockStartDate)}
+                      {blockEndDate && blockEndDate !== blockStartDate ? ` → ${formatFriendlyDate(blockEndDate)}` : ' (1 Day)'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClearSelection}
+                    className="p-1 rounded-lg hover:bg-white text-[#C53030] cursor-pointer transition-colors"
+                    title="Clear selected dates"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-[#FAFAF7] border border-dashed border-[#CBD5E0] text-center space-y-2">
+                  <p className="text-xs text-[#6B6B8A] font-semibold">
+                    👆 Click any date on the calendar to start selecting days to block.
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        let today = '';
+                        try {
+                          today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+                        } catch {
+                          today = new Date().toISOString().split('T')[0];
+                        }
+                        handleCalendarDateClick(today);
+                      }}
+                      className="px-3 py-1 rounded-lg bg-white border border-[#CBD5E0] text-[11px] font-bold text-[#553C9A] hover:border-[#1A1A2E] cursor-pointer transition-all"
+                    >
+                      ⚡ Pick Today
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Unit Selection Pills */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-[#6B6B8A] tracking-wider">
+                  Target Camera Unit
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setBlockUnit('all-units')}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-1.5 cursor-pointer ${
+                      blockUnit === 'all-units' ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] font-black' : 'bg-white text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FAFAF7] font-bold'
+                    }`}
+                  >
+                    <span>✨</span>
+                    <span className="truncate">All 3 Fleet Units</span>
+                  </button>
+
+                  {FLEET_UNITS.map(unit => (
+                    <button
+                      key={unit.id}
+                      type="button"
+                      onClick={() => setBlockUnit(unit.id)}
+                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-1.5 cursor-pointer ${
+                        blockUnit === unit.id ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] font-black' : 'bg-white text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FAFAF7] font-bold'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: unit.dotColor }} />
+                      <span className="truncate">{unit.shortName}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 1-Click Reason Selector Chips */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase text-[#6B6B8A] tracking-wider">
+                  Reason for Hold
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { label: '🔧 Maintenance & Cleaning', val: 'Maintenance & Cleaning' },
+                    { label: '👤 Personal Shoot / Test', val: 'Personal / Internal Gear Use' },
+                    { label: '🌟 Walk-In Customer', val: 'Offline / Walk-In Customer Reservation' },
+                    { label: '🚫 Shop Closed / Holiday', val: 'Shop Closed / Holiday' }
+                  ].map(r => (
+                    <button
+                      key={r.val}
+                      type="button"
+                      onClick={() => setBlockReason(r.val)}
+                      className={`p-2 rounded-xl text-xs font-bold border text-left transition-all cursor-pointer ${
+                        blockReason === r.val ? 'bg-[#C9B8F0] text-[#1A1A2E] border-2 border-[#1A1A2E] shadow-[2px_2px_0px_#1A1A2E] font-black' : 'bg-white text-[#1A1A2E] border-2 border-[#E8E4F0] hover:border-[#1A1A2E] hover:bg-[#FAFAF7] font-bold'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional Walk-in Customer Fields */}
+              {blockReason === 'Offline / Walk-In Customer Reservation' && (
+                <div className="p-3 rounded-2xl bg-[#EDE8FC]/40 border border-[#C9B8F0] space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-black text-[#553C9A] uppercase mb-0.5">
+                      Customer Full Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Maria Santos"
+                      value={blockCustomerName}
+                      onChange={(e) => setBlockCustomerName(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl bg-white border border-[#CBD5E0] text-xs font-bold outline-none focus:border-[#1A1A2E]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-[#553C9A] uppercase mb-0.5">
+                      Contact / Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 0917-123-4567"
+                      value={blockContact}
+                      onChange={(e) => setBlockContact(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl bg-white border border-[#CBD5E0] text-xs font-bold outline-none focus:border-[#1A1A2E]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Optional Notes */}
+              <div>
+                <label className="block text-[10px] font-black text-[#6B6B8A] uppercase mb-1">
+                  Optional Internal Note
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Cleaned sensor and tested battery life"
+                  value={blockNotes}
+                  onChange={(e) => setBlockNotes(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[#FAFAF7] border border-[#CBD5E0] text-xs font-bold outline-none focus:border-[#1A1A2E] focus:bg-white"
+                />
+              </div>
+
+              {/* Action Button */}
+              <button
+                type="button"
+                disabled={!blockStartDate || isSubmittingBlock}
+                onClick={handleAdminBlockDates}
+                className={`w-full py-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  !blockStartDate || isSubmittingBlock
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-2 border-gray-300'
+                    : 'bg-[#553C9A] hover:bg-[#44337A] text-white border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 active:translate-y-0.5'
+                }`}
+              >
+                {isSubmittingBlock ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Locking Dates in Fleet...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>
+                      {blockStartDate
+                        ? `Lock Selected Dates (${calculateBlockDaysCount()} Days)`
+                        : 'Select Dates to Lock'}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Card 2: Selected Day Equipment Rack & Unit Inspector */}
+            <div className="bg-white rounded-[28px] border-2 border-[#1A1A2E] shadow-[6px_6px_0px_0px_#1A1A2E] p-5 space-y-3.5 isolate">
+              <div className="flex items-center justify-between pb-2 border-b-2 border-[#E8E4F0]">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-[#553C9A]" />
+                  <h3 className="font-black text-xs text-[#1A1A2E]">
+                    Fleet Equipment on {formatFriendlyDate(selectedCalendarDate)}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {FLEET_UNITS.map(unit => {
+                  const targetDate = selectedCalendarDate || (new Date().toISOString().split('T')[0]);
+                  const unitStatuses = getFleetUnitBookingsForDate(targetDate, bookings);
+                  const st = unitStatuses[unit.id] || { status: 'available', label: 'Available' };
+                  const booking = st.booking;
+                  const gcashRefund = booking ? parseBookingGcashRefund(booking.notes, booking.gcashAccountName, booking.gcashAccountNumber) : null;
+
+                  return (
+                    <div
+                      key={unit.id}
+                      className={`p-3.5 rounded-2xl border-2 space-y-2.5 transition-all ${
+                        st.status === 'available'
+                          ? 'bg-[#E8F7F1]/30 border-[#A8DBC8]'
+                          : st.status === 'blocked'
+                          ? 'bg-[#EDE8FC]/40 border-[#C9B8F0]'
+                          : st.status === 'turnover'
+                          ? 'bg-[#FFFBEB]/50 border-[#FDE68A]'
+                          : 'bg-[#FFF5F5]/50 border-[#FEB2B2]'
+                      }`}
+                    >
+                      {/* Unit Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: unit.dotColor }}
+                          />
+                          <h4 className="font-black text-xs text-[#1A1A2E]">
+                            {unit.name}
+                          </h4>
+                        </div>
+                        <span
+                          className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                            st.status === 'available'
+                              ? 'bg-[#E8F7F1] text-[#234E52] border-[#A8DBC8]'
+                              : st.status === 'blocked'
+                              ? 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
+                              : st.status === 'turnover'
+                              ? 'bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]'
+                              : 'bg-[#FFF5F5] text-[#C53030] border-[#FEB2B2]'
+                          }`}
+                        >
+                          {st.label}
+                        </span>
+                      </div>
+
+                      {/* Available Body */}
+                      {st.status === 'available' && (
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <span className="text-[11px] text-[#234E52] font-semibold">
+                            Ready to rent (8:00 AM – 11:00 PM)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBlockUnit(unit.id);
+                              setBlockStartDate(targetDate);
+                              setBlockEndDate(targetDate);
+                              setSelectingRangeEnd(false);
+                            }}
+                            className="px-2.5 py-1 rounded-xl bg-white border border-[#A8DBC8] hover:bg-[#E8F7F1] text-[11px] font-bold text-[#234E52] cursor-pointer transition-colors"
+                          >
+                            🔒 Quick Lock
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Admin Hold Body */}
+                      {st.status === 'blocked' && booking && (
+                        <div className="space-y-2 text-xs">
+                          <div className="p-2 rounded-xl bg-white border border-[#C9B8F0] space-y-0.5">
+                            <div className="text-[10px] uppercase font-bold text-[#6B6B8A]">Hold Details</div>
+                            <div className="font-black text-[#553C9A]">{booking.shootType || booking.customerName || (booking as any).title || 'Admin Hold'}</div>
+                            {booking.notes && <div className="text-[11px] text-[#1A1A2E]">{booking.notes}</div>}
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isDeletingBooking}
+                            onClick={() => handleDeleteBooking(booking.bookingRef || (booking as any).id || '')}
+                            className="w-full py-1.5 rounded-xl bg-white border border-[#FEB2B2] hover:bg-[#FFF5F5] text-[11px] font-black text-[#C53030] transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <Unlock className="w-3 h-3" />
+                            <span>Unblock / Release Dates</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Customer Rented Body */}
+                      {(st.status === 'booked' || st.status === 'turnover') && booking && (
+                        <div className="space-y-2 text-xs">
+                          <div className="p-2 rounded-xl bg-white border border-[#E8E4F0] space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono font-bold text-[10px] text-[#553C9A]">{booking.bookingRef || (booking as any).id || 'REF'}</span>
+                              <span className="text-[10px] font-bold text-[#6B6B8A]">{booking.status || 'Confirmed'}</span>
+                            </div>
+                            <div className="font-black text-xs text-[#1A1A2E]">{booking.customerName || (booking as any).title || 'Valued Renter'}</div>
+                            <div className="text-[11px] text-[#6B6B8A] flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-[#553C9A]" />
+                              <span>{booking.contactNumber || 'Contact on file'}</span>
+                            </div>
+                            {st.timeSlot && (
+                              <div className="text-[11px] font-bold text-[#553C9A] flex items-center gap-1 pt-0.5">
+                                <Clock className="w-3 h-3" />
+                                <span>{st.timeSlot}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Customer GCash Refund info */}
+                          {gcashRefund && (gcashRefund.accountName || gcashRefund.accountNumber) && (
+                            <div className="p-2 rounded-xl bg-[#E8F7F1] border border-[#A8DBC8] text-[10px] space-y-0.5 font-bold text-[#234E52]">
+                              <div className="flex items-center justify-between uppercase">
+                                <span>Deposit Refund GCash</span>
+                                <span>₱1,000</span>
+                              </div>
+                              <div className="text-[#1A1A2E] font-black text-xs">{gcashRefund.accountName || 'N/A'}</div>
+                              <div className="font-mono text-[#234E52]">{gcashRefund.accountNumber || 'N/A'}</div>
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedBooking(booking);
+                              setInspectedDocs({});
+                              setKycConfirmedCheckbox(false);
+                            }}
+                            className="w-full py-1.5 rounded-xl bg-[#1A1A2E] text-white hover:bg-[#553C9A] text-[11px] font-black transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Inspect KYC & Reservation</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    )}
       </main>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -1712,6 +3150,100 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Security Deposit Refund GCash Account Details */}
+                {(() => {
+                  const gcashRefund = parseBookingGcashRefund(selectedBooking.notes, selectedBooking.gcashAccountName, selectedBooking.gcashAccountNumber);
+                  return (
+                    <div className="p-4 rounded-2xl bg-[#E8F7F1] border-2 border-[#A8DBC8] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-[#234E52]" />
+                          <h4 className="font-black text-xs text-[#234E52]">
+                            Security Deposit Refund (GCash Account)
+                          </h4>
+                        </div>
+                        <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-white text-[#234E52] border border-[#A8DBC8]">
+                          ₱1,000 Refundable Deposit
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        <div className="p-2.5 rounded-xl bg-white border border-[#A8DBC8]">
+                          <span className="text-[10px] font-bold text-[#234E52] uppercase block">GCash Account Name</span>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <span className="font-extrabold text-xs text-[#1A1A2E] truncate">
+                              {gcashRefund.accountName || 'Not specified'}
+                            </span>
+                            {gcashRefund.accountName && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(gcashRefund.accountName);
+                                  setActionSuccessMsg('Copied GCash Account Name!');
+                                  setTimeout(() => setActionSuccessMsg(null), 3000);
+                                }}
+                                className="text-[#234E52] hover:text-[#1A1A2E] p-1 cursor-pointer"
+                                title="Copy Name"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-white border border-[#A8DBC8]">
+                          <span className="text-[10px] font-bold text-[#234E52] uppercase block">GCash Mobile Number</span>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <a
+                              href={`tel:${gcashRefund.accountNumber}`}
+                              className="font-extrabold text-xs text-[#234E52] hover:underline"
+                            >
+                              {gcashRefund.accountNumber || 'Not specified'}
+                            </a>
+                            {gcashRefund.accountNumber && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(gcashRefund.accountNumber);
+                                  setActionSuccessMsg('Copied GCash Mobile Number!');
+                                  setTimeout(() => setActionSuccessMsg(null), 3000);
+                                }}
+                                className="text-[#234E52] hover:text-[#1A1A2E] p-1 cursor-pointer"
+                                title="Copy Number"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-white border border-[#A8DBC8]">
+                          <span className="text-[10px] font-bold text-[#234E52] uppercase block">Downpayment GCash Ref</span>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <span className="font-extrabold text-xs text-[#553C9A] font-mono truncate">
+                              {selectedBooking.gcashRefNumber || 'N/A'}
+                            </span>
+                            {selectedBooking.gcashRefNumber && selectedBooking.gcashRefNumber !== 'N/A' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(selectedBooking.gcashRefNumber);
+                                  setActionSuccessMsg('Copied GCash Ref Number!');
+                                  setTimeout(() => setActionSuccessMsg(null), 3000);
+                                }}
+                                className="text-[#553C9A] hover:text-[#1A1A2E] p-1 cursor-pointer"
+                                title="Copy Reference"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Submitted Documents Artifact Cards Grid */}
                 <div className="space-y-3">
@@ -1869,7 +3401,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             ? 'bg-[#FEF0E7] text-[#C05621] border-[#F5C6A8]'
                             : 'bg-[#EDE8FC] text-[#553C9A] border-[#C9B8F0]'
                         }`}>
-                          {modalSched.isSameDay ? 'Same-Day Rental (1 Day)' : `Multi-Day Rental (${selectedBooking.rentalDays} Days)`}
+                          {modalSched.isSameDay ? 'Same-Day Rental (1 Day)' : `Multi-Day Rental (${selectedBooking.rentalDays || 1} Days)`}
                         </span>
                       </div>
 
@@ -2235,6 +3767,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       )}
-    </div>
+
+          </div>
   );
 };
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => (
+  <AdminErrorBoundary>
+    <AdminDashboardContent {...props} />
+  </AdminErrorBoundary>
+);
