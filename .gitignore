@@ -7,6 +7,7 @@ coverage/
 .env*
 !.env.example
 .agents/
+.superpowers/
 
 graphify-out/
 scratch/

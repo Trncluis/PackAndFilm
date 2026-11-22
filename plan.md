@@ -1,83 +1,82 @@
-# Implementation Plan: Admin Fleet Calendar, Unit Tracking & GCash Deposit Refund
+# Implementation Plan: Laminated Bag QR Code Community Media & Customer Review System
 
-## 1. Problem & Requirement Analysis
-
-### Issue A: GCash Name & Number Missing in Admin Dashboard
-- **Root Cause**: In the booking flow (Step 3), the customer inputs `booking.gcashAccountName` and `booking.gcashAccountNumber` for their ₱1,000 security deposit refund.
-- **Resolution**:
-  1. Forwarded in `src/App.tsx` both as root fields and inside `notes`.
-  2. Extracted in `google-apps-script/Code.gs` and returned in `getAllBookings`.
-  3. Rendered prominently in `AdminDashboard.tsx` on booking cards, unit inspection cards, and the KYC drawer with 1-click copy buttons.
-
-### Issue B: Admin Fleet Calendar & Date Blocking (Partner-Friendly Redesign)
-- **Partner Usability Requirement**: Make the calendar and date-blocking functionality intuitive, friendly, and matched directly to the customer website's `UnifiedRentalCalendar` styling and interaction.
-- **Resolution**:
-  1. Built the Admin Fleet Calendar mirroring `UnifiedRentalCalendar.tsx`:
-     - Clean neo-brutalist circular day buttons (`SU`, `MO`, `TU`, `WE`, `TH`, `FR`, `SA`).
-     - Multi-unit status dots: 🟢 Available, 🟠 Turnover, 🔴 Booked, 🔒 Admin Hold.
-  2. **Direct Click-to-Range Functionality**:
-     - Click Day 1 -> sets start date.
-     - Click Day 2 -> sets return date (range is highlighted in soft purple `bg-[#EDE8FC]` with bold brutalist borders).
-     - Or click same day for a single-day hold.
-  3. **Inline Action Panel (Right side on desktop, stacked on mobile)**:
-     - Top Card: **🔒 Lock / Reserve Selected Dates**:
-       - Displays selected dates and days count.
-       - Unit selector: `All 3 Fleet Units` | `Osmo Pocket 3` | `G7 X Black` | `G7 X Silver`.
-       - 1-click reason pills: `🔧 Maintenance & Cleaning`, `👤 Personal Shoot / Test`, `🌟 Walk-In Customer`, `🚫 Shop Closed / Holiday`.
-       - If Walk-In Customer: clean inputs for Customer Name and Phone Number.
-       - Optional internal notes input.
-       - Big, bold Action Button: **`🔒 Confirm & Lock Selected Dates`**.
-     - Bottom Card: **📦 Fleet Equipment Status for Selected Day**:
-       - Lists all 3 camera units on that day.
-       - If available: `🟢 Ready to Rent` with `[🔒 Quick Lock]` button.
-       - If hold: `🔒 Admin Hold` with reason, notes, and **`[🔓 Unblock / Release Dates]`** 1-click button!
-       - If customer rental: Renter name, contact, pickup/return hours, **Deposit Refund GCash Details**, and `[👁️ Inspect KYC & Reservation]` button.
-  4. **Cleaned Redundant Modal & Buttons**:
-     - Removed redundant `[🔒 Block / Reserve Dates]` from the view switcher row.
-     - Removed redundant `[+ Advanced Modal]` from the camera unit toolbar.
-     - Deleted dead modal markup (`showBlockModal`) to eliminate clutter and confusion.
-     - Preserved the original full-width cards and solid dark `#1A1A2E` active button styling per user preference.
-
-### Issue C: White Screen Crash on Rapid Navigation After Refresh
-- **Root Cause Discovered & Proven**:
-  - When refreshing the admin dashboard, `AdminDashboard` immediately initializes its initial `bookings` state from `localBookings` (from `localStorage` or `App.tsx` state before the Google Sheets fetch completes).
-  - These records (`BookingRecord`) had `id`, `title`, and `renterTag`, but did not have `customerName` or `bookingRef`.
-  - When the user quickly switched to `Fleet Calendar & Units` (before `fetchAllBookings` replaced them with backend records), `getFleetUnitBookingsForDate` executed:
-    1. `b.customerName.includes('[ADMIN')`: threw `TypeError: Cannot read properties of undefined (reading 'includes')`.
-    2. `a.bookingRef.localeCompare(b.bookingRef)`: threw `TypeError: Cannot read properties of undefined (reading 'localeCompare')`.
-  - Since React had no error boundary, this unhandled render exception unmounted the whole DOM tree into a blank white screen.
-- **Resolution**:
-  1. Built universal normalizer `normalizeAdminBooking` ensuring every booking object always has defined `customerName`, `bookingRef`, `cameraId`, `cameraRented`, `startDate`, `endDate`, `status`, and `notes`.
-  2. Guarded `getFleetUnitBookingsForDate`: string-coerced all `customerName`, `status`, and `bookingRef` reads and guarded sorting logic against missing values.
-  3. Added `customerName: customer` and `bookingRef: id` to `mapSheetRowToBooking` in `src/App.tsx` and updated `BookingRecord` in `src/data/bookings.ts`.
-  4. Wrapped the dashboard in an `AdminErrorBoundary` class component that catches any unforeseen render glitch and presents a recovery card instead of a white screen.
-  5. Verified with headless Chrome CDP rapid-reload script (`verify_rapid_refresh_and_switch.cjs`): 0 runtime exceptions and clean instant rendering.
-  6. Discovered and resolved `UNDEFINEDD MULTI-DAY` typo by calculating `rentalDays` dynamically from `startDate` and `endDate` when undefined.
+## 1. Scope & Core Requirements
+- **Strict Git Guardrail**: DO NOT commit or push anything to local git or GitHub. All changes remain unstaged/uncommitted in the local working tree for manual user review and approval.
+- **Strict Homepage & Hero Isolation**: The homepage, hero section, equipment catalog, and booking stepper remain 100% untouched.
+- **Dedicated QR Landing Experience (`/review` and `/share`)**:
+  - Scanning the physical laminated QR code in the camera bag opens a standalone mobile-first page.
+  - Gives customers two distinct, clean choices:
+    1. **✨ Drop Your Shots (Get Featured)**: Upload photos/clips taken with the rented camera + Instagram handle + repost consent. Stored in Google Drive.
+    2. **⭐ Review & Suggestions**: Rate the rental experience (1-5 stars), select highlight tags, and provide feedback/suggestions for website and service improvements.
+- **Backend & Google Drive Architecture**:
+  - Google Apps Script receives media and creates/resolves a dedicated **`PackAndFilm Community Shots`** folder in Google Drive.
+  - Submissions and reviews are recorded in dedicated sheet tabs (`Community_Media` and `Customer_Reviews`) for persistence and tracking.
+- **Admin Dashboard Integration**:
+  - A new **`📸 Community & Reviews`** tab in `AdminDashboard.tsx`.
+  - Moderation view to see uploaded photos, open them in Google Drive, copy customer IG handles with 1 click, and read customer suggestions.
 
 ---
 
-## 2. Strict Git Guardrails Status
-- **Rule**: Absolutely ZERO commits and ZERO git pushes until explicitly authorized by the user.
-- **Status**: Verified. 5 unstaged modified files (`google-apps-script/Code.gs`, `plan.md`, `src/App.tsx`, `src/components/AdminDashboard.tsx`, `src/data/bookings.ts`). No commits made.
+## 2. Proposed Changes & Architecture
+
+### A. Routing & Standalone Customer Page (`src/components/DedicatedReviewPage.tsx` & `src/App.tsx`)
+1. Create `src/components/DedicatedReviewPage.tsx`:
+   - Neo-brutalist mobile-first design matching PackAndFilm tokens (`#1A1A2E`, `#553C9A`, `#FAF5FF`, `#F0FFF4`).
+   - Responsive tabs:
+     - **Tab 1: Drop Your Shots**:
+       - Fields: `socialHandle` (IG handle or name), `cameraId` (camera rented), `files` (up to 5 photo/clip files with client-side preview and size validation), `caption` (optional shoot note), `consent` (repost permission checkbox).
+       - Submit handler: base64 encodes files safely and calls Apps Script `submitCommunityMedia`.
+       - Success state: celebration message + PackAndFilm Manila thank you card.
+     - **Tab 2: Review & Feedback**:
+       - Fields: `rating` (1-5 stars), `highlights` (multi-select pills: Pristine Gear, Long Battery, Fast Handover, Easy Booking), `feedbackText` (open feedback for website/gear), `customerName` (optional).
+       - Submit handler: calls Apps Script `submitCustomerFeedback`.
+       - Success state: thank you confirmation.
+2. In `src/App.tsx`:
+   - Add `'review'` to `ActiveView` union type.
+   - Add route detection for `window.location.pathname === '/review'`, `'/share'`, or hash `#review`, `#/review`, `#share`.
+   - Render `<DedicatedReviewPage onNavigate={navigateTo} />` when `activeView === 'review'`.
+
+### B. Google Apps Script Backend (`google-apps-script/Code.gs`)
+1. Add Google Drive folder helper:
+   - `getOrCreateCommunityFolder_()`: looks up or creates the `PackAndFilm Community Shots` folder in Google Drive.
+2. Add public actions in `doPost`:
+   - `action === "submitCommunityMedia"`:
+     - Extracts files (base64 data + filename + mimeType).
+     - Uploads each file into the Drive folder, titled `[YYYY-MM-DD]_[handle]_[filename]`.
+     - Records entry in `Community_Media` sheet: timestamp, customer handle, camera rented, file URLs, file IDs, consent boolean, status (`new`).
+     - Returns `{ status: "success", count: files.length }`.
+   - `action === "submitCustomerFeedback"`:
+     - Records entry in `Customer_Reviews` sheet: timestamp, name/handle, star rating, highlights, feedback text, status (`new`).
+     - Returns `{ status: "success" }`.
+3. Add admin actions in `doPost`:
+   - `action === "getCommunityData"`:
+     - Authenticated with admin session token.
+     - Returns community submissions list and customer reviews list.
+   - `action === "updateCommunityStatus"`:
+     - Allows admin to mark items as `featured` or `archived`.
+
+### C. Admin Dashboard (`src/components/AdminDashboard.tsx`)
+1. Extend `AdminViewMode` type to include `'reviews'`:
+   - `'list' | 'calendar' | 'reviews'`
+2. Add tab button in the top navigation bar:
+   - `📸 Community & Reviews` with count badge.
+3. Build the `Community & Reviews` view:
+   - Summary metric banner: Photos Uploaded, Google Drive Folder direct link, Average Rating ⭐.
+   - Media Gallery section:
+     - Cards showing customer handle, camera rented, submission date, thumbnail previews.
+     - 1-click **📂 Open in Google Drive** button.
+     - 1-click **📋 Copy IG Handle** button.
+     - Status badges (`New`, `Featured`).
+   - Customer Feedback section:
+     - Clean list showing star rating badges, highlighted praise chips, and improvement suggestions.
 
 ---
 
-## 3. Verification & Evidence
-- **Build**: `npm run build` completed cleanly in 521ms (0 errors).
-- **Comprehensive 8-Test Automated CDP Suite** (`scratch/deep_test_suite.cjs`):
-  1. `Test 1: Initial Render` &rarr; PASS (Dashboard mounted cleanly)
-  2. `Test 2: Rapid Tab Switching Stress Test` &rarr; PASS (10 rapid cycles in 600ms, 0 crashes)
-  3. `Test 3: Month Navigation` &rarr; PASS (Chevrons Next/Prev & Jump to Today)
-  4. `Test 4: Fleet Unit Filter Switching` &rarr; PASS (All 3 Units, Osmo Pocket 3, G7 X Black, G7 X Silver)
-  5. `Test 5: Range Selection & Reversal` &rarr; PASS (Forward range, backward selection, Clear selection)
-  6. `Test 6: Date Hold & Unblock` &rarr; PASS (Created hold, verified rack card, unblocked cleanly)
-  7. `Test 7: Dirty Data Resilience` &rarr; PASS (Zero crashes with null, missing, NaN dates, and unassigned IDs)
-  8. `Test 8: Bookings Manager & KYC Inspection` &rarr; PASS (Search filtering & inspection drawer operational)
-  - **Runtime Exceptions**: 0
-  - **Console Errors**: 0
-  - **Verified Artifact**: [admin_deep_test_verified.png](file:///C:/Users/superuser/.gemini/antigravity/brain/d8cefea1-a5b9-43f1-8c1b-74d441a36da4/admin_deep_test_verified.png)
-- **Interactive Browser CDP Tests**:
-  - `admin_partner_calendar_overview.png`: Verified the clean calendar overview with all 3 camera units and status dots.
-  - `admin_partner_range_selected.png`: Verified clicking Day 20 then Day 22 highlights the range and updates the Lock card to "3 Days".
-  - `admin_partner_after_lock.png`: Verified clicking "Lock Selected Dates" creates the hold and shows the green confirmation banner.
-  - `admin_partner_equipment_rack_scrolled.png`: Verified the 3-unit equipment rack with 1-click Unblock and Quick Lock buttons.
+## 3. Verification & Validation Plan
+1. **Automated End-to-End Tests**:
+   - Run a Puppeteer/CDP script to verify `/review` route loads standalone without homepage content.
+   - Verify tab switching between "Drop Shots" and "Review & Feedback".
+   - Verify form input validation and error states.
+   - Verify Admin Dashboard switcher opens the `📸 Community & Reviews` tab and renders correctly.
+2. **TypeScript & Build Verification**:
+   - Run `npm run build` to guarantee zero compile errors or broken types.

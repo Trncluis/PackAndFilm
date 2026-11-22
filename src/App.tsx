@@ -83,6 +83,7 @@ import {
 } from './components/CameraCatalogAvailability';
 import { DedicatedRequirementsPage } from './components/DedicatedRequirementsPage';
 import { DedicatedTermsPage } from './components/DedicatedTermsPage';
+import { DedicatedReviewPage } from './components/DedicatedReviewPage';
 
 const DOWNPAYMENT_FEE = RENTAL_CONFIG.reservationFee;
 
@@ -174,7 +175,7 @@ export interface ConfirmedReceiptData {
   gcashRefNumber: string;
 }
 
-export type ActiveView = 'home' | 'book' | 'requirements' | 'terms' | 'admin';
+export type ActiveView = 'home' | 'book' | 'requirements' | 'terms' | 'admin' | 'review';
 
 export default function App() {
   // Client Route State
@@ -224,6 +225,28 @@ export default function App() {
     ) {
       return 'terms';
     }
+    if (
+      rawHash === '#review' ||
+      rawHash === '#reviews' ||
+      rawHash === '#share' ||
+      rawHash === '#community' ||
+      rawHash === '#/review' ||
+      rawHash === '#/share' ||
+      rawHash.startsWith('#review') ||
+      rawHash.startsWith('#share') ||
+      rawPath === '/review' ||
+      rawPath === '/review/' ||
+      rawPath === '/reviews' ||
+      rawPath === '/reviews/' ||
+      rawPath === '/share' ||
+      rawPath === '/share/' ||
+      rawPath === '/community' ||
+      rawPath === '/community/' ||
+      p.get('view') === 'review' ||
+      p.get('view') === 'share'
+    ) {
+      return 'review';
+    }
     return 'home';
   };
 
@@ -257,6 +280,7 @@ export default function App() {
       if (view === 'book') newPath = '/book';
       else if (view === 'requirements') newPath = '/requirements';
       else if (view === 'terms') newPath = '/terms';
+      else if (view === 'review') newPath = '/review';
       else if (view === 'admin') newPath = '/admin';
 
       if (window.location.pathname !== newPath && !window.location.hash) {
@@ -2977,6 +3001,14 @@ export default function App() {
       {/* 2. DEDICATED TERMS & CONDITIONS VIEW */}
       {activeView === 'terms' && (
         <DedicatedTermsPage onNavigate={navigateTo} />
+      )}
+
+      {/* 3. DEDICATED COMMUNITY & REVIEW VIEW */}
+      {activeView === 'review' && (
+        <DedicatedReviewPage
+          appsScriptUrl={APPS_SCRIPT_URL}
+          onNavigate={navigateTo}
+        />
       )}
 
       {/* 3. HOMEPAGE VIEW */}

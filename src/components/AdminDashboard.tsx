@@ -35,7 +35,13 @@ import {
   Phone,
   Shield,
   Tag,
-  Sparkles
+  Sparkles,
+  Star,
+  MessageSquare,
+  Instagram,
+  QrCode,
+  Download,
+  Printer
 } from 'lucide-react';
 
 export function parseBookingEmail(notes?: string, email?: string): string {
@@ -937,7 +943,34 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
   const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string; isVideo?: boolean } | null>(null);
 
   // ── Fleet Calendar & Date Blocking States ──
-  const [adminViewMode, setAdminViewMode] = useState<'list' | 'calendar'>('list');
+  const [adminViewMode, setAdminViewMode] = useState<'list' | 'calendar' | 'reviews'>('list');
+
+  // ── Community Media & Customer Reviews States ──
+  const [communityMedia, setCommunityMedia] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('pnf_community_shots');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [customerReviews, setCustomerReviews] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('pnf_customer_reviews');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [communityDriveFolderUrl, setCommunityDriveFolderUrl] = useState<string>('');
+  const [communitySubTab, setCommunitySubTab] = useState<'shots' | 'reviews'>('shots');
+  const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
+  const [isLoadingCommunity, setIsLoadingCommunity] = useState<boolean>(false);
+  const [showBagQrModal, setShowBagQrModal] = useState(false);
+  const [copiedQrLink, setCopiedQrLink] = useState(false);
+  const bagQrTargetUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+    ? `${window.location.origin}/#review`
+    : 'https://pack-and-film.vercel.app/#review';
   const [selectedFleetUnit, setSelectedFleetUnit] = useState<string>('all');
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(() => {
@@ -1101,7 +1134,7 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
 
   // Prevent background scroll-chaining and repaint cycles when any modal is open in Admin Dashboard
   useEffect(() => {
-    const isAnyModalOpen = !!selectedBooking || !!previewDoc || showClearAllModal || !!deleteTargetBooking ;
+    const isAnyModalOpen = !!selectedBooking || !!previewDoc || showClearAllModal || !!deleteTargetBooking || showBagQrModal;
     if (isAnyModalOpen) {
       const originalOverflow = window.getComputedStyle(document.body).overflow;
       document.body.style.overflow = 'hidden';
@@ -1109,7 +1142,7 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
         document.body.style.overflow = originalOverflow;
       };
     }
-  }, [selectedBooking, previewDoc, showClearAllModal, deleteTargetBooking]);
+  }, [selectedBooking, previewDoc, showClearAllModal, deleteTargetBooking, showBagQrModal]);
 
   // ─────────────────────────────────────────────────────────────
   // BACKEND AUTHENTICATION (POST action: adminLogin & SHA-256 Verification)
@@ -1269,8 +1302,74 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     if (isAuthenticated) {
       fetchAllBookings();
+      fetchCommunityData();
     }
   }, [isAuthenticated]);
+
+  // ─────────────────────────────────────────────────────────────
+  // FETCH COMMUNITY DATA (POST action: getCommunityData with Session Token)
+  // ─────────────────────────────────────────────────────────────
+  const fetchCommunityData = async () => {
+    if (!sessionToken) return;
+
+    setIsLoadingCommunity(true);
+    try {
+      const res = await fetch(appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'getCommunityData',
+          sessionToken: sessionToken
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (data && data.status === 'success') {
+        if (Array.isArray(data.mediaSubmissions)) setCommunityMedia(data.mediaSubmissions);
+        if (Array.isArray(data.reviews)) setCustomerReviews(data.reviews);
+        if (data.communityFolderUrl) setCommunityDriveFolderUrl(data.communityFolderUrl);
+      } else {
+        const localShots = JSON.parse(localStorage.getItem('pnf_community_shots') || '[]');
+        const localReviews = JSON.parse(localStorage.getItem('pnf_customer_reviews') || '[]');
+        if (localShots.length > 0) setCommunityMedia(localShots);
+        if (localReviews.length > 0) setCustomerReviews(localReviews);
+      }
+    } catch (err) {
+      console.warn('Error fetching community data, reading local cache:', err);
+      const localShots = JSON.parse(localStorage.getItem('pnf_community_shots') || '[]');
+      const localReviews = JSON.parse(localStorage.getItem('pnf_customer_reviews') || '[]');
+      if (localShots.length > 0) setCommunityMedia(localShots);
+      if (localReviews.length > 0) setCustomerReviews(localReviews);
+    } finally {
+      setIsLoadingCommunity(false);
+    }
+  };
+
+  const handleUpdateCommunityStatus = async (itemType: 'media' | 'review', id: string, newStatus: string) => {
+    if (itemType === 'media') {
+      setCommunityMedia(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
+    } else {
+      setCustomerReviews(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
+    }
+
+    if (!sessionToken) return;
+    try {
+      await fetch(appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'updateCommunityStatus',
+          sessionToken,
+          itemType,
+          id,
+          status: newStatus
+        })
+      });
+    } catch (err) {
+      console.warn('Error updating status on server:', err);
+    }
+  };
 
   // ─────────────────────────────────────────────────────────────
   // UPDATE BOOKING STATUS WITH STRICT SEQUENTIAL WORKFLOW ENFORCEMENT
@@ -1864,47 +1963,47 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Header Bar */}
-      <header className="sticky top-0 z-30 bg-[#FAFAF7]/95 backdrop-blur-md border-b-2 border-[#1A1A2E] px-4 sm:px-8 py-3.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 bg-[#FAFAF7]/95 backdrop-blur-md border-b-2 border-[#1A1A2E] px-3 sm:px-8 py-2.5 sm:py-3.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          <div className="min-w-0 flex items-center gap-2 sm:gap-3">
             <button
               onClick={onExit}
-              className="p-2 rounded-xl bg-white border border-[#E8E4F0] hover:bg-[#EDE8FC] text-[#1A1A2E] transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-white border border-[#E8E4F0] hover:bg-[#EDE8FC] text-[#1A1A2E] transition-colors cursor-pointer shrink-0"
               title="Return to Customer Storefront"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div className="w-11 h-11 rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] p-0.5 flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-[#EDE8FC] border border-[#C9B8F0] p-0.5 flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
               <img
                 src="/logo.png"
                 alt="PackAndFilm"
                 className="w-full h-full object-contain scale-105"
               />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-lg tracking-tight text-[#1A1A2E]">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-black text-sm sm:text-lg tracking-tight text-[#1A1A2E] truncate">
                   PackAndFilm Operations
                 </span>
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#1A1A2E] text-white">
+                <span className="hidden md:inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#1A1A2E] text-white shrink-0">
                   ADMIN CONSOLE
                 </span>
               </div>
-              <p className="text-[11px] text-[#6B6B8A]">
-                Authenticated as: <strong className="text-[#553C9A]">{activeAdminName}</strong> ({activeAdminUser})
+              <p className="text-[10px] sm:text-[11px] text-[#6B6B8A] truncate">
+                Authenticated: <strong className="text-[#553C9A]">{activeAdminName}</strong> ({activeAdminUser})
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               onClick={fetchAllBookings}
               disabled={isLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] hover:bg-[#EDE8FC] text-xs font-bold text-[#553C9A] transition-all cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-xl bg-white border border-[#E8E4F0] hover:bg-[#EDE8FC] text-xs font-bold text-[#553C9A] transition-all cursor-pointer disabled:opacity-50 shrink-0"
               title="Sync with Google Sheets"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Sync Sheets</span>
+              <span className="hidden md:inline">Sync Sheets</span>
             </button>
 
             <button
@@ -1913,26 +2012,27 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
                 setShowClearAllModal(true);
               }}
               disabled={isLoading || bookings.length === 0}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#FFF5F5] border border-[#FEB2B2] text-xs font-bold text-[#C53030] hover:bg-[#FED7D7] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-xl bg-[#FFF5F5] border border-[#FEB2B2] text-xs font-bold text-[#C53030] hover:bg-[#FED7D7] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
               title="Permanently remove all bookings from Google Sheets"
             >
               <Trash2 className="w-3.5 h-3.5 text-[#C53030]" />
-              <span className="hidden sm:inline">Clear All Bookings</span>
+              <span className="hidden md:inline">Clear All Bookings</span>
             </button>
 
             <button
               onClick={handleLogout}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-bold text-[#1A1A2E] hover:bg-[#FAFAF7] transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-xl bg-white border border-[#E8E4F0] text-xs font-bold text-[#1A1A2E] hover:bg-[#FAFAF7] transition-all cursor-pointer shrink-0"
+              title="Sign Out"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
+              <span className="hidden md:inline">Sign Out</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
         
         {/* KPI Summary Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -1992,20 +2092,20 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* Admin Navigation Switcher: Bookings Manager vs Fleet Calendar & Units */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E]">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-2 sm:p-2.5 rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E]">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
             <button
               onClick={() => setAdminViewMode('list')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 adminViewMode === 'list'
                   ? 'bg-[#1A1A2E] text-white shadow-xs'
                   : 'bg-[#FAFAF7] text-[#6B6B8A] hover:bg-[#EDE8FC] hover:text-[#1A1A2E]'
               }`}
             >
-              <FileText className="w-4 h-4" />
+              <FileText className="w-4 h-4 shrink-0" />
               <span>Bookings Manager</span>
               {bookings.length > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
                   adminViewMode === 'list' ? 'bg-white/20 text-white' : 'bg-[#EDE8FC] text-[#553C9A]'
                 }`}>
                   {bookings.length}
@@ -2015,17 +2115,39 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
 
             <button
               onClick={() => setAdminViewMode('calendar')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 adminViewMode === 'calendar'
                   ? 'bg-[#1A1A2E] text-white shadow-xs'
                   : 'bg-[#FAFAF7] text-[#6B6B8A] hover:bg-[#EDE8FC] hover:text-[#1A1A2E]'
               }`}
             >
-              <Calendar className="w-4 h-4" />
+              <Calendar className="w-4 h-4 shrink-0" />
               <span>Fleet Calendar & Units</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F7F1] text-[#234E52] border border-[#A8DBC8]">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F7F1] text-[#234E52] border border-[#A8DBC8] shrink-0">
                 3 Units Live
               </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setAdminViewMode('reviews');
+                fetchCommunityData();
+              }}
+              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
+                adminViewMode === 'reviews'
+                  ? 'bg-[#1A1A2E] text-white shadow-xs'
+                  : 'bg-[#FAFAF7] text-[#6B6B8A] hover:bg-[#EDE8FC] hover:text-[#1A1A2E]'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-[#C9B8F0] shrink-0" />
+              <span>Community & Reviews</span>
+              {communityMedia.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                  adminViewMode === 'reviews' ? 'bg-white/20 text-white' : 'bg-[#EDE8FC] text-[#553C9A]'
+                }`}>
+                  {communityMedia.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -2103,23 +2225,41 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
                     className="bg-white rounded-2xl border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] p-4 sm:p-5 transition-all hover:-translate-y-0.5 space-y-3"
                   >
                     {/* Header Row */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#E8E4F0]">
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-mono font-black text-sm text-[#1A1A2E] bg-[#FAFAF7] px-2.5 py-1 rounded-lg border border-[#E8E4F0]">
-                          {b.bookingRef}
-                        </span>
-                        <span className="font-black text-base text-[#1A1A2E]">
-                          {b.customerName || 'Valued Renter'}
-                        </span>
-                        <span className="text-xs text-[#6B46C1] font-bold">
-                          {b.socialMediaHandle}
-                        </span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-[#E8E4F0]">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-black text-xs sm:text-sm text-[#1A1A2E] bg-[#FAFAF7] px-2.5 py-1 rounded-lg border border-[#E8E4F0] shrink-0 whitespace-nowrap">
+                            {b.bookingRef}
+                          </span>
+                          <span className="font-black text-sm sm:text-base text-[#1A1A2E] truncate">
+                            {b.customerName || 'Valued Renter'}
+                          </span>
+                        </div>
+                        {b.socialMediaHandle && (
+                          <div className="min-w-0 max-w-full">
+                            {b.socialMediaHandle.startsWith('http') ? (
+                              <a
+                                href={b.socialMediaHandle}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-[#6B46C1] hover:underline truncate max-w-full"
+                              >
+                                <span className="truncate">{b.socialMediaHandle}</span>
+                                <ExternalLink className="w-3 h-3 shrink-0" />
+                              </a>
+                            ) : (
+                              <span className="text-[11px] text-[#6B46C1] font-bold truncate block">
+                                {b.socialMediaHandle}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Status Badge & Workflow Step */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
                         <span
-                          className={`text-xs font-black px-3 py-1 rounded-full border ${workflow.pillColor} ${workflow.textColor} ${workflow.borderColor}`}
+                          className={`text-xs font-black px-3 py-1 rounded-full border whitespace-nowrap ${workflow.pillColor} ${workflow.textColor} ${workflow.borderColor}`}
                           title={workflow.description}
                         >
                           {workflow.stepLabel}
@@ -2131,9 +2271,9 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
                             setInspectedDocs({});
                             setKycConfirmedCheckbox(false);
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#1A1A2E] text-xs font-bold text-[#1A1A2E] flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-[#FAFAF7] hover:bg-[#EDE8FC] border border-[#1A1A2E] text-xs font-bold text-[#1A1A2E] flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
                         >
-                          <Eye className="w-3.5 h-3.5 text-[#553C9A]" />
+                          <Eye className="w-3.5 h-3.5 text-[#553C9A] shrink-0" />
                           <span>Inspect KYC & Files</span>
                         </button>
                       </div>
@@ -2215,32 +2355,36 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
                             </div>
 
                             {isHold ? (
-                              <span className="px-2.5 py-0.5 rounded-lg bg-[#EDE8FC] border border-[#C9B8F0] text-[#553C9A] font-black flex items-center gap-1">
+                              <span className="px-2.5 py-0.5 rounded-lg bg-[#EDE8FC] border border-[#C9B8F0] text-[#553C9A] font-black flex items-center gap-1 shrink-0">
                                 <Lock className="w-3 h-3" />
                                 <span>Admin Fleet Hold</span>
                               </span>
                             ) : (
-                              <div className="px-2.5 py-0.5 rounded-lg bg-[#E8F7F1] border border-[#A8DBC8] text-[#234E52] flex items-center gap-1.5 font-bold shadow-2xs">
-                                <CreditCard className="w-3.5 h-3.5 text-[#234E52]" />
-                                <span>Deposit Refund GCash:</span>
-                                <strong className="text-[#1A1A2E]">{gcashRefund.accountName || 'Not specified'}</strong>
-                                <span>•</span>
-                                <strong className="text-[#1A1A2E]">{gcashRefund.accountNumber || 'Not specified'}</strong>
-                                {(gcashRefund.accountName || gcashRefund.accountNumber) && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const text = `${gcashRefund.accountName} - ${gcashRefund.accountNumber}`;
-                                      navigator.clipboard.writeText(text);
-                                      setActionSuccessMsg(`Copied GCash: ${text}`);
-                                      setTimeout(() => setActionSuccessMsg(null), 3000);
-                                    }}
-                                    className="p-0.5 hover:text-[#1A1A2E] text-[#234E52] cursor-pointer ml-0.5"
-                                    title="Copy GCash refund details"
-                                  >
-                                    <Copy className="w-3 h-3" />
-                                  </button>
-                                )}
+                              <div className="px-2.5 py-1 rounded-lg bg-[#E8F7F1] border border-[#A8DBC8] text-[#234E52] flex flex-wrap items-center gap-1.5 font-bold shadow-2xs max-w-full">
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <CreditCard className="w-3.5 h-3.5 text-[#234E52] shrink-0" />
+                                  <span>Deposit Refund GCash:</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                  <strong className="text-[#1A1A2E]">{gcashRefund.accountName || 'Not specified'}</strong>
+                                  <span>•</span>
+                                  <strong className="text-[#1A1A2E]">{gcashRefund.accountNumber || 'Not specified'}</strong>
+                                  {(gcashRefund.accountName || gcashRefund.accountNumber) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const text = `${gcashRefund.accountName} - ${gcashRefund.accountNumber}`;
+                                        navigator.clipboard.writeText(text);
+                                        setActionSuccessMsg(`Copied GCash: ${text}`);
+                                        setTimeout(() => setActionSuccessMsg(null), 3000);
+                                      }}
+                                      className="p-0.5 hover:text-[#1A1A2E] text-[#234E52] cursor-pointer ml-0.5 shrink-0"
+                                      title="Copy GCash refund details"
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -2248,11 +2392,11 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
                       })()}
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#E8E4F0]/40">
-                        <div className="text-[10px] text-[#6B6B8A]">
+                        <div className="text-[10px] text-[#6B6B8A] break-words">
                           {b.handoverMethod}
                         </div>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {/* Step 1: KYC Pending -> Can only Inspect & Review KYC */}
                           {workflow.step === 1 && (
                             <>
@@ -2359,7 +2503,7 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
 
     {/* View 2: Fleet Calendar & Units Manager */}
     {adminViewMode === 'calendar' && (
-      <div className="space-y-6 animate-fadeIn max-w-6xl mx-auto">
+      <div className="space-y-6 animate-fadeIn">
         {/* Top Control Bar: Fleet Unit Switcher Tabs */}
         <div className="bg-white p-3 sm:p-4 rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
@@ -2998,6 +3142,291 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
 
           </div>
         </div>
+      </div>
+    )}
+
+    {/* View 3: Community Media & Customer Reviews Manager */}
+    {adminViewMode === 'reviews' && (
+      <div className="space-y-6 animate-fadeIn">
+        
+        {/* Top Control Header Card */}
+        <div className="bg-white p-4 sm:p-5 rounded-[24px] border-2 border-[#1A1A2E] shadow-[4px_4px_0px_#1A1A2E] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-black text-[#1A1A2E]">Community Media & Reviews</h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]">
+                QR Bag Submissions
+              </span>
+            </div>
+            <p className="text-xs text-[#718096] font-semibold mt-0.5">
+              Customer photos shot with PackAndFilm gear + service improvement feedback.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowBagQrModal(true)}
+              className="px-3 py-2 rounded-xl bg-[#EDE8FC] border-2 border-[#1A1A2E] hover:bg-[#DDD4FA] text-[#553C9A] font-black text-xs transition-all shadow-[2px_2px_0px_#1A1A2E] active:translate-x-[1px] active:translate-y-[1px] flex items-center gap-1.5 cursor-pointer"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Get Bag QR Card</span>
+            </button>
+
+            {communityDriveFolderUrl && (
+              <a
+                href={communityDriveFolderUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-2 rounded-xl bg-[#FAF5FF] border-2 border-[#553C9A] text-[#553C9A] hover:bg-[#553C9A] hover:text-white font-black text-xs transition-all shadow-[2px_2px_0px_#553C9A] active:translate-x-[1px] active:translate-y-[1px] flex items-center gap-1.5 cursor-pointer"
+              >
+                <FolderOpen className="w-4 h-4" />
+                <span>Open Community Drive ↗</span>
+              </a>
+            )}
+
+            <button
+              onClick={fetchCommunityData}
+              disabled={isLoadingCommunity}
+              className="px-3 py-2 rounded-xl bg-white border-2 border-[#1A1A2E] hover:bg-[#EDE8FC] text-[#1A1A2E] font-black text-xs transition-all shadow-[2px_2px_0px_#1A1A2E] active:translate-x-[1px] active:translate-y-[1px] flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCommunity ? 'animate-spin' : ''}`} />
+              <span>Sync</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Sub-tab Navigation: Photo Drops vs Reviews */}
+        <div className="flex items-center gap-2 border-b-2 border-[#E8E4F0] pb-2 overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setCommunitySubTab('shots')}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
+              communitySubTab === 'shots'
+                ? 'bg-[#EDE8FC] text-[#553C9A] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E]'
+                : 'bg-[#FAFAF7] text-[#6B6B8A] border-2 border-transparent hover:border-[#CBD5E0] hover:text-[#1A1A2E]'
+            }`}
+          >
+            <span>Photo Drops for FB & IG</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+              communitySubTab === 'shots' ? 'bg-[#553C9A] text-white' : 'bg-[#EDE8FC] text-[#553C9A]'
+            }`}>
+              {communityMedia.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setCommunitySubTab('reviews')}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
+              communitySubTab === 'reviews'
+                ? 'bg-[#EDE8FC] text-[#553C9A] border-2 border-[#1A1A2E] shadow-[3px_3px_0px_#1A1A2E]'
+                : 'bg-[#FAFAF7] text-[#6B6B8A] border-2 border-transparent hover:border-[#CBD5E0] hover:text-[#1A1A2E]'
+            }`}
+          >
+            <span>Customer Reviews & Ideas</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+              communitySubTab === 'reviews' ? 'bg-[#553C9A] text-white' : 'bg-[#EDE8FC] text-[#553C9A]'
+            }`}>
+              {customerReviews.length}
+            </span>
+          </button>
+        </div>
+
+        {/* SUB-VIEW 1: PHOTO DROPS */}
+        {communitySubTab === 'shots' && (
+          <div className="space-y-4">
+            {communityMedia.length === 0 ? (
+              <div className="bg-white border-2 border-[#1A1A2E] rounded-[24px] p-8 text-center shadow-[4px_4px_0px_#1A1A2E]">
+                <h4 className="text-sm font-black text-[#1A1A2E]">No Community Photos Yet</h4>
+                <p className="text-xs text-[#718096] max-w-sm mx-auto mt-1 font-medium">
+                  When renters scan the laminated card inside the camera bag and drop their shots, they will show up here with 1-click Drive download links!
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {communityMedia.map((item: any) => {
+                  const isFeatured = item.status === 'featured';
+                  const isArchived = item.status === 'archived';
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white border-2 border-[#1A1A2E] rounded-2xl p-4 shadow-[4px_4px_0px_#1A1A2E] flex flex-col justify-between space-y-3"
+                    >
+                      <div>
+                        {/* Header: Handle & Status */}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="font-black text-sm text-[#1A1A2E] truncate">
+                              {item.socialHandle}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(item.socialHandle);
+                                setCopiedHandle(item.id);
+                                setTimeout(() => setCopiedHandle(null), 2000);
+                              }}
+                              className="text-[10px] font-bold text-[#553C9A] hover:underline cursor-pointer flex items-center gap-0.5"
+                              title="Copy handle"
+                            >
+                              <Copy className="w-3 h-3" />
+                              <span>{copiedHandle === item.id ? 'Copied!' : 'Copy'}</span>
+                            </button>
+                          </div>
+
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                            isFeatured
+                              ? 'bg-[#C6F6D5] text-[#22543D]'
+                              : isArchived
+                              ? 'bg-[#EDF2F7] text-[#718096]'
+                              : 'bg-[#EDE8FC] text-[#553C9A]'
+                          }`}>
+                            {item.status || 'New'}
+                          </span>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-1 text-xs text-[#4A5568]">
+                          <div className="font-bold text-[#2D3748] flex items-center gap-1.5">
+                            <Camera className="w-3.5 h-3.5 text-[#553C9A]" />
+                            <span>{item.cameraRented || 'Camera Kit'}</span>
+                          </div>
+
+                          {item.caption && (
+                            <div className="text-[11px] italic text-[#718096] bg-[#FAFAF7] p-2 rounded-xl border border-[#E2E8F0]">
+                              "{item.caption}"
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between text-[10px] text-[#A0AEC0] pt-1">
+                            <span>{item.timestamp ? String(item.timestamp).split('T')[0] : 'Recently'}</span>
+                            <span className="font-black text-[#276749]">
+                              {item.consentGiven ? '✓ Consent: Yes' : 'Consent: No'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Media previews / links */}
+                        {Array.isArray(item.fileUrls) && item.fileUrls.length > 0 && (
+                          <div className="grid grid-cols-3 gap-1.5 mt-2.5">
+                            {item.fileUrls.slice(0, 3).map((url: string, uIdx: number) => (
+                              <a
+                                key={uIdx}
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="aspect-square bg-[#FAF5FF] border border-[#C9B8F0] rounded-xl flex items-center justify-center text-[10px] font-bold text-[#553C9A] hover:bg-[#EDE8FC] transition-colors p-1 text-center truncate cursor-pointer"
+                              >
+                                View #{uIdx + 1} ↗
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="pt-2 border-t border-[#E8E4F0] flex items-center justify-between gap-2">
+                        {item.driveFolderUrl ? (
+                          <a
+                            href={item.driveFolderUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-black text-[#553C9A] hover:underline flex items-center gap-1"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5" />
+                            <span>Drive Folder ↗</span>
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-[#A0AEC0] font-bold">Stored in Drive</span>
+                        )}
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateCommunityStatus('media', item.id, isFeatured ? 'new' : 'featured')}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                              isFeatured
+                                ? 'bg-[#C6F6D5] text-[#22543D] border-[#9AE6B4]'
+                                : 'bg-[#FAF5FF] text-[#553C9A] border-[#C9B8F0] hover:bg-[#553C9A] hover:text-white'
+                            }`}
+                          >
+                            {isFeatured ? '★ Featured' : 'Feature'}
+                          </button>
+                        </div>
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SUB-VIEW 2: CUSTOMER REVIEWS & FEEDBACK */}
+        {communitySubTab === 'reviews' && (
+          <div className="space-y-4">
+            {customerReviews.length === 0 ? (
+              <div className="bg-white border-2 border-[#1A1A2E] rounded-[24px] p-8 text-center shadow-[4px_4px_0px_#1A1A2E]">
+                <h4 className="text-sm font-black text-[#1A1A2E]">No Reviews Submitted Yet</h4>
+                <p className="text-xs text-[#718096] max-w-sm mx-auto mt-1 font-medium">
+                  When renters submit feedback or suggestions via the camera bag QR card, their reviews will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {customerReviews.map((rev: any) => (
+                  <div
+                    key={rev.id}
+                    className="bg-white border-2 border-[#1A1A2E] rounded-2xl p-4 sm:p-5 shadow-[4px_4px_0px_#1A1A2E] space-y-2.5"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-sm text-[#1A1A2E]">{rev.customerName || 'Valued Renter'}</span>
+                        <span className="text-[10px] font-bold text-[#718096] bg-[#EDF2F7] px-2 py-0.5 rounded-full">
+                          {rev.cameraRented || 'Camera Rental'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex text-[#ECC94B] text-sm">
+                          {Array.from({ length: rev.rating || 5 }).map((_, i) => (
+                            <Star key={i} className="w-4 h-4 fill-current" />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-[#A0AEC0] font-bold">
+                          {rev.timestamp ? String(rev.timestamp).split('T')[0] : 'Recently'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Highlight pills */}
+                    {Array.isArray(rev.highlights) && rev.highlights.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {rev.highlights.map((h: string, hIdx: number) => (
+                          <span
+                            key={hIdx}
+                            className="bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0] px-2.5 py-0.5 rounded-full text-[10px] font-black"
+                          >
+                            {h}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Feedback content */}
+                    {rev.feedbackText && (
+                      <blockquote className="bg-[#FAFAF7] border-l-4 border-[#2F855A] p-3 rounded-r-xl text-xs text-[#2D3748] font-medium leading-relaxed">
+                        "{rev.feedbackText}"
+                      </blockquote>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     )}
       </main>
@@ -3764,6 +4193,96 @@ const AdminDashboardContent: React.FC<AdminDashboardProps> = ({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          7. CAMERA BAG QR CODE MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {showBagQrModal && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+          <div
+            className="fixed inset-0 bg-black/75 transition-opacity will-change-opacity"
+            onClick={() => setShowBagQrModal(false)}
+            aria-hidden="true"
+          />
+          <div className="relative w-full max-w-sm bg-[#FAFAF7] rounded-[28px] border-2 border-[#1A1A2E] shadow-[8px_8px_0px_#1A1A2E] overflow-hidden p-5 sm:p-6 space-y-4 z-10 isolate my-8">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-[#E8E4F0]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#EDE8FC] border-2 border-[#1A1A2E] flex items-center justify-center text-[#553C9A] shadow-[2px_2px_0px_#1A1A2E]">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[#1A1A2E]">Camera Bag QR Code</h3>
+                  <p className="text-[11px] text-[#6B6B8A] font-semibold">Ready for your laminated bag cards</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBagQrModal(false)}
+                className="w-8 h-8 rounded-xl border-2 border-[#1A1A2E] bg-white flex items-center justify-center text-[#6B6B8A] hover:text-[#1A1A2E] hover:bg-[#EDE8FC] shadow-[2px_2px_0px_#1A1A2E] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Bag Card Preview */}
+            <div className="bg-white border-2 border-[#1A1A2E] rounded-2xl p-5 shadow-[4px_4px_0px_#1A1A2E] text-center space-y-3">
+              <div className="flex items-center justify-between border-b border-[#E8E4F0] pb-2">
+                <div className="flex items-center gap-1.5">
+                  <img src="/logo.png" alt="PackAndFilm" className="w-5 h-5 object-contain" />
+                  <span className="font-black text-xs uppercase tracking-wider text-[#1A1A2E]">PackAndFilm</span>
+                </div>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#EDE8FC] text-[#553C9A] border border-[#C9B8F0]">
+                  Official Bag Card
+                </span>
+              </div>
+
+              <div>
+                <h4 className="text-base font-black text-[#1A1A2E] tracking-tight">How Was Your Shoot?</h4>
+                <p className="text-[11px] text-[#718096] font-semibold mt-0.5">Scan to drop photos for feature or leave feedback!</p>
+              </div>
+
+              <div className="py-1">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(bagQrTargetUrl)}&color=1A1A2E&margin=8`}
+                  alt="PackAndFilm Camera Bag Review QR Code"
+                  className="w-44 h-44 mx-auto rounded-xl border-2 border-[#1A1A2E] p-2 bg-white shadow-[3px_3px_0px_#1A1A2E]"
+                />
+              </div>
+
+              {/* Automatic Production Link with Copy */}
+              <div className="flex items-center justify-between gap-1.5 bg-[#FAF5FF] border border-[#C9B8F0] py-1.5 px-3 rounded-xl">
+                <span className="text-[10px] text-[#553C9A] font-black truncate">
+                  {bagQrTargetUrl.replace(/^https?:\/\//, '')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(bagQrTargetUrl);
+                    setCopiedQrLink(true);
+                    setTimeout(() => setCopiedQrLink(false), 2000);
+                  }}
+                  className="text-[10px] font-bold text-[#553C9A] hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>{copiedQrLink ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Actions: Download High-Res PNG */}
+            <a
+              href={`https://api.qrserver.com/v1/create-qr-code/?size=800x800&data=${encodeURIComponent(bagQrTargetUrl)}&color=1A1A2E&margin=12&format=png`}
+              download="packandfilm-camera-bag-qr.png"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full py-3 px-4 bg-[#553C9A] hover:bg-[#44307d] text-white border-2 border-[#1A1A2E] rounded-xl font-black text-xs shadow-[3px_3px_0px_#1A1A2E] active:translate-x-[1px] active:translate-y-[1px] flex items-center justify-center gap-2 cursor-pointer transition-all"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download High-Res QR Code (.PNG) ↗</span>
+            </a>
           </div>
         </div>
       )}

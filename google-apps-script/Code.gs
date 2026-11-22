@@ -16,6 +16,9 @@
 
 const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 const KYC_ROOT_FOLDER_NAME = "PackAndFilm_KYC_Uploads";
+const COMMUNITY_ROOT_FOLDER_NAME = "PackAndFilm_Community_Shots";
+const COMMUNITY_MEDIA_SHEET_NAME = "Community_Media";
+const CUSTOMER_REVIEWS_SHEET_NAME = "Customer_Reviews";
 
 // ─────────────────────────────────────────────────────────────
 // 0. DATE, TIMEZONE, CONCURRENCY & AUDIT CORE UTILITIES
@@ -425,6 +428,68 @@ function getOrCreateRootFolder() {
   }
   const newFolder = DriveApp.createFolder(KYC_ROOT_FOLDER_NAME);
   return newFolder;
+}
+
+/**
+ * Retrieves or creates the top-level root folder for PackAndFilm community submissions.
+ */
+function getOrCreateCommunityRootFolder() {
+  const folders = DriveApp.getFoldersByName(COMMUNITY_ROOT_FOLDER_NAME);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  const newFolder = DriveApp.createFolder(COMMUNITY_ROOT_FOLDER_NAME);
+  return newFolder;
+}
+
+/**
+ * Retrieves or creates the Community_Media tracking sheet.
+ */
+function getOrCreateCommunityMediaSheet(ss) {
+  let sheet = ss.getSheetByName(COMMUNITY_MEDIA_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(COMMUNITY_MEDIA_SHEET_NAME);
+    const headers = [
+      "Submission ID",
+      "Timestamp",
+      "Social Handle / Name",
+      "Camera Unit",
+      "Caption / Location",
+      "Consent Given",
+      "Status",
+      "Media Count",
+      "Drive File Links",
+      "Drive Folder URL"
+    ];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#EDE8FC");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/**
+ * Retrieves or creates the Customer_Reviews tracking sheet.
+ */
+function getOrCreateCustomerReviewsSheet(ss) {
+  let sheet = ss.getSheetByName(CUSTOMER_REVIEWS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CUSTOMER_REVIEWS_SHEET_NAME);
+    const headers = [
+      "Review ID",
+      "Timestamp",
+      "Customer Name / Handle",
+      "Camera Unit",
+      "Rating",
+      "Highlight Tags",
+      "Suggestions / Feedback",
+      "Status"
+    ];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#F0FFF4");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
 }
 
 /**
@@ -1637,6 +1702,209 @@ function doPost(e) {
         bookingRef: targetRef,
         driveFolderUrl: bookingFolder.getUrl(),
         message: "Documents successfully added to customer Google Drive folder."
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ── 7b. COMMUNITY MEDIA SUBMISSION (PUBLIC DROP YOUR SHOTS TO GOOGLE DRIVE) ──
+    if (body.action === "submitCommunityMedia") {
+      const socialHandle = String(body.socialHandle || "").trim();
+      const cameraRented = String(body.cameraRented || "").trim();
+      const caption = String(body.caption || "").trim();
+      const consentGiven = body.consentGiven !== false;
+      const files = Array.isArray(body.files) ? body.files : [];
+
+      if (!socialHandle) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: "Instagram handle or name is required."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const rootFolder = getOrCreateCommunityRootFolder();
+      const cleanHandle = socialHandle.replace(/[^a-zA-Z0-9_.-]/g, "_");
+      const datePrefix = Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd");
+      const subfolderName = datePrefix + "_" + cleanHandle;
+
+      let subfolder;
+      const existingSub = rootFolder.getFoldersByName(subfolderName);
+      if (existingSub.hasNext()) {
+        subfolder = existingSub.next();
+      } else {
+        subfolder = rootFolder.createFolder(subfolderName);
+      }
+
+      const savedUrls = [];
+      for (let fi = 0; fi < files.length; fi++) {
+        const f = files[fi];
+        if (f && f.base64) {
+          const fileIndex = fi + 1;
+          const cleanOriginalName = String(f.fileName || ("media_" + fileIndex)).replace(/[^a-zA-Z0-9_.-]/g, "_");
+          const filenameBase = String(fileIndex).padStart(2, "0") + "_" + cleanOriginalName.replace(/\.[^/.]+$/, "");
+          const fileUrl = saveBase64ToDrive(subfolder, f.base64, filenameBase);
+          if (fileUrl) savedUrls.push(fileUrl);
+        }
+      }
+
+      const commSheet = getOrCreateCommunityMediaSheet(ss);
+      const submissionId = "COMM-" + Utilities.formatDate(new Date(), "Asia/Manila", "yyyyMMdd-HHmmss") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+      const timestampStr = Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm:ss");
+
+      commSheet.appendRow([
+        submissionId,
+        timestampStr,
+        socialHandle,
+        cameraRented,
+        caption,
+        consentGiven ? "YES" : "NO",
+        "new",
+        savedUrls.length,
+        savedUrls.join("\n"),
+        subfolder.getUrl()
+      ]);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        submissionId: submissionId,
+        filesSaved: savedUrls.length,
+        driveFolderUrl: subfolder.getUrl(),
+        fileUrls: savedUrls
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ── 7c. CUSTOMER REVIEW & SUGGESTIONS SUBMISSION ──
+    if (body.action === "submitCustomerFeedback") {
+      const customerName = String(body.customerName || "Valued Renter").trim();
+      const cameraRented = String(body.cameraRented || "").trim();
+      const rating = Number(body.rating) || 5;
+      const highlights = Array.isArray(body.highlights) ? body.highlights.join(", ") : String(body.highlights || "");
+      const feedbackText = String(body.feedbackText || "").trim();
+
+      const revSheet = getOrCreateCustomerReviewsSheet(ss);
+      const reviewId = "REV-" + Utilities.formatDate(new Date(), "Asia/Manila", "yyyyMMdd-HHmmss") + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+      const timestampStr = Utilities.formatDate(new Date(), "Asia/Manila", "yyyy-MM-dd HH:mm:ss");
+
+      revSheet.appendRow([
+        reviewId,
+        timestampStr,
+        customerName,
+        cameraRented,
+        rating,
+        highlights,
+        feedbackText,
+        "new"
+      ]);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        reviewId: reviewId
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ── 7d. PROTECTED GET COMMUNITY MEDIA & REVIEWS (ADMIN CONSOLE) ──
+    if (body.action === "getCommunityData") {
+      const session = validateSessionToken(body.sessionToken);
+      if (!session) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          code: "UNAUTHORIZED",
+          message: "Access Denied: Valid admin session token required."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // 1. Fetch Community Media Submissions
+      const commSheet = getOrCreateCommunityMediaSheet(ss);
+      const commData = commSheet.getDataRange().getValues();
+      const mediaSubmissions = [];
+
+      for (let i = 1; i < commData.length; i++) {
+        const row = commData[i];
+        if (row[0]) {
+          const rawUrls = String(row[8] || "");
+          const fileUrls = rawUrls.split("\n").map(function(u) { return u.trim(); }).filter(Boolean);
+          mediaSubmissions.push({
+            id: String(row[0]),
+            timestamp: String(row[1] || ""),
+            socialHandle: String(row[2] || ""),
+            cameraRented: String(row[3] || ""),
+            caption: String(row[4] || ""),
+            consentGiven: String(row[5] || "").toUpperCase() === "YES",
+            status: String(row[6] || "new"),
+            mediaCount: Number(row[7]) || fileUrls.length,
+            fileUrls: fileUrls,
+            driveFolderUrl: String(row[9] || "")
+          });
+        }
+      }
+
+      // 2. Fetch Customer Reviews
+      const revSheet = getOrCreateCustomerReviewsSheet(ss);
+      const revData = revSheet.getDataRange().getValues();
+      const reviews = [];
+
+      for (let i = 1; i < revData.length; i++) {
+        const row = revData[i];
+        if (row[0]) {
+          const rawTags = String(row[5] || "");
+          const highlightTags = rawTags.split(",").map(function(t) { return t.trim(); }).filter(Boolean);
+          reviews.push({
+            id: String(row[0]),
+            timestamp: String(row[1] || ""),
+            customerName: String(row[2] || "Valued Renter"),
+            cameraRented: String(row[3] || ""),
+            rating: Number(row[4]) || 5,
+            highlights: highlightTags,
+            feedbackText: String(row[6] || ""),
+            status: String(row[7] || "new")
+          });
+        }
+      }
+
+      // Root Community Google Drive Folder link
+      const communityFolder = getOrCreateCommunityRootFolder();
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        communityFolderUrl: communityFolder.getUrl(),
+        mediaSubmissions: mediaSubmissions.reverse(),
+        reviews: reviews.reverse()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ── 7e. PROTECTED UPDATE COMMUNITY ITEM STATUS ──
+    if (body.action === "updateCommunityStatus") {
+      const session = validateSessionToken(body.sessionToken);
+      if (!session) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          code: "UNAUTHORIZED",
+          message: "Access Denied: Valid admin session token required."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const itemType = body.itemType || "media";
+      const targetId = String(body.id || "").trim();
+      const newStatus = String(body.status || "featured").trim();
+
+      const targetSheet = itemType === "review"
+        ? getOrCreateCustomerReviewsSheet(ss)
+        : getOrCreateCommunityMediaSheet(ss);
+
+      const data = targetSheet.getDataRange().getValues();
+      const statusCol = itemType === "review" ? 8 : 7;
+
+      let found = false;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]).trim() === targetId) {
+          targetSheet.getRange(i + 1, statusCol).setValue(newStatus);
+          found = true;
+          break;
+        }
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: found ? "success" : "not_found",
+        id: targetId,
+        newStatus: newStatus
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
